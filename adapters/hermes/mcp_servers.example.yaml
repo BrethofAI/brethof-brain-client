@@ -1,0 +1,11 @@
+# Drop this under `mcp_servers:` in your Hermes cli-config.yaml.
+# Hermes auto-discovers the 15 brethof-mind tools from this one HTTP MCP server.
+mcp_servers:
+  brethof-mind:
+    url: https://api.brethof.cloud/v1/mcp
+    headers:
+      # Your brethof-mind API key (from brethof.ai/account → brethof-mind tab).
+      # Keep this config private; prefer ~/.hermes/.env for the secret.
+      Authorization: "Bearer bm_live_REPLACE_ME"
+    timeout: 60          # per-tool-call timeout (s)
+    connect_timeout: 30  # initial connection timeout (s)

@@ -15,3 +15,15 @@ __version__ = "1.0.0"
 
 DEFAULT_ENDPOINT = "https://api.brethof.cloud"
 USER_AGENT = f"brethof-mind-client/{__version__}"
+
+
+def __getattr__(name):
+    # Lazy re-exports so `from brethof_mind_client import MindClient` works
+    # without importing the api module (and its deps) at package load.
+    if name in ("MindClient", "MindToolError"):
+        from . import api
+        return getattr(api, name)
+    if name in ("Config",):
+        from .config import Config
+        return Config
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
