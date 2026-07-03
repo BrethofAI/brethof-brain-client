@@ -1,0 +1,38 @@
+{
+  "name": "brethof-mind",
+  "displayName": "brethof-mind",
+  "version": "1.0.0",
+  "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and 15 memory tools, backed by brethof-mind cloud.",
+  "author": {
+    "name": "Brethof AI",
+    "email": "hello@brethof.ai",
+    "url": "https://brethof.cloud"
+  },
+  "homepage": "https://brethof.cloud",
+  "repository": "https://github.com/BrethofAI/brethof-mind-client",
+  "license": "LicenseRef-brethof-mind-Client-License",
+  "keywords": ["memory", "mcp", "claude", "agents", "recall", "curate"],
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "brethof-mind API key",
+      "description": "From brethof.ai/account -> brethof-mind tab (bm_live_... or bm_test_...).",
+      "sensitive": true,
+      "required": true
+    },
+    "endpoint": {
+      "type": "string",
+      "title": "Data-plane endpoint",
+      "description": "Leave as default unless self-hosting.",
+      "default": "https://api.brethof.cloud"
+    },
+    "project": {
+      "type": "string",
+      "title": "Default project",
+      "description": "Default memory project for this account (per-directory mapping still works via ~/.brethof-mind/config.json).",
+      "default": "global"
+    }
+  }
+}

@@ -38,16 +38,33 @@ Nothing else is collected. The client never sends files, environment variables,
 or anything outside the transcript. If a hook can't reach the service it fails
 silent — your session is never blocked.
 
-## Install
+## Install as a Claude Code plugin (recommended)
+
+The plugin bundles this client, wires the hooks + the 15 memory tools, and adds
+the `/recall` `/curate` `/heal` `/onboard` commands — no `pip install` needed,
+only Python 3.9+ on your PATH.
+
+```
+/plugin marketplace add BrethofAI/brethof-mind-client
+/plugin install brethof-mind@brethof
+```
+
+You'll be prompted for your **API key** (from
+[brethof.ai/account](https://brethof.ai) → brethof-mind tab); it's stored in your
+OS keychain. Restart Claude Code and memory is live. Commands are namespaced:
+`/brethof-mind:recall`, `/brethof-mind:curate`, `/brethof-mind:heal`,
+`/brethof-mind:onboard`.
+
+## Install as a library / CLI (alternative)
+
+For non-plugin use (scripting, other agents), install the package directly:
 
 ```bash
 pip install brethof-mind-client
 ```
 
-## Set up
-
-Get an API key from your account at [brethof.ai/account](https://brethof.ai)
-(the brethof-mind tab), then:
+Get an API key from [brethof.ai/account](https://brethof.ai) (the brethof-mind
+tab), then:
 
 ```bash
 brethof-mind setup --api-key bm_live_xxxxxxxx

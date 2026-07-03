@@ -68,7 +68,8 @@ class Config:
         endpoint = (os.environ.get("BRETHOF_MIND_ENDPOINT")
                     or f.get("endpoint") or DEFAULT_ENDPOINT).rstrip("/")
         api_key = os.environ.get("BRETHOF_MIND_API_KEY") or f.get("api_key") or ""
-        default_project = f.get("default_project") or "global"
+        default_project = (os.environ.get("BRETHOF_MIND_DEFAULT_PROJECT")
+                           or f.get("default_project") or "global")
         projects = f.get("projects") if isinstance(f.get("projects"), list) else []
         return cls(endpoint=endpoint, api_key=api_key.strip(),
                    default_project=default_project, projects=projects, raw=f)

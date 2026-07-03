@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "brethof-mind": {
+      "url": "${user_config.endpoint}/v1/mcp",
+      "auth": {
+        "type": "bearer",
+        "token": "${user_config.api_key}"
+      }
+    }
+  }
+}
