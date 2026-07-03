@@ -35,6 +35,20 @@ recall, and metering. Stdlib only, so it drops in without new dependencies.
 Restart Hermes. It now recalls at session start, prefetches per turn, archives
 every turn, and exposes the `brethofmind_*` tools — all against the cloud.
 
+## Memory commands (skills)
+
+The provider gives Hermes automatic memory + the `brethofmind_*` tools. To also
+get the `/recall`, `/curate`, `/heal`, `/onboard` commands, copy the `skills/`
+folder here into your Hermes skills dir:
+
+```
+cp -r skills/* ~/.hermes/skills/
+```
+
+They use the provider's tools (no local scripts), so they work anywhere the
+provider does. Run `/onboard` once, `/curate` at the end of a session, and
+`/heal` about weekly.
+
 ## Tools-only alternative (no hooks)
 
 If you just want the 15 memory tools in Hermes without the provider's automatic
