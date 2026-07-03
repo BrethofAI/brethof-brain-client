@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brethof-mind-client"
+version = "1.0.0"
+description = "Thin client for brethof-mind cloud — shared long-term memory for AI coding agents"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Brethof AI", email = "hello@brethof.ai" }]
+keywords = ["claude", "claude-code", "memory", "mcp", "agents"]
+# Source-available, not OSI open-source — see LICENSE (brethof-mind Client License).
+license = { text = "LicenseRef-brethof-mind-Client-License" }
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+]
+# No runtime dependencies — stdlib only, by design.
+dependencies = []
+
+[project.urls]
+Homepage = "https://brethof.cloud"
+Service = "https://api.brethof.cloud"
+
+[project.scripts]
+brethof-mind = "brethof_mind_client.cli:main"
+brethof-mind-hook = "brethof_mind_client.hook:main"
+
+[tool.setuptools]
+packages = ["brethof_mind_client"]

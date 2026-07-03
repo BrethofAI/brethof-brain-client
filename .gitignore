@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.eggs/
+
+# NEVER commit credentials or local state (belt-and-suspenders — these live in
+# ~/.brethof-mind, not the repo, but guard anyway).
+config.json
+*.env
+.env
+*.key
+*secret*
+.brethof-mind/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

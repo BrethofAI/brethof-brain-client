@@ -1,0 +1,48 @@
+brethof-mind Client License
+Copyright (c) 2026 Brethof AI. All rights reserved.
+
+This source code (the "Software") is made available for transparency and
+security review. It is the client for the brethof-mind service operated by
+Brethof AI (the "Service"). It is NOT open-source software and is NOT placed in
+the public domain.
+
+1. GRANT. Subject to your compliance with this License, Brethof AI grants you a
+   personal, non-exclusive, non-transferable, revocable license to:
+   (a) read, review, and audit the source code; and
+   (b) download, install, run, and internally modify the Software solely to
+       access and use the Service through your own authorized account.
+
+2. RESTRICTIONS. You may NOT:
+   (a) redistribute, publish, sublicense, sell, rent, or otherwise make the
+       Software (in source or binary form, modified or unmodified) available to
+       any third party;
+   (b) use the Software, in whole or in part, to build, train, operate, or
+       assist any product or service that competes with the Service, or to
+       connect to any backend other than the Service;
+   (c) create or distribute derivative works except for internal modifications
+       under Section 1(b), which may not be redistributed;
+   (d) remove, alter, or obscure any copyright, trademark, or other proprietary
+       notices; or
+   (e) use Brethof AI's names, logos, or trademarks except to identify the
+       Service you are accessing.
+
+3. OWNERSHIP. The Software is licensed, not sold. Brethof AI retains all right,
+   title, and interest in and to the Software, including all intellectual
+   property rights. No rights are granted except as expressly set out here.
+
+4. TERMINATION. This License terminates automatically if you breach it, or when
+   you cease to be an authorized user of the Service. On termination you must
+   stop using and destroy your copies of the Software. Sections 3, 5, and 6
+   survive termination.
+
+5. NO WARRANTY. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY. IN NO EVENT SHALL BRETHOF AI BE LIABLE FOR ANY
+   CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT,
+   OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE
+   USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For any use not permitted above — including redistribution or commercial
+licensing — contact hello@brethof.ai.
