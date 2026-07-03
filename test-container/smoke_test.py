@@ -87,6 +87,26 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         check("archive_turns()", False, str(e))
 
+    # 6. hooks path — the generic AgentHooks used by the OpenClaw adapter
+    try:
+        from brethof_mind_client import AgentHooks
+        h = AgentHooks(project=PROJECT, session_id="container-hooks")
+        block = h.session_start()
+        check("AgentHooks.session_start()", isinstance(block, str), f"{len(block)} chars")
+        env = h.archive("container hook test: user turn",
+                        "container hook test: assistant turn")
+        check("AgentHooks.archive()", env.get("status") == "ok",
+              f"status={env.get('status')}")
+    except Exception as e:  # noqa: BLE001
+        check("AgentHooks (session_start + archive)", False, str(e))
+
+    # 7. OpenClaw MemorySession wrapper end-to-end
+    try:
+        import openclaw_hooks
+        check("OpenClaw MemorySession demo", openclaw_hooks.demo(), "two-turn session")
+    except Exception as e:  # noqa: BLE001
+        check("OpenClaw MemorySession demo", False, str(e))
+
     print(f"\nRESULT: {'PASS' if failed == 0 else 'FAIL'}  ({passed} passed, {failed} failed)")
     return 0 if failed == 0 else 1
 

@@ -23,6 +23,9 @@ def __getattr__(name):
     if name in ("MindClient", "MindToolError"):
         from . import api
         return getattr(api, name)
+    if name == "AgentHooks":
+        from .hooks_api import AgentHooks
+        return AgentHooks
     if name in ("Config",):
         from .config import Config
         return Config

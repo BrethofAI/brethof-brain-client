@@ -11,6 +11,7 @@ COPY brethof_mind_client ./brethof_mind_client
 RUN pip install --no-cache-dir .
 
 COPY test-container/smoke_test.py ./smoke_test.py
+COPY adapters/openclaw/openclaw_hooks.py ./openclaw_hooks.py
 
 # Credentials are injected at run time via env (never baked into the image).
 #   docker run --rm -e BRETHOF_MIND_API_KEY=bm_... brethof-mind-smoke
