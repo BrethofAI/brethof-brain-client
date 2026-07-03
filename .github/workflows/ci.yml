@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Core cross-OS check: the client's OS-varying logic on real Win/Ubuntu/macOS
+  # runners (path + config resolution, transcript parsing, fail-open hooks, CLI).
+  client-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.9', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install (stdlib-only client) + pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest .
+      - name: Run unit tests
+        run: pytest -q
+
+  # Full end-to-end against api.brethof.cloud on all 3 OSes — the real macOS
+  # proof. Runs only when the BRETHOF_MIND_API_KEY secret is present (a bm_test_
+  # key), so forks/PRs without it don't fail.
+  live-smoke:
+    needs: client-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install .
+      - name: Live smoke test
+        shell: bash
+        env:
+          BRETHOF_MIND_API_KEY: ${{ secrets.BRETHOF_MIND_API_KEY }}
+        run: |
+          if [ -z "$BRETHOF_MIND_API_KEY" ]; then
+            echo "BRETHOF_MIND_API_KEY secret not set — skipping live smoke."
+            exit 0
+          fi
+          # openclaw_hooks lives under adapters/ (not pip-installed) — put it on the path.
+          PYTHONPATH="$PWD/adapters/openclaw" python test-container/smoke_test.py
+
+  # Best-effort: validate the Claude Code plugin structure on each OS. The CLI /
+  # command availability can vary, so this never fails the build (informational).
+  plugin-validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate plugin (best-effort)
+        shell: bash
+        run: |
+          npm install -g @anthropic-ai/claude-code || { echo "claude CLI unavailable — skipping"; exit 0; }
+          claude plugin validate ./ --strict || echo "plugin validate reported issues (informational)"
