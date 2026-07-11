@@ -2,17 +2,23 @@
 check status. Stdlib only.
 
     brethof-mind setup --api-key bm_live_xxx [--endpoint URL] [--project KEY]
-    brethof-mind install-hooks     # add the 5 hooks to ~/.claude/settings.json
+    brethof-mind install-hooks     # add the 4 hooks to ~/.claude/settings.json
     brethof-mind mcp-command       # print the `claude mcp add` line to run
     brethof-mind status            # show plan + usage
     brethof-mind doctor            # diagnose config / connectivity / wiring
+
+(The hook dispatcher also understands a 5th event, ``commit``, for programmatic
+wiring — e.g. a git post-commit hook; the installer wires the 4 session events.)
 """
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
+import re
 import sys
+import urllib.parse
 
 from . import DEFAULT_ENDPOINT, __version__
 from .client import Client, ClientError
@@ -27,12 +33,75 @@ HOOK_EVENTS = [
 CLAUDE_SETTINGS = os.path.expanduser("~/.claude/settings.json")
 MCP_PATH = "/v1/mcp"
 
+# Matches our own installed hook command and captures the baked interpreter:
+#   "<python path>" -m brethof_mind_client.hook <event>
+_CMD_RE = re.compile(r'^"([^"]+)" -m brethof_mind_client\.hook (\S+)$')
+
 
 def _hook_command(event_arg: str) -> str:
     """The command Claude Code runs for a hook. Bakes in THIS interpreter so the
-    right Python (the one this package is installed into) is always used."""
+    right Python (the one this package is installed into) is always used.
+    Forward slashes always — Claude Code runs hook commands through bash even on
+    Windows, and bash eats backslashes."""
     py = sys.executable.replace("\\", "/")
     return f'"{py}" -m brethof_mind_client.hook {event_arg}'
+
+
+def _ours(command: str, event_arg: str):
+    """If ``command`` is our hook command for ``event_arg``, return the baked
+    interpreter path; else None."""
+    m = _CMD_RE.match(command or "")
+    return m.group(1) if m and m.group(2) == event_arg else None
+
+
+def _valid_endpoint(url: str) -> str:
+    """Return a normalized endpoint or raise ValueError with a human reason."""
+    url = (url or "").strip().rstrip("/")
+    p = urllib.parse.urlparse(url)
+    if p.scheme not in ("http", "https") or not p.netloc:
+        raise ValueError(f"endpoint must be a full https:// URL, got {url!r}")
+    if p.scheme == "http" and p.hostname not in ("localhost", "127.0.0.1", "::1"):
+        raise ValueError("http:// endpoints would send your API key in cleartext — "
+                         "use https:// (http is allowed for localhost only)")
+    return url
+
+
+# ── ~/.claude/settings.json plumbing (always backed up, always atomic) ───────
+
+def _load_settings() -> dict:
+    if os.path.exists(CLAUDE_SETTINGS):
+        try:
+            with open(CLAUDE_SETTINGS, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            print(f"error: {CLAUDE_SETTINGS} is not valid JSON - fix it first",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        if not isinstance(data, dict) or not isinstance(data.get("hooks", {}), dict):
+            print(f"error: {CLAUDE_SETTINGS} has an unexpected shape "
+                  "(expected an object, with 'hooks' an object) - fix it first",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        return data
+    return {}
+
+
+def _write_settings(settings: dict) -> None:
+    """Back up the current file, then write atomically (tmp + os.replace) so an
+    interrupted write can never truncate the user's whole Claude Code config."""
+    os.makedirs(os.path.dirname(CLAUDE_SETTINGS), exist_ok=True)
+    if os.path.exists(CLAUDE_SETTINGS):
+        try:
+            with open(CLAUDE_SETTINGS, encoding="utf-8") as f:
+                old = f.read()
+            with open(CLAUDE_SETTINGS + ".bak", "w", encoding="utf-8") as f:
+                f.write(old)
+        except Exception:
+            pass
+    tmp = CLAUDE_SETTINGS + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
+    os.replace(tmp, CLAUDE_SETTINGS)
 
 
 # ── commands ────────────────────────────────────────────────────────────────
@@ -41,7 +110,9 @@ def cmd_setup(args) -> int:
     api_key = args.api_key
     if not api_key:
         if sys.stdin.isatty():
-            api_key = input("brethof-mind API key (bm_live_... or bm_test_...): ").strip()
+            # getpass: the key must not echo to the terminal or scrollback.
+            api_key = getpass.getpass(
+                "brethof-mind API key (bm_live_... or bm_test_..., hidden): ").strip()
         else:
             print("error: --api-key required (or run in an interactive terminal)",
                   file=sys.stderr)
@@ -58,8 +129,13 @@ def cmd_setup(args) -> int:
                 data = json.load(f)
         except Exception:
             data = {}
+    try:
+        endpoint = _valid_endpoint(args.endpoint or data.get("endpoint") or DEFAULT_ENDPOINT)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     data["api_key"] = api_key
-    data["endpoint"] = (args.endpoint or data.get("endpoint") or DEFAULT_ENDPOINT).rstrip("/")
+    data["endpoint"] = endpoint
     if args.project:
         if not valid_project(args.project):
             print(f"error: invalid project key '{args.project}' "
@@ -85,51 +161,45 @@ def cmd_setup(args) -> int:
     return 0
 
 
-def _load_settings() -> dict:
-    if os.path.exists(CLAUDE_SETTINGS):
-        try:
-            with open(CLAUDE_SETTINGS, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            print(f"error: {CLAUDE_SETTINGS} is not valid JSON - fix it first",
-                  file=sys.stderr)
-            raise SystemExit(2)
-    return {}
-
-
 def cmd_install_hooks(args) -> int:
     settings = _load_settings()
     hooks = settings.setdefault("hooks", {})
-    added = 0
+    added = repaired = 0
     for event_name, event_arg in HOOK_EVENTS:
         command = _hook_command(event_arg)
         groups = hooks.setdefault(event_name, [])
-        # already wired? (idempotent)
-        exists = any(
-            h.get("command", "").endswith(f"brethof_mind_client.hook {event_arg}")
-            for g in groups if isinstance(g, dict)
-            for h in g.get("hooks", []) if isinstance(h, dict))
-        if exists:
-            continue
-        groups.append({"matcher": "", "hooks": [{"type": "command", "command": command}]})
-        added += 1
+        if not isinstance(groups, list):
+            print(f"error: settings hooks.{event_name} is not a list - fix it first",
+                  file=sys.stderr)
+            return 2
+        found = False
+        for g in groups:
+            if not isinstance(g, dict):
+                continue
+            for h in g.get("hooks", []):
+                if not isinstance(h, dict):
+                    continue
+                py = _ours(h.get("command", ""), event_arg)
+                if py is None:
+                    continue
+                found = True
+                # Repair a stale interpreter (deleted venv, Python upgrade):
+                # the baked path must exist AND be this install's interpreter.
+                if not os.path.exists(py) or h.get("command") != command:
+                    h["command"] = command
+                    repaired += 1
+        if not found:
+            groups.append({"matcher": "", "hooks": [{"type": "command", "command": command}]})
+            added += 1
 
-    if added and os.path.exists(CLAUDE_SETTINGS):
-        bak = CLAUDE_SETTINGS + ".bak"
-        try:
-            with open(CLAUDE_SETTINGS, encoding="utf-8") as f:
-                old = f.read()
-            with open(bak, "w", encoding="utf-8") as f:
-                f.write(old)
-            print(f"OK: backed up existing settings -> {bak}")
-        except Exception:
-            pass
-
-    os.makedirs(os.path.dirname(CLAUDE_SETTINGS), exist_ok=True)
-    with open(CLAUDE_SETTINGS, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
-    if added:
-        print(f"OK: wired {added} hook(s) into {CLAUDE_SETTINGS}")
+    if added or repaired:
+        _write_settings(settings)
+        what = []
+        if added:
+            what.append(f"wired {added} hook(s)")
+        if repaired:
+            what.append(f"repaired {repaired} stale interpreter path(s)")
+        print(f"OK: {', '.join(what)} in {CLAUDE_SETTINGS} (backup: {CLAUDE_SETTINGS}.bak)")
         print("  Restart Claude Code (or start a new session) to activate.")
     else:
         print("OK: hooks already installed - nothing to do")
@@ -137,26 +207,36 @@ def cmd_install_hooks(args) -> int:
 
 
 def cmd_uninstall_hooks(args) -> int:
+    if not os.path.exists(CLAUDE_SETTINGS):
+        print("OK: no Claude Code settings file - nothing installed")
+        return 0
     settings = _load_settings()
     hooks = settings.get("hooks", {})
     removed = 0
     for event_name, event_arg in HOOK_EVENTS:
         groups = hooks.get(event_name, [])
+        if not isinstance(groups, list):
+            continue
         kept = []
         for g in groups:
+            if not isinstance(g, dict):
+                kept.append(g)  # not ours — pass through untouched
+                continue
             inner = [h for h in g.get("hooks", [])
-                     if not h.get("command", "").endswith(
-                         f"brethof_mind_client.hook {event_arg}")]
-            removed += len(g.get("hooks", [])) - len(inner)
-            if inner:
-                g["hooks"] = inner
+                     if not (isinstance(h, dict) and _ours(h.get("command", ""), event_arg))]
+            lost = len(g.get("hooks", [])) - len(inner)
+            removed += lost
+            # Drop a group only if WE emptied it; a user's own (even empty)
+            # group passes through untouched.
+            if inner or not lost:
+                g["hooks"] = inner if lost else g.get("hooks", inner)
                 kept.append(g)
         if kept:
             hooks[event_name] = kept
         elif event_name in hooks:
             del hooks[event_name]
-    with open(CLAUDE_SETTINGS, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
+    if removed:
+        _write_settings(settings)
     print(f"OK: removed {removed} brethof-mind hook(s) from {CLAUDE_SETTINGS}")
     return 0
 
@@ -166,10 +246,14 @@ def cmd_mcp_command(args) -> int:
     key = cfg.api_key or "bm_live_YOUR_KEY"
     url = cfg.endpoint + MCP_PATH
     print("Run this once to add the 15 memory tools to Claude Code:\n")
-    print(f'  claude mcp add --transport http brethof-mind {url} \\')
-    print(f'    --header "Authorization: Bearer {key}"')
+    # ONE line, no continuation characters — POSIX `\` breaks in PowerShell/cmd.
+    print(f'  claude mcp add --transport http brethof-mind {url} '
+          f'--header "Authorization: Bearer {key}"')
     print("\n(That stores the server in Claude Code's MCP config; the tools then "
           "appear as recall, save_memory, get_memory, ...)")
+    if cfg.api_key:
+        print("note: the line contains your real API key and will land in shell "
+              "history - clear it afterwards if the machine is shared.")
     return 0
 
 
@@ -211,28 +295,57 @@ def cmd_doctor(args) -> int:
     check("config file", os.path.exists(CONFIG_PATH), CONFIG_PATH)
     check("api key set", bool(cfg.api_key),
           "run: brethof-mind setup" if not cfg.api_key else cfg.api_key[:12] + "...")
-    check("endpoint", bool(cfg.endpoint), cfg.endpoint)
+    try:
+        _valid_endpoint(cfg.endpoint)
+        check("endpoint", True, cfg.endpoint)
+    except ValueError as e:
+        check("endpoint", False, str(e))
+
+    # project routing sanity
+    env_proj = os.environ.get("BRETHOF_MIND_PROJECT")
+    if env_proj:
+        check("BRETHOF_MIND_PROJECT", valid_project(env_proj),
+              env_proj if valid_project(env_proj)
+              else f"'{env_proj}' invalid (must match [a-z][a-z0-9_]{{0,15}}) - IGNORED")
+    if not valid_project(cfg.default_project):
+        check("default_project", False,
+              f"'{cfg.default_project}' invalid - falling back to 'global'")
+    bad_keys = [p.get("key") for p in cfg.projects if isinstance(p, dict)
+                and p.get("key") and not valid_project(p.get("key"))]
+    if bad_keys:
+        check("projects[].key", False, f"invalid keys ignored: {', '.join(bad_keys)}")
 
     if cfg.configured():
         try:
             snap = Client(cfg, timeout=8.0).get("/v1/usage")
             check("service reachable + key valid", True, f"plan {snap.get('plan','?')}")
         except ClientError as e:
-            check("service reachable + key valid", False, str(e))
+            detail = str(e)
+            if "1010" in detail or "Cloudflare" in detail:
+                detail += "  <- looks like an edge/WAF block, NOT a bad key"
+            check("service reachable + key valid", False, detail)
 
-    # hooks wired?
+    # hooks wired? (and does each baked interpreter still exist?)
     try:
         settings = _load_settings()
     except SystemExit:
         settings = {}
-    hooks = settings.get("hooks", {})
+    hooks = settings.get("hooks", {}) if isinstance(settings.get("hooks", {}), dict) else {}
     for event_name, event_arg in HOOK_EVENTS:
-        wired = any(
-            h.get("command", "").endswith(f"brethof_mind_client.hook {event_arg}")
+        pys = [
+            _ours(h.get("command", ""), event_arg)
             for g in hooks.get(event_name, []) if isinstance(g, dict)
-            for h in g.get("hooks", []) if isinstance(h, dict))
-        check(f"hook {event_name}", wired,
-              "" if wired else "run: brethof-mind install-hooks")
+            for h in g.get("hooks", []) if isinstance(h, dict)
+        ]
+        pys = [p for p in pys if p]
+        if not pys:
+            check(f"hook {event_name}", False, "run: brethof-mind install-hooks")
+        elif not all(os.path.exists(p) for p in pys):
+            dead = next(p for p in pys if not os.path.exists(p))
+            check(f"hook {event_name}", False,
+                  f"interpreter missing: {dead} - rerun: brethof-mind install-hooks")
+        else:
+            check(f"hook {event_name}", True)
 
     print("\n" + ("all good" if ok else "issues found - see [XX] above"))
     return 0 if ok else 1

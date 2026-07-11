@@ -28,15 +28,19 @@ The client is source-available precisely so you can verify this yourself — rea
 - On **each assistant turn** (the `Stop` hook), it reads the *new* lines of your
   Claude Code transcript and sends them to be archived as your memory — this
   includes your messages, the assistant's replies, its thinking blocks, and
-  tool-call markers. A local offset file (`~/.brethof-mind/state/`) ensures each
-  line is sent once.
+  one-line tool-call markers (`[tool_use: Bash]`). **Tool outputs are dropped
+  client-side**: the contents of files the assistant reads and the output of
+  commands it runs never leave your machine. A local offset file
+  (`~/.brethof-mind/state/`) ensures each line is sent once.
 - Every request is authenticated with **your API key** and goes only to **your
   endpoint** (`api.brethof.cloud` by default). Your data lands in your own
   isolated tenant database, encrypted at rest.
 
 Nothing else is collected. The client never sends files, environment variables,
-or anything outside the transcript. If a hook can't reach the service it fails
-silent — your session is never blocked.
+or anything outside the transcript text described above. If a hook can't reach
+the service it fails silent — your session is never blocked. The one exception
+to silence: if your **API key is rejected**, the next session start shows a
+one-line notice, because silently stopping archival would mean losing history.
 
 ## Install as a Claude Code plugin (recommended)
 
@@ -50,8 +54,10 @@ only Python 3.9+ on your PATH.
 ```
 
 You'll be prompted for your **API key** (from
-[brethof.ai/account](https://brethof.ai) → brethof-mind tab); it's stored in your
-OS keychain. Restart Claude Code and memory is live. Commands are namespaced:
+[brethof.ai/account](https://brethof.ai) → brethof-mind tab); Claude Code stores
+it as plugin config (sensitive values go to your OS keychain where available)
+and passes it to the hooks via the environment — never on a command line.
+Restart Claude Code and memory is live. Commands are namespaced:
 `/brethof-mind:recall`, `/brethof-mind:curate`, `/brethof-mind:heal`,
 `/brethof-mind:onboard`.
 
@@ -83,8 +89,10 @@ brethof-mind status
 ## Configuration
 
 Settings resolve from environment variables, then `~/.brethof-mind/config.json`,
-then defaults. The config file is the only place your key is stored; `setup`
-locks it to your user account.
+then defaults. With the **CLI install**, the config file is where your key is
+stored — `setup` creates it owner-readable-only (`0600`) on Linux/macOS; on
+Windows your user-profile ACLs protect it. With the **plugin install**, Claude
+Code holds the key instead and the config file isn't needed.
 
 ```json
 {
@@ -102,7 +110,10 @@ locks it to your user account.
   directory: `$BRETHOF_MIND_PROJECT` wins, else the longest matching `path`
   prefix, else `default_project`. A project key matches `[a-z][a-z0-9_]{0,15}`.
 - Env overrides: `BRETHOF_MIND_ENDPOINT`, `BRETHOF_MIND_API_KEY`,
-  `BRETHOF_MIND_PROJECT`.
+  `BRETHOF_MIND_PROJECT` (this session's project), `BRETHOF_MIND_DEFAULT_PROJECT`
+  (fallback default), `BRETHOF_MIND_HOME` (move `~/.brethof-mind` elsewhere).
+- Corporate proxies work out of the box: the client honors the standard
+  `HTTPS_PROXY` / `HTTP_PROXY` environment variables.
 
 ## Commands
 

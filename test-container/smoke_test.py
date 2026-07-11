@@ -17,6 +17,14 @@ import sys
 from brethof_mind_client import MindClient
 from brethof_mind_client.client import ClientError
 
+# Windows consoles default to cp1252 — make our own output crash-proof so a
+# '→' in a label can't turn a passing check into a bogus FAIL.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
+
 PROJECT = os.environ.get("BRETHOF_MIND_PROJECT", "global")
 REC_ID = "openclaw_container_probe"          # UPSERT id → test is re-runnable
 SESSION = "openclaw-container-smoke"

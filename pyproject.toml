@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brethof-mind-client"
-version = "1.0.0"
+version = "1.0.1"
 description = "Thin client for brethof-mind cloud — shared long-term memory for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.9"

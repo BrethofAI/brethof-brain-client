@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "BRETHOF_MIND_API_KEY=\"${user_config.api_key}\" BRETHOF_MIND_ENDPOINT=\"${user_config.endpoint}\" BRETHOF_MIND_DEFAULT_PROJECT=\"${user_config.project}\" \"$(command -v python3 || command -v python)\" \"${CLAUDE_PLUGIN_ROOT}/hook_entry.py\" session-start"
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" session-start",
+            "timeout": 12
           }
         ]
       }
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "BRETHOF_MIND_API_KEY=\"${user_config.api_key}\" BRETHOF_MIND_ENDPOINT=\"${user_config.endpoint}\" BRETHOF_MIND_DEFAULT_PROJECT=\"${user_config.project}\" \"$(command -v python3 || command -v python)\" \"${CLAUDE_PLUGIN_ROOT}/hook_entry.py\" prompt-submit"
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit",
+            "timeout": 12
           }
         ]
       }
@@ -28,7 +30,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "BRETHOF_MIND_API_KEY=\"${user_config.api_key}\" BRETHOF_MIND_ENDPOINT=\"${user_config.endpoint}\" BRETHOF_MIND_DEFAULT_PROJECT=\"${user_config.project}\" \"$(command -v python3 || command -v python)\" \"${CLAUDE_PLUGIN_ROOT}/hook_entry.py\" stop"
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" stop",
+            "timeout": 30
           }
         ]
       }
@@ -39,7 +42,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "BRETHOF_MIND_API_KEY=\"${user_config.api_key}\" BRETHOF_MIND_ENDPOINT=\"${user_config.endpoint}\" \"$(command -v python3 || command -v python)\" \"${CLAUDE_PLUGIN_ROOT}/hook_entry.py\" pre-compact"
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" pre-compact",
+            "timeout": 10
           }
         ]
       }

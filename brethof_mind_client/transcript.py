@@ -7,13 +7,28 @@ plane hashes (session_id, turn_index, text) into the row id, so re-sending the
 same line is an idempotent UPSERT, never a duplicate.
 
 Offset + index advance ONLY after the server confirms the write (see hook.stop),
-so a failed flush is simply retried next turn from the same point.
+so a failed flush is simply retried next turn from the same point. The file is
+read in BINARY mode and offsets are plain byte counts, so they can be validated
+against the file size and a stored offset can never land mid-character.
 
-Turn shape emitted (matches mindcore/archive.archive_turns):
+Safety properties:
+- Only NEWLINE-TERMINATED lines are consumed. A half-written final line (the
+  writer mid-flush) is left for the next pass instead of being skipped forever.
+- If the transcript was replaced or truncated (stored offset > file size),
+  state resets to (0, 0) and the file is re-read from the start — identical
+  (session_id, index, text) triples upsert to the same server rows, so the
+  resend cannot duplicate.
+- Every turn carries ``_offset`` (the byte offset just past its line) so the
+  caller can flush in bounded chunks and commit state per confirmed chunk.
+
+Turn shape emitted (matches mindcore/archive.archive_turns), minus the
+client-internal ``_offset``:
     {"index": int, "line_type": "user"|"assistant", "text": str,
      "timestamp": iso-or-None, "embed": bool}
-Only real conversation lines are emitted; tool-result noise and empty lines are
-dropped so we neither store nor bill for them.
+Only real conversation lines are emitted. Tool RESULTS are dropped entirely —
+they carry the contents of the user's files and command output, which the
+README promises never leave the machine. Assistant tool CALLS ship as one-line
+markers ("[tool_use: Bash]").
 """
 from __future__ import annotations
 
@@ -56,19 +71,14 @@ def _extract_text(d: dict):
         if isinstance(c, str):
             return c, True
         if isinstance(c, list):
-            out = []
-            for b in c:
-                if not isinstance(b, dict):
-                    continue
-                bc = b.get("content")
-                if isinstance(bc, str):
-                    out.append(bc)
-                elif isinstance(bc, list):
-                    for x in bc:
-                        if isinstance(x, dict) and x.get("type") == "text":
-                            out.append(x.get("text", ""))
-            # list-form user content is almost always a tool_result → don't embed
-            return "\n".join(out), False
+            # List-form user content mixes genuine typed text blocks with
+            # tool_result blocks. Keep the dialogue; DROP tool results — they
+            # carry file contents and command output that must not leave the
+            # machine (the README's "What leaves your machine" contract).
+            out = [b.get("text", "") for b in c
+                   if isinstance(b, dict) and b.get("type") == "text"]
+            text = "\n".join(s for s in out if s)
+            return text, bool(text)
     if t == "assistant" and msg:
         c = msg.get("content")
         if isinstance(c, list):
@@ -88,27 +98,41 @@ def _extract_text(d: dict):
 
 
 def read_new_turns(transcript_path: str, session_id: str):
-    """Return ``(turns, new_offset, next_index)`` for lines added since the last
-    committed offset. Does not persist anything — the caller commits after a
-    successful flush."""
+    """Return ``(turns, tail_offset, next_index)`` for COMPLETE lines added
+    since the last committed offset.
+
+    ``tail_offset`` is the byte offset just past the last newline-terminated
+    line scanned (conversation or not); each turn's ``_offset`` is the offset
+    just past its own line. Does not persist anything — the caller commits
+    state only after the server confirms a flush."""
     state = load_state(session_id)
     offset, idx = state["offset"], state["next_index"]
     turns = []
     if not transcript_path or not os.path.exists(transcript_path):
         return turns, offset, idx
     try:
-        with open(transcript_path, encoding="utf-8") as f:
+        if offset > os.path.getsize(transcript_path):
+            # Transcript replaced/rewritten shorter: reset and re-read from 0.
+            # The server's idempotent row ids turn the resend into a no-op.
+            offset, idx = 0, 0
+        pos = offset
+        with open(transcript_path, "rb") as f:
             f.seek(offset)
             while True:
                 raw = f.readline()
-                if not raw:
+                if not raw or not raw.endswith(b"\n"):
+                    # EOF, or a half-written final line: leave it for the next
+                    # pass rather than committing the offset past it.
                     break
+                pos += len(raw)
                 line = raw.strip()
                 if not line:
                     continue
                 try:
-                    d = json.loads(line)
+                    d = json.loads(line.decode("utf-8", "replace"))
                 except Exception:
+                    continue
+                if not isinstance(d, dict):
                     continue
                 t = d.get("type")
                 if t not in ("user", "assistant"):
@@ -122,9 +146,9 @@ def read_new_turns(transcript_path: str, session_id: str):
                     "text": text[:TEXT_CAP],
                     "timestamp": d.get("timestamp"),
                     "embed": embed,
+                    "_offset": pos,
                 })
                 idx += 1
-            new_offset = f.tell()
     except Exception:
-        return [], offset, state["next_index"]
-    return turns, new_offset, idx
+        return [], state["offset"], state["next_index"]
+    return turns, pos, idx
