@@ -126,11 +126,28 @@ Code holds the key instead and the config file isn't needed.
 | `brethof-mind status` | Show your plan and usage |
 | `brethof-mind doctor` | Diagnose config, connectivity, and hook wiring |
 
+## Adapters for other agents
+
+brethof-mind works with any agent that supports hooks and/or MCP. Adapters live in
+[`adapters/`](adapters/):
+
+| Adapter | Agent | How |
+|---|---|---|
+| **Claude Code** (built-in) | Anthropic Claude Code | Plugin install (recommended) or CLI hooks |
+| [`adapters/hermes/`](adapters/hermes/) | Nous Research Hermes | Memory provider plugin + skills |
+| [`adapters/openclaw/`](adapters/openclaw/) | OpenClaw | `MemorySession` wrapper (test harness) |
+| [`adapters/grok-build/`](adapters/grok-build/) | xAI Grok Build | `grok mcp add` + Claude Code hooks + skills |
+
+Grok Build is Claude Code-compatible — it reads `~/.claude/settings.json` for
+hooks and has its own `grok mcp` command. See
+[`adapters/grok-build/README.md`](adapters/grok-build/README.md) for setup.
+
 ## Uninstall
 
 ```bash
 brethof-mind uninstall-hooks
 claude mcp remove brethof-mind
+grok mcp remove brethof-mind    # if using Grok Build adapter
 pip uninstall brethof-mind-client
 ```
 
