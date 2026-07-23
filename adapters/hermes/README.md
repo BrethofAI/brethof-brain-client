@@ -27,13 +27,31 @@ recall, and metering. Stdlib only, so it drops in without new dependencies.
    BRETHOF_MIND_ENDPOINT=https://api.brethof.cloud   # optional, this is the default
    HERMES_MEMORY_PROJECT=global                        # project this agent reads/archives to
    ```
-3. Activate it in Hermes `cli-config.yaml`:
+3. Activate it in Hermes `config.yaml`:
    ```yaml
    memory:
      provider: brethofmind_cloud
    ```
 Restart Hermes. It now recalls at session start, prefetches per turn, archives
 every turn, and exposes the `brethofmind_*` tools — all against the cloud.
+
+### Install gotchas (learned the hard way)
+
+- **`memory.provider` is the ONLY activation path.** Do **not** run
+  `hermes plugins enable brethofmind_cloud` — the general plugin loader has no
+  `register_memory_provider` on its `PluginContext` and the plugin fails to
+  load through it. Keep the plugin out of BOTH `plugins.enabled` and
+  `plugins.disabled`.
+- **Verify the write path, not just recall.** After install, send one message
+  and confirm a fresh row lands in your `<project>_chat` (e.g. via the
+  `recent_records` tool). Recall working does NOT prove archiving works — they
+  fail independently.
+- **Editing `$HERMES_HOME/.env` from a sandboxed agent can silently miss.**
+  MSIX-packaged apps (e.g. the Claude desktop app) copy-on-write their writes
+  under `%LOCALAPPDATA%\Packages\<pkg>\LocalCache\`, so the "edited" `.env`
+  never reaches Hermes while the editor keeps seeing its own shadow copy.
+  If config edits mysteriously don't take effect, compare the file's hash from
+  a shell spawned outside the sandbox.
 
 ## Memory commands (skills)
 

@@ -2,7 +2,13 @@ name: brethofmind_cloud
 version: 1.0.0
 description: "brethof-mind cloud memory for Hermes — shared long-term memory via api.brethof.cloud with your API key. As a MemoryProvider it auto-recalls at session start, prefetches per turn, archives every turn, and exposes the brethofmind_search/recall/save/delete tools. Cloud counterpart of the local brethofmind provider; the SOLE-memory replacement for the built-in note store (set memory.provider: brethofmind_cloud)."
 author: "Brethof AI <hello@brethof.ai>"
-kind: memory_provider
+# NOTE: hermes-agent (v40.x) has no first-class 'memory_provider' plugin kind —
+# valid kinds are backend/exclusive/model-provider/platform/standalone, and an
+# unknown kind logs a boot warning then falls back to 'standalone' anyway.
+# Memory providers are activated ONLY via `memory.provider` in config.yaml;
+# never `hermes plugins enable` (that loader lacks register_memory_provider
+# and the plugin fails to load through it).
+kind: standalone
 platforms:
   - linux
   - macos

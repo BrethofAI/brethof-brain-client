@@ -44,11 +44,74 @@ except Exception:  # import surface may differ for a user plugin
     def tool_error(msg: str) -> str:
         return json.dumps({"error": msg})
 
-ENDPOINT = os.environ.get("BRETHOF_MIND_ENDPOINT", "https://api.brethof.cloud").rstrip("/")
-API_KEY = os.environ.get("BRETHOF_MIND_API_KEY", "").strip()
-PROJECT = (os.environ.get("HERMES_MEMORY_PROJECT", "global") or "global").strip()
 USER_AGENT = "brethof-mind-hermes/1.0"          # a real UA (the edge challenges generic ones)
 _PROJECT_RE = re.compile(r"^[a-z][a-z0-9_]{0,15}$")
+
+# Config is resolved at CALL time, not import time, reading os.environ first
+# and falling back to parsing $HERMES_HOME/.env ourselves. Rationale: not every
+# Hermes entrypoint loads the user .env before plugins import (and a module-
+# level snapshot freezes whatever half-loaded state existed at import), so
+# self-resolving keeps the provider correct in all of them.
+_ENV_FILE_CACHE: Optional[Dict[str, str]] = None
+
+
+def _candidate_env_files() -> List["os.PathLike"]:
+    """.env files to consult, most-authoritative last. The plugin's OWN install
+    home (``…/hermes/plugins/brethofmind_cloud/__init__.py`` -> parents[2]) is
+    the canonical one and does not depend on HERMES_HOME being set."""
+    files = []
+    try:
+        from hermes_constants import get_hermes_home
+        files.append(get_hermes_home() / ".env")
+    except Exception:
+        pass
+    try:
+        import pathlib
+        files.append(pathlib.Path(__file__).resolve().parents[2] / ".env")
+    except Exception:
+        pass
+    return files
+
+
+def _hermes_env_file() -> Dict[str, str]:
+    global _ENV_FILE_CACHE
+    if _ENV_FILE_CACHE is not None:
+        return _ENV_FILE_CACHE
+    data: Dict[str, str] = {}
+    for envf in _candidate_env_files():
+        try:
+            if not envf.exists():
+                continue
+            for raw in envf.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                data[k.strip()] = v.strip().strip('"').strip("'")  # later file wins
+        except Exception:
+            pass
+    _ENV_FILE_CACHE = data
+    return data
+
+
+def _cfg(name: str, default: str = "") -> str:
+    v = os.environ.get(name)
+    if v and v.strip():
+        return v.strip()
+    v = _hermes_env_file().get(name)
+    return v.strip() if v and v.strip() else default
+
+
+def _endpoint() -> str:
+    return _cfg("BRETHOF_MIND_ENDPOINT", "https://api.brethof.cloud").rstrip("/")
+
+
+def _api_key() -> str:
+    return _cfg("BRETHOF_MIND_API_KEY", "")
+
+
+def _project() -> str:
+    return _cfg("HERMES_MEMORY_PROJECT", "global") or "global"
 
 
 class BrethofMindCloudProvider(MemoryProvider):
@@ -71,7 +134,7 @@ class BrethofMindCloudProvider(MemoryProvider):
     def is_available(self) -> bool:
         # Ready iff a key is configured. Per the ABC, no network call here;
         # hooks below degrade gracefully if the service is unreachable.
-        return bool(API_KEY)
+        return bool(_api_key())
 
     def get_config_schema(self) -> List[Dict[str, Any]]:
         return []  # all config via env
@@ -79,10 +142,10 @@ class BrethofMindCloudProvider(MemoryProvider):
     # -- HTTP to the data plane (stdlib only) -------------------------------
     def _post(self, path: str, payload: dict, timeout: float = 20.0) -> dict:
         req = urllib.request.Request(
-            ENDPOINT + path,
+            _endpoint() + path,
             data=json.dumps(payload).encode("utf-8"),
             headers={
-                "Authorization": f"Bearer {API_KEY}",
+                "Authorization": f"Bearer {_api_key()}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "User-Agent": USER_AGENT,
@@ -117,7 +180,7 @@ class BrethofMindCloudProvider(MemoryProvider):
         self._session_id = session_id or ""
         self._next_index = 0
         try:
-            env = self._post("/v1/hooks/session-start", {"project": PROJECT})
+            env = self._post("/v1/hooks/session-start", {"project": _project()})
             self._brain_block = env.get("injection") or ""
         except Exception as e:  # never break a session on a hiccup
             logger.warning("brethofmind-cloud: session-start failed: %s", e)
@@ -143,7 +206,7 @@ class BrethofMindCloudProvider(MemoryProvider):
         def _run():
             try:
                 env = self._post("/v1/hooks/prompt-submit", {
-                    "project": PROJECT, "prompt": query,
+                    "project": _project(), "prompt": query,
                     "session_id": session_id or self._session_id})
                 blob = env.get("injection") or ""
                 if blob:
@@ -159,6 +222,7 @@ class BrethofMindCloudProvider(MemoryProvider):
     # -- archive (sync_turn) ------------------------------------------------
     def sync_turn(self, user_content: str, assistant_content: str, *,
                   session_id: str = "", messages=None) -> None:
+        proj = _project()
         sid = session_id or self._session_id
         turns = []
         if user_content and user_content.strip():
@@ -172,19 +236,17 @@ class BrethofMindCloudProvider(MemoryProvider):
         if not turns:
             return
 
-        def _sync():
-            try:
-                self._post("/v1/hooks/stop", {"project": PROJECT,
-                                              "session_id": sid, "turns": turns})
-            except Exception as e:
-                logger.warning("brethofmind-cloud sync_turn failed: %s", e)
-
-        prev = self._sync_thread
-        if prev and prev.is_alive():
-            prev.join(timeout=5.0)
-        self._sync_thread = threading.Thread(
-            target=_sync, daemon=True, name="brethofmind-cloud-sync")
-        self._sync_thread.start()
+        # Archive SYNCHRONOUSLY. Hermes' memory manager already dispatches
+        # sync_turn on its own background worker (which lives with the agent),
+        # so blocking here does not stall the user's response — and it avoids
+        # the fire-and-forget-daemon-thread bug where the thread was torn down
+        # before the (slow, server-embedding) POST completed, so turns were
+        # silently never persisted.
+        try:
+            self._post("/v1/hooks/stop",
+                       {"project": proj, "session_id": sid, "turns": turns})
+        except Exception as e:
+            logger.warning("brethofmind-cloud sync_turn failed: %s", e)
 
     # -- deliberate tools (same names/shape as the local provider) ----------
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
@@ -226,20 +288,20 @@ class BrethofMindCloudProvider(MemoryProvider):
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
                 return json.dumps({"result": self._mcp("semantic_search",
-                                                       query_text=q, project=PROJECT, top_k=k)})
+                                                       query_text=q, project=_project(), top_k=k)})
             if tool_name == "brethofmind_recall":
                 q = (args.get("query") or "").strip()
                 if not q:
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
                 return json.dumps({"result": self._mcp("search_chat",
-                                                       query_text=q, project=PROJECT, top_k=k)})
+                                                       query_text=q, project=_project(), top_k=k)})
             if tool_name == "brethofmind_save":
                 title = (args.get("title") or "").strip()
                 content = (args.get("content") or "").strip()
                 if not title or not content:
                     return tool_error("brethofmind_save needs both title and content")
-                proj = (args.get("project") or PROJECT).strip()
+                proj = (args.get("project") or _project()).strip()
                 if not _PROJECT_RE.match(proj):
                     return tool_error(f"invalid project '{proj}'")
                 rid = self._record_id(args.get("record_id", ""), title, content)
