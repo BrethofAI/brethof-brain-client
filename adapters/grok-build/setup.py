@@ -86,50 +86,69 @@ def add_mcp_server(grok_bin: str, api_key: str, endpoint: str):
         return False
 
 
-def verify_hooks():
-    """Check that Claude Code hooks are wired in ~/.claude/settings.json.
+def install_hooks():
+    """Install the NATIVE grok Stop-hook archiver (~/.grok/hooks/).
 
-    Grok Build reads these hooks, so if Claude Code's brethof-mind plugin is
-    installed, the hooks fire for Grok too.
+    Grok Build does scan ~/.claude/settings.json for hooks, but the Claude hook
+    entry CANNOT work there (verified empirically on grok 0.2.106, 2026-07-24):
+    payloads are camelCase, passive-hook stdout (additionalContext) is ignored,
+    and on Windows grok's spawner mangles the quoted `"exe" "script"` command
+    form. So we wire grok_hook.py natively: a Stop hook that archives grok's
+    own updates.jsonl transcript to the cloud. Memory INJECTION is replaced by
+    the PULL model — a global rule tells Grok to call the MCP recall tools.
     """
-    print("=== Verifying Claude Code hooks ===")
-    settings_path = Path.home() / ".claude" / "settings.json"
-    if not settings_path.exists():
-        print("  ⚠ No ~/.claude/settings.json found.")
-        print("  Install the Claude Code plugin first:")
-        print("    /plugin marketplace add BrethofAI/brethof-mind-client")
-        print("    /plugin install brethof-mind@brethof")
-        print("  Or copy hooks manually from the repo root into ~/.claude/hooks/")
-        return False
+    print("=== Installing native grok hooks ===")
+    import json as _json
+    adapter = Path(__file__).parent / "grok_hook.py"
+    hooks_dir = Path.home() / ".grok" / "hooks"
+    bin_dir = hooks_dir / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
 
-    import json
-    with open(settings_path) as f:
-        settings = json.load(f)
-
-    hooks = settings.get("hooks", {})
-    has_session_start = "SessionStart" in hooks
-    has_prompt_submit = "UserPromptSubmit" in hooks
-    has_stop = "Stop" in hooks
-
-    if has_session_start and has_prompt_submit and has_stop:
-        print("  ✓ Hooks found: SessionStart, UserPromptSubmit, Stop")
-        # Check they reference brethof-mind
-        all_hooks = []
-        for event in ("SessionStart", "UserPromptSubmit", "Stop", "PreCompact"):
-            for entry in hooks.get(event, []):
-                for h in entry.get("hooks", []):
-                    all_hooks.append(h.get("command", ""))
-        bm_hooks = [h for h in all_hooks if "brethof" in h.lower() or "memory" in h.lower() or "load_memory" in h]
-        if bm_hooks:
-            print(f"  ✓ brethof-mind hooks detected ({len(bm_hooks)} commands)")
-            return True
-        else:
-            print("  ⚠ Hooks exist but may not be brethof-mind specific.")
-            print("  Commands found:", all_hooks[:3])
-            return True  # still probably fine
+    if sys.platform == "win32":
+        # .cmd wrapper REQUIRED: grok's Windows spawner breaks on quoted
+        # `"python" "script" arg` inline commands (exit 1 before Python runs).
+        wrapper = bin_dir / "bm-grok-stop.cmd"
+        wrapper.write_text(
+            "@echo off\r\n"
+            f'"{sys.executable}" "{adapter}" stop\r\n'
+            "exit /b 0\r\n", encoding="utf-8")
+        command = "bin/bm-grok-stop.cmd"
     else:
-        print("  ⚠ Missing some hooks. Install the Claude Code plugin for full integration.")
-        return False
+        wrapper = bin_dir / "bm-grok-stop.sh"
+        wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{adapter}" stop\n',
+                           encoding="utf-8")
+        wrapper.chmod(0o755)
+        command = "bin/bm-grok-stop.sh"
+
+    hook_json = hooks_dir / "brethof-mind.json"
+    hook_json.write_text(_json.dumps({"hooks": {"Stop": [
+        {"hooks": [{"type": "command", "command": command, "timeout": 25}]}
+    ]}}, indent=2) + "\n", encoding="utf-8")
+    print(f"  ✓ Stop-hook archiver: {hook_json} -> {wrapper.name}")
+
+    # PULL-model memory rule (grok has no hook context-injection channel).
+    rules_dir = Path.home() / ".grok" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    rule = rules_dir / "brethof-mind-memory.md"
+    rule.write_text(
+        "# brethof-mind memory (PULL model — you must call the tools)\n\n"
+        "You have persistent cross-session memory: the **brethof-mind** MCP "
+        "server (recall, search_memory, semantic_search, get_memory, "
+        "save_memory, search_chat_text, ...).\n\n"
+        "Grok cannot inject memory automatically, so YOU pull it:\n"
+        "1. Before the first substantive answer on a known project, call "
+        "`recall` with the topic.\n"
+        "2. When a question touches past decisions/infra/runbooks — `recall` "
+        "first, never guess. Exact strings (paths, errors) → `search_chat_text`.\n"
+        "3. New decisions/facts/runbooks → `save_memory` (update, don't fork).\n"
+        "4. Turns are archived automatically by the Stop hook — do not save "
+        "chat history manually.\n\n"
+        "Do NOT use Grok's built-in markdown memory — brethof-mind is the "
+        "single memory system.\n", encoding="utf-8")
+    print(f"  ✓ Pull-model rule: {rule}")
+    print("  NOTE: consider `[compat.claude] hooks = false` in ~/.grok/config.toml"
+          " — the Claude-sourced hooks fail in grok and only add log noise.")
+    return True
 
 
 def copy_skills():
@@ -168,7 +187,7 @@ def main():
     print()
 
     ok_mcp = add_mcp_server(grok_bin, api_key, endpoint)
-    ok_hooks = verify_hooks()
+    ok_hooks = install_hooks()
     ok_skills = copy_skills()
 
     print()
@@ -179,9 +198,9 @@ def main():
         print("✗ MCP server: failed — check your API key and endpoint")
 
     if ok_hooks:
-        print("✓ Hooks: Claude Code hooks detected (Grok reads these)")
+        print("✓ Hooks: native Stop-hook archiver + pull-model memory rule installed")
     else:
-        print("⚠ Hooks: not fully configured — install Claude Code plugin for hooks")
+        print("⚠ Hooks: not configured — re-run or wire ~/.grok/hooks manually")
 
     if ok_skills:
         print("✓ Skills: /recall /curate /heal /onboard installed")
