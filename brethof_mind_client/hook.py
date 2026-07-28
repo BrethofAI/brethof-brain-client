@@ -22,11 +22,19 @@ turns. Those get a one-line notice; everything transient stays quiet.
 from __future__ import annotations
 
 import json
+import os
 import sys
+import traceback
 
 from .client import Client, ClientError
 from .config import Config
 from . import transcript
+
+# BRETHOF_MIND_HOOK_DEBUG=1 turns the fail-open silence into stderr truth.
+# The 2026-07-06 audit named silent swallowing this client's biggest risk;
+# 2026-07-28 proved it: a pre-compact that never enqueued took four probing
+# rounds to even OBSERVE because every layer ate the evidence.
+DEBUG = bool(os.environ.get("BRETHOF_MIND_HOOK_DEBUG"))
 
 # Chunked archive flush: bounded batches, state committed per confirmed batch,
 # so a large backlog (fresh install on an old session, over_cap period, outage)
@@ -42,6 +50,12 @@ def _read_stdin() -> dict:
         data = json.load(sys.stdin)
         return data if isinstance(data, dict) else {}
     except Exception:
+        # A parse failure degrades to {} and every handler no-ops on the
+        # missing session_id — fail-open holds. But silently: a mangled test
+        # payload cost four debugging rounds on 2026-07-28 because this except
+        # ate the JSONDecodeError. Debug mode tells the truth.
+        if DEBUG:
+            traceback.print_exc()
         return {}
 
 
@@ -175,7 +189,8 @@ def _pre_compact(cfg: Config, inp: dict) -> None:
     try:
         _stop(cfg, inp)
     except Exception:  # noqa: BLE001 — flush is best-effort here; _stop has
-        pass           # its own state discipline and will retry next turn
+        if DEBUG:      # its own state discipline and will retry next turn
+            traceback.print_exc()
     try:
         state = transcript.load_state(inp.get("session_id", ""))
         Client(cfg, timeout=10.0).post(
@@ -184,7 +199,8 @@ def _pre_compact(cfg: Config, inp: dict) -> None:
              "project": cfg.project_for(inp.get("cwd", "")),
              "last_index": max(0, state["next_index"] - 1)})
     except ClientError:
-        pass
+        if DEBUG:
+            traceback.print_exc()
 
 
 _HANDLERS = {
@@ -208,7 +224,12 @@ def main(argv=None) -> int:
         if not cfg.configured():
             return 0  # not set up yet — stay silent, `brethof-mind setup` handles UX
         inp = _read_stdin()
+        if DEBUG:
+            sys.stderr.write(f"[hook-debug] event={event} "
+                             f"inp_keys={sorted(inp)}\n")
         handler(cfg, inp)
+        if DEBUG:
+            sys.stderr.write(f"[hook-debug] {event} handler returned clean\n")
     except ClientError as e:
         # Persistent auth problems are the ONE condition worth a signal: a dead
         # key silently halts archiving until the transcripts age out. Inject a
@@ -221,7 +242,8 @@ def main(argv=None) -> int:
                                  "run `brethof-mind doctor`\n")
         # Anything else: data plane unreachable → memory just doesn't load.
     except Exception:  # noqa: BLE001 — absolute last resort; never break the turn
-        pass
+        if DEBUG:
+            traceback.print_exc()
     return 0
 
 
