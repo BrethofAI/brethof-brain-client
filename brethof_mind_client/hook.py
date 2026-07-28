@@ -159,11 +159,30 @@ def _commit(cfg: Config, inp: dict) -> None:
 
 
 def _pre_compact(cfg: Config, inp: dict) -> None:
-    # Server ack only; curate/marker behaviour is a local concern the server
-    # doesn't gate. Best-effort — swallow anything.
+    """/compact = the split line. The server curates the window from ITS
+    archive, so before telling it to, make sure the archive HAS the window:
+
+    1. FLUSH — run the stop-hook logic so every pending turn is archived.
+       Without this the curate reads a transcript missing its own tail.
+    2. ENQUEUE with project + last_index — the first version sent only
+       session_id, so every job landed as project 'global' (2026-07-28, the
+       founder's first real ms compact) and the server had no number to
+       reconcile the archive against.
+
+    Still best-effort: a failed pre-compact costs one curate cycle, never the
+    session. The marker guarantees the window survives for the next compact.
+    """
     try:
-        Client(cfg, timeout=5.0).post("/v1/hooks/pre-compact",
-                                      {"session_id": inp.get("session_id", "")})
+        _stop(cfg, inp)
+    except Exception:  # noqa: BLE001 — flush is best-effort here; _stop has
+        pass           # its own state discipline and will retry next turn
+    try:
+        state = transcript.load_state(inp.get("session_id", ""))
+        Client(cfg, timeout=10.0).post(
+            "/v1/hooks/pre-compact",
+            {"session_id": inp.get("session_id", ""),
+             "project": cfg.project_for(inp.get("cwd", "")),
+             "last_index": max(0, state["next_index"] - 1)})
     except ClientError:
         pass
 
