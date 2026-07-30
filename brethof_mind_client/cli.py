@@ -24,17 +24,21 @@ from . import DEFAULT_ENDPOINT, __version__
 from .client import Client, ClientError
 from .config import (CONFIG_PATH, Config, ensure_dirs, save_file, valid_project)
 
-# SessionStart is registered TWICE (part 1 / part 2): Claude Code caps each
-# hook's output at 10k chars, so the memory payload arrives as two budgeted
-# chunks — the server packs sections and returns "" for an unused part.
-HOOK_EVENTS = [
-    ("SessionStart", "session-start 1"),
-    ("SessionStart", "session-start 2"),
-    ("SessionStart", "session-start 3"),
-    ("UserPromptSubmit", "prompt-submit"),
-    ("Stop", "stop"),
-    ("PreCompact", "pre-compact"),
-]
+# SessionStart is registered once PER PART: Claude Code caps each hook's
+# output at 10k chars, so the server auto-splits the payload into as many
+# ≤9k parts as the tenant's rules + projects need and returns "" for unused
+# parts. 8 slots ≈ a 76KB envelope — sized for business tenants with many
+# projects/rules; same-event hooks run in parallel, so empty slots are
+# almost free.
+SESSION_START_PARTS = 8
+HOOK_EVENTS = (
+    [("SessionStart", f"session-start {i}")
+     for i in range(1, SESSION_START_PARTS + 1)]
+    + [
+        ("UserPromptSubmit", "prompt-submit"),
+        ("Stop", "stop"),
+        ("PreCompact", "pre-compact"),
+    ])
 CLAUDE_SETTINGS = os.path.expanduser("~/.claude/settings.json")
 MCP_PATH = "/v1/mcp"
 
