@@ -6,7 +6,7 @@ and has its own `grok mcp` command for MCP servers. This script:
 
 1. Adds the brethof-mind HTTP MCP server via `grok mcp add`
 2. Verifies the Claude Code hooks are wired (Grok reads these too)
-3. Copies the /recall /curate /heal /onboard skills to ~/.grok/skills/
+3. Copies the /recall /curate /onboard skills to ~/.grok/skills/
 
 Run from this directory:
     python setup.py
@@ -133,14 +133,19 @@ def install_hooks():
     rule.write_text(
         "# brethof-mind memory (PULL model — you must call the tools)\n\n"
         "You have persistent cross-session memory: the **brethof-mind** MCP "
-        "server (recall, search_memory, semantic_search, get_memory, "
-        "save_memory, search_chat_text, ...).\n\n"
+        "server. Use the tools it lists — `search_memory` (saved memory, "
+        "the current truth) and `search_history` (full conversation "
+        "history, raw) are the core pair.\n\n"
         "Grok cannot inject memory automatically, so YOU pull it:\n"
-        "1. Before the first substantive answer on a known project, call "
-        "`recall` with the topic.\n"
-        "2. When a question touches past decisions/infra/runbooks — `recall` "
-        "first, never guess. Exact strings (paths, errors) → `search_chat_text`.\n"
-        "3. New decisions/facts/runbooks → `save_memory` (update, don't fork).\n"
+        "1. Before the first substantive answer on a known project, "
+        "`search_memory` the topic.\n"
+        "2. When a question touches past decisions/infra/runbooks — search "
+        "first, never guess. Exact strings (paths, errors) → "
+        "`search_history`.\n"
+        "3. Memory LEARNS AUTOMATICALLY from every archived exchange — the "
+        "service curates as you work. Save explicitly only what the user "
+        "asks to remember or what must be recorded exactly, with the save "
+        "tool the server lists.\n"
         "4. Turns are archived automatically by the Stop hook — do not save "
         "chat history manually.\n\n"
         "Do NOT use Grok's built-in markdown memory — brethof-mind is the "
@@ -152,7 +157,7 @@ def install_hooks():
 
 
 def copy_skills():
-    """Copy /recall /curate /heal /onboard skills to ~/.grok/skills/."""
+    """Copy /recall /curate /onboard skills to ~/.grok/skills/."""
     print("=== Copying skills ===")
     skills_dir = Path(__file__).parent / "skills"
     if not skills_dir.exists():
@@ -203,7 +208,7 @@ def main():
         print("⚠ Hooks: not configured — re-run or wire ~/.grok/hooks manually")
 
     if ok_skills:
-        print("✓ Skills: /recall /curate /heal /onboard installed")
+        print("✓ Skills: /recall /curate /onboard installed")
     else:
         print("⚠ Skills: not copied")
 

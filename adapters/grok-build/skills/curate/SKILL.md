@@ -1,49 +1,36 @@
 ---
 name: curate
-description: "Distil the current session into brethof-mind memory: capture decisions/facts/gotchas, update state dashboards, prune stale records. Run before compacting or at the end of a work session. Trigger on: curate, save to memory, update memory, end of session."
-version: 1.0.0
+description: "Save something to brethof-mind memory explicitly — a decision, convention, or fact that must be remembered exactly as stated. Memory also learns automatically from every exchange; use this when precision or immediacy matters. Trigger on: remember this, save to memory, don't forget, note this down."
+version: 2.0.0
 platforms: [linux, macos, windows]
-metadata:
-  hermes:
-    tags: [memory, curate, brethof-mind, hygiene]
-    related_skills: []
 ---
 
-# Curate — distil this session into brethof-mind memory
+# Save to memory — explicit remembering
 
-brethof-mind is shared long-term memory you use exactly like Claude. This distils
-a session into it so the next one resumes cleanly — and prunes what went stale.
-Capturing too little and deleting too little are BOTH failures; under-deletion is
-the worse, recurring one. Curated memory is disposable — only `*_chat` archives
-are immutable. A dead record is a DELETED record.
+brethof-mind learns from your conversations **automatically**: the memory
+service curates every exchange as it happens, keeps what is durable, updates
+what changed, and discards what went stale. You do NOT need to summarize
+sessions, run end-of-session curation, or maintain memory hygiene — that is
+the service's job now, and doing it by hand just duplicates it.
+
+Use this skill for the cases automation shouldn't guess at:
+- The user says **"remember this"** — save their exact intent.
+- A **decision or convention** was settled and must be recorded precisely.
+- A fact matters for **other projects** than the one you're in.
 
 ## Your tools
-- `brethofmind_search(query)` — find existing records across all projects. Each
-  result STARTS with its full id `table:key` — use that id to update or delete it.
-- `brethofmind_save(title, content, memory_type, project, record_id)` — UPSERT.
-  `project` = the table it belongs to (a project key, or `state` / `rules`). Pass a
-  STABLE `record_id` to update-in-place; omit for a new auto-id record.
-- `brethofmind_delete(project, record_id)` — delete a stale/superseded record.
-- `brethofmind_recall(query)` — search past sessions (read-only).
+- `the memory save tool your brethof-mind MCP server lists (save_project / save_general, or save_memory on a full-access key)` — save one durable fact. Write
+  it self-contained: a reader a month from now must understand it without
+  this conversation. Include concrete names, dates, numbers.
+- `search_memory(query)` — check first whether memory already holds it;
+  if a result already says the same thing, saving again is noise.
+- `delete_memory` — remove a saved memory the user
+  says is wrong or dead. Conversation history is never touched by this.
 
 ## Steps
-1. **Navigate from the indexes.** `brethofmind_search("memory_index")` — follow the
-   project index maps; don't guess tables or reinvent records.
-2. **Walk the WHOLE session, group by the PROJECT each thing belongs to.** Capture
-   GENEROUSLY: every decision, correction, fact figured out, gotcha, runbook,
-   dead-end ruled out, key file/path, and the WHY behind a choice. A future agent
-   should resume cold from what you write.
-3. **For each touched project:**
-   - **state** — UPSERT one row: `project="state"`, `record_id="<project-or-area>"`,
-     with a `status` line, a dated note in `recent_changes`, and `next_actions`.
-   - **knowledge** — save genuinely new decisions/facts/runbooks/gotchas to that
-     project's table: `project="<key>"`, a STABLE `record_id`, the right
-     `memory_type`. SEARCH FIRST — update-in-place, never duplicate.
-   - **index** — if you added or renamed records, update `project="<key>"`,
-     `record_id="memory_index"` so it still maps reality.
-   - **rules** — a new convention the user gave → `project="rules"`.
-4. **DELETE — be confident; this is the step agents wrongly skip.** Anything this
-   session made false or superseded → `brethofmind_delete` it. Collapse standalone
-   status snapshots into the `state` row, then delete the snapshots. Dedupe two
-   records that say the same thing. NEVER delete `*_chat` (the tool blocks it).
-5. **Report** a short per-project summary: state/index updated · N saved · **M DELETED**.
+1. Search first. If memory already knows it, stop — or save only the delta.
+2. Save ONE fact per call, self-contained, under the project it is about.
+3. Confirm to the user in one line what was saved and where.
+
+Most of what happens in a session should NOT be explicitly saved — the
+automatic layer already has it. Explicit saves are for emphasis, not bulk.

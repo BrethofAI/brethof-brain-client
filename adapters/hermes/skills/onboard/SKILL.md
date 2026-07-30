@@ -1,57 +1,47 @@
 ---
 name: onboard
-description: "First-run setup: explain brethof-mind, then build the user's projects, rules, and indexes with them. Run once after installing the plugin. Trigger on: onboard, set up memory, first run, initialize memory."
-version: 1.0.0
+description: "First-run setup: connect brethof-mind cloud memory and explain how it works. Run once after installing the plugin. Trigger on: onboard, set up memory, first run, initialize memory."
+version: 2.0.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [memory, onboard, setup, brethof-mind]
-    related_skills: [curate]
+    related_skills: [curate, recall]
 ---
 
-# Onboard — first-run brethof-mind setup
+# Onboard — connect brethof-mind memory
 
-Guide a new user through setting up their brethof-mind cloud memory, then build
-their personal layer WITH them. Be conversational and concrete — a guided setup,
-not a lecture. There is nothing to install and no local database: the tenant
-lives on the server and its tables are created automatically on first write.
+Guide a new user through connecting their brethof-mind cloud memory. Be
+conversational and concrete — a guided setup, not a lecture. There is
+nothing to install server-side and no local database: memory lives in the
+cloud and starts working on the first conversation.
 
-## 0. Sense the state
-`brethofmind_search("memory_index")`. If nothing meaningful comes back, this is a
-fresh tenant — proceed. If projects/rules already exist, treat this as a re-tune:
-confirm before overwriting anything.
+## 1. The key
+- The user creates an API key in their account panel:
+  **brethof.ai/account → Memory tab → New key** (2FA required once).
+- Put it in the environment: `BRETHOF_MIND_API_KEY=<key>` (and optionally
+  `HERMES_MEMORY_PROJECT=<project>` for this agent's default project).
+- Never echo the key back, never store it in memory or logs.
 
-## 1. Explain what this is (a few lines)
-- Memory that survives across sessions and is SHARED across your agents: a
-  curated brain you look things up in, plus an immutable archive of every
-  conversation.
-- **Tiered indexes**: one GENERAL index (the router) + one PER PROJECT. You never
-  load everything — you follow the indexes to what you need.
-- **Tables**: one curated table per project; `*_chat` (immutable transcript
-  archive); `rules` (conventions loaded every session); `state` (one status row
-  per project/area).
-- **The discipline**: delete what's superseded (no "obsolete" flag); `*_chat` is
-  sacred; update-don't-fork.
-- **`/curate`** at the end of a session saves + prunes; **`/heal`** ~weekly deep-cleans.
+## 2. Verify the connection
+Call `brethofmind_search("test")`. Any well-formed response — even "no
+results" — means the key works. An auth error means the key is wrong or
+revoked: back to the panel.
 
-## 2. Interview (one topic at a time — keep it short; WAIT for answers)
-1. **Projects** — which codebases/areas do you work in? Each becomes a project key
-   (its own memory table, created on first write).
-2. **What to remember** — for each project, what should you reliably recall next
-   time (decisions, conventions, gotchas, where things live)?
-3. **Hard rules** — conventions to enforce every time (cross-cutting → `area='all'`;
-   project-specific → that project's area). Imperative and short.
+## 3. Explain how it works (a few lines, in your own words)
+- **Memory is automatic.** Every exchange is archived, and the memory
+  service curates it as you work — decisions, facts, and corrections land
+  in memory within seconds, without anyone summarizing anything.
+- **Projects are just names.** Pass a project when saving or searching;
+  it exists the moment it's first used. No setup, no limit on how many.
+- **Recall is unlimited** on every plan — search freely, always.
+- **Two stores**: saved memory (current truth, curated) and conversation
+  history (complete, raw). The /recall skill explains when to use which.
+- **Explicit saves** are for emphasis: "remember this" → /curate skill.
+- Usage and plan live in the account panel; the service emails a heads-up
+  when usage approaches the plan's allowance.
 
-## 3. Write their memory (confirm the plan first, then do it — all via tools)
-- **Per-project index** — `brethofmind_save(project="<key>", record_id="memory_index", ...)`
-  with a short "what's here / where to look" stub. The first save creates the table.
-- **General index** — `brethofmind_save(project="global", record_id="memory_index", ...)`:
-  a lean router listing their projects + a one-line pointer to each.
-- **Their rules** — `brethofmind_save(project="rules", ...)` for each (right `area`).
-- **state** — optionally seed a `state` row per active project with a one-line status.
-
-## 4. Close
-Summarise what you wrote (projects, indexes, rules). Tell them to end sessions
-with `/curate` and run `/heal` about weekly. Rules for you: don't invent
-projects/rules they didn't ask for; confirm before overwriting an index; never
-touch `*_chat`.
+## 4. First real moment
+Ask the user to tell you one durable fact about their work (a preference,
+a convention, a current goal) and save it with `brethofmind_save`. Then
+search for it — showing the round trip beats explaining it.

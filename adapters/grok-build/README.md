@@ -6,7 +6,7 @@ prompts. It also has its own `grok mcp` command for MCP server management.
 
 This adapter wires Grok Build to brethof-mind cloud so it gets the same memory
 as Claude Code and Hermes: **auto-recall at session start, ambient recall before
-each prompt, archiving every turn, and 15 memory tools on demand**.
+each prompt, archiving every turn, and the memory tools on demand**.
 
 ## What you get
 
@@ -15,8 +15,8 @@ each prompt, archiving every turn, and 15 memory tools on demand**.
 | **Session-start injection** | `~/.claude/settings.json` hooks → cloud API | Memory index + rules + state loaded into system prompt |
 | **Ambient recall** | `~/.claude/settings.json` hooks → cloud API | Relevant memory injected before each prompt |
 | **Turn archival** | `~/.claude/settings.json` hooks → cloud API | Each user+assistant turn archived to chat memory |
-| **15 memory tools** | `grok mcp add` → cloud MCP endpoint | `recall`, `search_memory`, `semantic_search`, `save_memory`, `list_memory`, `get_memory`, `memory_health`, etc. |
-| **`/recall` `/curate` `/heal` `/onboard`** | Skills copied to `~/.grok/` | Slash commands for memory management |
+| **Memory tools** | `grok mcp add` → cloud MCP endpoint | The server lists the toolset your key is entitled to — `search_memory`, `search_history`, the save tools, `list_memory`, `get_memory`, `delete_memory`, `cleanup_history`, etc. |
+| **`/recall` `/curate` `/onboard`** | Skills copied to `~/.grok/` | Slash commands for memory management |
 
 ## Install
 
@@ -30,7 +30,7 @@ python setup.py
 The setup script:
 1. Adds the `brethof-mind` HTTP MCP server to `~/.grok/config.toml` via `grok mcp add`
 2. Verifies the Claude Code hooks in `~/.claude/settings.json` are wired (Grok reads these)
-3. Copies the `/recall` `/curate` `/heal` `/onboard` skills to `~/.grok/skills/`
+3. Copies the `/recall` `/curate` `/onboard` skills to `~/.grok/skills/`
 
 You'll need your **API key** from [brethof.ai/account](https://brethof.ai) →
 brethof-mind tab. Set it in the environment:
@@ -42,7 +42,7 @@ BRETHOF_MIND_ENDPOINT=https://api.brethof.cloud   # optional, this is the defaul
 
 ### Option B: Manual
 
-**1. Add the MCP server** (gives Grok the 15 memory tools):
+**1. Add the MCP server** (gives Grok the memory tools):
 
 ```bash
 grok mcp add --transport http brethof-mind https://api.brethof.cloud/v1/mcp \
@@ -53,14 +53,14 @@ grok mcp add --transport http brethof-mind https://api.brethof.cloud/v1/mcp \
 hooks fire automatically if already installed):
 
 ```bash
-grok mcp doctor    # should show brethof-mind: ✓ handshake OK, 15 tools discovered
+grok mcp doctor    # should show brethof-mind: ✓ handshake OK, tools discovered
 ```
 
 If the Claude Code hooks aren't installed yet, install the Claude Code plugin
 first (`/plugin install brethof-mind@brethof` in Claude Code) or copy the hooks
 from the root of this repo into `~/.claude/hooks/`.
 
-**3. Copy skills** (optional — adds `/recall` `/curate` `/heal` `/onboard`):
+**3. Copy skills** (optional — adds `/recall` `/curate` `/onboard`):
 
 ```bash
 cp -r skills/* ~/.grok/skills/
@@ -73,11 +73,11 @@ cp -r skills/* ~/.grok/skills/
 grok mcp doctor
 
 # In a Grok session, the agent should be able to call:
-#   recall("your topic")           — hybrid search curated + chat
-#   search_memory("keyword")       — keyword search curated memory
-#   semantic_search("concept")      — vector search curated memory
-#   save_memory("title", "content") — save a new record
-#   memory_health()                — check memory system health
+#   search_memory("your topic")    — saved memory: the current truth
+#   search_history("exact string") — full conversation history, raw
+#   save_project("fact", project)  — save one durable fact (the service
+#                                    files it; memory also learns from
+#                                    every exchange automatically)
 ```
 
 ## How it works

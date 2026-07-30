@@ -17,6 +17,10 @@
 # Authorization = "Bearer bm_live_REPLACE_ME"
 #
 # Verify: grok mcp doctor
-# Tools: recall, search_memory, semantic_search, search_chat, search_chat_text,
-#        get_memory, list_memory, recent_records, query_raw, memory_health,
-#        save_memory, save_record, supersede_memory, save_commit
+#
+# Tools: the server lists the toolset your key is entitled to — do not
+# hard-code names. A panel-minted key sees the standard set (list_projects,
+# save_project, save_general, save_project_rule, save_general_rule,
+# search_memory, search_history, list_memory, get_memory, delete_memory,
+# delete_project, cleanup_history, list_rules); a full-access key sees the
+# extended set. Either way `tools/list` is the truth.

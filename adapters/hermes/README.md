@@ -56,7 +56,7 @@ every turn, and exposes the `brethofmind_*` tools — all against the cloud.
 ## Memory commands (skills)
 
 The provider gives Hermes automatic memory + the `brethofmind_*` tools. To also
-get the `/recall`, `/curate`, `/heal`, `/onboard` commands, copy the `skills/`
+get the `/recall`, `/curate`, `/onboard` commands, copy the `skills/`
 folder here into your Hermes skills dir:
 
 ```
@@ -64,12 +64,12 @@ cp -r skills/* ~/.hermes/skills/
 ```
 
 They use the provider's tools (no local scripts), so they work anywhere the
-provider does. Run `/onboard` once, `/curate` at the end of a session, and
-`/heal` about weekly.
+provider does. Run `/onboard` once. Memory curates itself automatically as you work —
+`/curate` is only for explicit "remember this" saves.
 
 ## Tools-only alternative (no hooks)
 
-If you just want the 15 memory tools in Hermes without the provider's automatic
+If you just want the memory tools in Hermes without the provider's automatic
 inject/archive hooks, register the remote MCP endpoint instead (see
 `mcp_servers.example.yaml`). The provider above is the fuller integration and the
 recommended path when brethof-mind is Hermes's memory.

@@ -157,6 +157,36 @@ class BrethofMindCloudProvider(MemoryProvider):
             body = r.read()
         return json.loads(body or b"{}")
 
+    _tool_names_cache: Optional[set] = None
+
+    def _tool_names(self) -> set:
+        """The tool names THIS key's tier actually has — asked once from
+        tools/list, cached for the process. The v2 server resolves a
+        toolset per key (full-access keys see the classic tools, panel
+        keys see the intent tools), so the provider adapts instead of
+        assuming: same brethofmind_* interface either way."""
+        if self._tool_names_cache is not None:
+            return self._tool_names_cache
+        try:
+            self._rpc_id += 1
+            resp = self._post("/v1/mcp", {
+                "jsonrpc": "2.0", "id": self._rpc_id, "method": "tools/list",
+                "params": {}})
+            names = {t.get("name") for t in
+                     (resp.get("result") or {}).get("tools", [])}
+        except Exception as e:  # noqa: BLE001 — degrade to classic names
+            logger.warning("brethofmind-cloud tools/list failed: %s", e)
+            names = set()
+        self._tool_names_cache = names
+        return names
+
+    def _pick(self, *candidates: str) -> str:
+        names = self._tool_names()
+        for c in candidates:
+            if c in names:
+                return c
+        return candidates[0]           # server answers unknown-tool cleanly
+
     def _mcp(self, tool: str, **arguments: Any) -> str:
         """Call one of the 15 memory tools; return its text result. Raises on
         a tool/JSON-RPC error."""
@@ -287,15 +317,17 @@ class BrethofMindCloudProvider(MemoryProvider):
                 if not q:
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
-                return json.dumps({"result": self._mcp("semantic_search",
-                                                       query_text=q, project=_project(), top_k=k)})
+                return json.dumps({"result": self._mcp(
+                    self._pick("semantic_search", "search_memory"),
+                    query_text=q, project=_project(), top_k=k)})
             if tool_name == "brethofmind_recall":
                 q = (args.get("query") or "").strip()
                 if not q:
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
-                return json.dumps({"result": self._mcp("search_chat",
-                                                       query_text=q, project=_project(), top_k=k)})
+                return json.dumps({"result": self._mcp(
+                    self._pick("search_chat", "search_history"),
+                    query_text=q, project=_project(), top_k=k)})
             if tool_name == "brethofmind_save":
                 title = (args.get("title") or "").strip()
                 content = (args.get("content") or "").strip()
@@ -304,10 +336,22 @@ class BrethofMindCloudProvider(MemoryProvider):
                 proj = (args.get("project") or _project()).strip()
                 if not _PROJECT_RE.match(proj):
                     return tool_error(f"invalid project '{proj}'")
-                rid = self._record_id(args.get("record_id", ""), title, content)
-                out = self._mcp("save_memory", project=proj, record_id=rid,
-                                memory_type=args.get("memory_type", "note"),
-                                title=title, content=content)
+                if "save_memory" in self._tool_names():
+                    # Full-access key: classic upsert with a stable id.
+                    rid = self._record_id(args.get("record_id", ""), title,
+                                          content)
+                    out = self._mcp("save_memory", project=proj,
+                                    record_id=rid,
+                                    memory_type=args.get("memory_type",
+                                                         "note"),
+                                    title=title, content=content)
+                else:
+                    # Panel key: an INTENT — the memory service files it
+                    # (placement, dedupe, supersede). record_id and
+                    # memory_type are the service's business, not ours.
+                    out = self._mcp("save_project",
+                                    content=f"{title}: {content}",
+                                    project=proj)
                 return json.dumps({"result": out})
             if tool_name == "brethofmind_delete":
                 proj = (args.get("project") or "").strip()
@@ -316,8 +360,12 @@ class BrethofMindCloudProvider(MemoryProvider):
                     return tool_error("brethofmind_delete needs project and record_id")
                 if not _PROJECT_RE.match(proj) or proj.endswith(("_chat", "_commit")):
                     return tool_error("cannot delete from that table")
-                self._mcp("query_raw", sql=f"DELETE {proj}:`{rid}`;")
-                return json.dumps({"result": f"Deleted {proj}:{rid}"})
+                # v2: the id-scoped delete tool on BOTH tiers — it refuses
+                # the chat archive by construction. (The old path here was
+                # a query_raw with SurrealDB syntax: doubly dead on v2,
+                # where query_raw is read-only Postgres.)
+                out = self._mcp("delete_memory", project=proj, record_id=rid)
+                return json.dumps({"result": out})
         except Exception as e:  # noqa: BLE001
             return tool_error(f"brethofmind-cloud error: {e}")
         return tool_error(f"Unknown tool: {tool_name}")
