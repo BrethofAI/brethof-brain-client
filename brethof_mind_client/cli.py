@@ -24,8 +24,13 @@ from . import DEFAULT_ENDPOINT, __version__
 from .client import Client, ClientError
 from .config import (CONFIG_PATH, Config, ensure_dirs, save_file, valid_project)
 
+# SessionStart is registered TWICE (part 1 / part 2): Claude Code caps each
+# hook's output at 10k chars, so the memory payload arrives as two budgeted
+# chunks — the server packs sections and returns "" for an unused part.
 HOOK_EVENTS = [
-    ("SessionStart", "session-start"),
+    ("SessionStart", "session-start 1"),
+    ("SessionStart", "session-start 2"),
+    ("SessionStart", "session-start 3"),
     ("UserPromptSubmit", "prompt-submit"),
     ("Stop", "stop"),
     ("PreCompact", "pre-compact"),
@@ -34,8 +39,8 @@ CLAUDE_SETTINGS = os.path.expanduser("~/.claude/settings.json")
 MCP_PATH = "/v1/mcp"
 
 # Matches our own installed hook command and captures the baked interpreter:
-#   "<python path>" -m brethof_mind_client.hook <event>
-_CMD_RE = re.compile(r'^"([^"]+)" -m brethof_mind_client\.hook (\S+)$')
+#   "<python path>" -m brethof_mind_client.hook <event> [part]
+_CMD_RE = re.compile(r'^"([^"]+)" -m brethof_mind_client\.hook (\S+(?: \d+)?)$')
 
 
 def _hook_command(event_arg: str) -> str:
@@ -165,6 +170,19 @@ def cmd_install_hooks(args) -> int:
     settings = _load_settings()
     hooks = settings.setdefault("hooks", {})
     added = repaired = 0
+    # MIGRATION: the pre-parts registration was a single bare "session-start"
+    # hook. Left in place next to "session-start 1/2" it would inject the
+    # whole payload a THIRD time — remove ours (and only ours) on sight.
+    legacy = 0
+    for g in hooks.get("SessionStart", []) or []:
+        if isinstance(g, dict):
+            inner = [h for h in g.get("hooks", [])
+                     if not (isinstance(h, dict)
+                             and _ours(h.get("command", ""), "session-start"))]
+            legacy += len(g.get("hooks", [])) - len(inner)
+            g["hooks"] = inner
+    if legacy:
+        repaired += legacy
     for event_name, event_arg in HOOK_EVENTS:
         command = _hook_command(event_arg)
         groups = hooks.setdefault(event_name, [])
@@ -213,7 +231,8 @@ def cmd_uninstall_hooks(args) -> int:
     settings = _load_settings()
     hooks = settings.get("hooks", {})
     removed = 0
-    for event_name, event_arg in HOOK_EVENTS:
+    # "session-start" (bare) = the pre-parts registration — still removable.
+    for event_name, event_arg in HOOK_EVENTS + [("SessionStart", "session-start")]:
         groups = hooks.get(event_name, [])
         if not isinstance(groups, list):
             continue

@@ -97,13 +97,23 @@ def _injection_from_envelope(env: dict) -> str:
 
 # ── event handlers ──────────────────────────────────────────────────────────
 
-def _session_start(cfg: Config, inp: dict) -> None:
+def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    # Claude Code caps EACH hook's output at 10k chars, so the payload is
+    # delivered as budgeted parts — settings registers this event once per
+    # part ("session-start 1", "session-start 2"). No part argument = the
+    # whole payload in one piece (legacy registrations keep working).
     project = cfg.project_for(inp.get("cwd", ""))
-    env = Client(cfg).post("/v1/hooks/session-start", {"project": project})
+    payload: dict = {"project": project}
+    if args:
+        try:
+            payload["part"] = int(args[0])
+        except (TypeError, ValueError):
+            pass
+    env = Client(cfg).post("/v1/hooks/session-start", payload)
     _emit_context("SessionStart", _injection_from_envelope(env))
 
 
-def _prompt_submit(cfg: Config, inp: dict) -> None:
+def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     project = cfg.project_for(inp.get("cwd", ""))
     prompt = (inp.get("prompt") or "").strip()
     session_id = inp.get("session_id") or ""
@@ -115,7 +125,7 @@ def _prompt_submit(cfg: Config, inp: dict) -> None:
     _emit_context("UserPromptSubmit", _injection_from_envelope(env))
 
 
-def _stop(cfg: Config, inp: dict) -> None:
+def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
     """Archive new conversation turns in bounded chunks. State (offset + index)
     advances ONLY past turns the server has confirmed, one chunk at a time, so
     a failure mid-backlog keeps every confirmed chunk and retries the rest."""
@@ -158,7 +168,7 @@ def _stop(cfg: Config, inp: dict) -> None:
     transcript.save_state(session_id, tail_offset, next_index)
 
 
-def _commit(cfg: Config, inp: dict) -> None:
+def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     project = cfg.project_for(inp.get("cwd", ""))
     payload = {"project": project}
     for k in ("hash", "branch", "repo", "message"):
@@ -172,7 +182,7 @@ def _commit(cfg: Config, inp: dict) -> None:
     Client(cfg).post("/v1/hooks/commit", payload)
 
 
-def _pre_compact(cfg: Config, inp: dict) -> None:
+def _pre_compact(cfg: Config, inp: dict, args: tuple = ()) -> None:
     """/compact = the split line. The server curates the window from ITS
     archive, so before telling it to, make sure the archive HAS the window:
 
@@ -227,7 +237,7 @@ def main(argv=None) -> int:
         if DEBUG:
             sys.stderr.write(f"[hook-debug] event={event} "
                              f"inp_keys={sorted(inp)}\n")
-        handler(cfg, inp)
+        handler(cfg, inp, tuple(argv[1:]))
         if DEBUG:
             sys.stderr.write(f"[hook-debug] {event} handler returned clean\n")
     except ClientError as e:
