@@ -183,31 +183,54 @@ def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
 
 
 def _pre_compact(cfg: Config, inp: dict, args: tuple = ()) -> None:
-    """/compact = the split line. The server curates the window from ITS
-    archive, so before telling it to, make sure the archive HAS the window:
+    """/compact is the moment the client is about to summarize its transcript
+    away — the last chance to guarantee the server archive holds ALL of it.
 
-    1. FLUSH — run the stop-hook logic so every pending turn is archived.
-       Without this the curate reads a transcript missing its own tail.
-    2. ENQUEUE with project + last_index — the first version sent only
-       session_id, so every job landed as project 'global' (2026-07-28, the
-       founder's first real ms compact) and the server had no number to
-       reconcile the archive against.
-
-    Still best-effort: a failed pre-compact costs one curate cycle, never the
-    session. The marker guarantees the window survives for the next compact.
+    ARCHIVE PARITY (the hook's whole job since 2026-08-06 — the compact-era
+    curate enqueue is retired; per-turn curation owns every window):
+    1. FLUSH the pending tail (stop-hook logic).
+    2. HANDSHAKE — send our last index; the server answers with its own max
+       AND row count, so both a lagging tail and MID-STREAM HOLES (backup
+       restore, lost writes) are visible.
+    3. HEAL — on any gap, reset the flush state to zero and re-send the
+       whole transcript (server inserts are idempotent), then verify once
+       more. A healed or unhealable gap is reported on stderr; the compact
+       itself is never blocked — memory is an enhancement, not a gate.
     """
-    try:
-        _stop(cfg, inp)
-    except Exception:  # noqa: BLE001 — flush is best-effort here; _stop has
-        if DEBUG:      # its own state discipline and will retry next turn
-            traceback.print_exc()
-    try:
-        state = transcript.load_state(inp.get("session_id", ""))
-        Client(cfg, timeout=10.0).post(
+    session_id = inp.get("session_id", "")
+    project = cfg.project_for(inp.get("cwd", ""))
+
+    def _flush():
+        try:
+            _stop(cfg, inp)
+        except Exception:  # noqa: BLE001 — flush is best-effort here; _stop
+            if DEBUG:      # has its own state discipline, retries next turn
+                traceback.print_exc()
+
+    def _handshake():
+        state = transcript.load_state(session_id)
+        return Client(cfg, timeout=10.0).post(
             "/v1/hooks/pre-compact",
-            {"session_id": inp.get("session_id", ""),
-             "project": cfg.project_for(inp.get("cwd", "")),
+            {"session_id": session_id, "project": project,
              "last_index": max(0, state["next_index"] - 1)})
+
+    _flush()
+    try:
+        env = _handshake()
+        if env.get("flush_needed"):
+            # The archive disagrees with this transcript — re-send it all.
+            transcript.save_state(session_id, 0, 0)
+            _flush()
+            env = _handshake()
+            if env.get("flush_needed"):
+                sys.stderr.write(
+                    "brethof-mind: archive STILL behind this transcript "
+                    "after full re-flush — some turns may be lost to "
+                    "compaction (server last_index="
+                    f"{env.get('server_last_index')}).\n")
+            else:
+                sys.stderr.write("brethof-mind: archive gap detected and "
+                                 "healed before compact.\n")
     except ClientError:
         if DEBUG:
             traceback.print_exc()
