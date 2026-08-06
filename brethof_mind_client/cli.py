@@ -27,10 +27,11 @@ from .config import (CONFIG_PATH, Config, ensure_dirs, save_file, valid_project)
 # SessionStart is registered once PER PART: Claude Code caps each hook's
 # output at 10k chars, so the server auto-splits the payload into as many
 # ≤9k parts as the tenant's rules + projects need and returns "" for unused
-# parts. 8 slots ≈ a 76KB envelope — sized for business tenants with many
-# projects/rules; same-event hooks run in parallel, so empty slots are
+# parts. 12 slots ≈ a 108KB envelope — sized so the server-side law
+# budgets (48K general + 20K project rule pools) can never crowd out the
+# briefing sections; same-event hooks run in parallel, so empty slots are
 # almost free.
-SESSION_START_PARTS = 8
+SESSION_START_PARTS = 12
 HOOK_EVENTS = (
     [("SessionStart", f"session-start {i}")
      for i in range(1, SESSION_START_PARTS + 1)]
