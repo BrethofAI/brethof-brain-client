@@ -22,7 +22,14 @@ config.json shape (all keys optional except api_key)::
 Project resolution for a given working directory:
   1. ``$BRETHOF_MIND_PROJECT`` if set (explicit override),
   2. the ``projects`` entry whose ``path`` is the longest prefix of the cwd,
-  3. ``default_project`` (config or "global").
+  3. an EXPLICIT ``default_project`` (set in config or env) — a stated
+     instruction always wins,
+  4. otherwise the folder's own name, sanitised into a project key — an
+     unmapped working directory gets its OWN project, because a project
+     is a folder; new work must never pour into the shared 'global'
+     layer by default,
+  5. "global" only when no usable name can be derived (a generic
+     container folder such as ``src`` or ``tmp``).
 
 A project key must match the data plane's rule: ``[a-z][a-z0-9_]{0,15}``.
 """
@@ -46,6 +53,38 @@ _PROJECT_RE = re.compile(r"^[a-z][a-z0-9_]{0,15}$")
 
 def valid_project(name: str) -> bool:
     return bool(_PROJECT_RE.match(name or ""))
+
+
+# Folder names that describe a location, not a body of work — deriving a
+# project from them would file real work under a meaningless name.
+_GENERIC_DIRS = {
+    "src", "code", "repo", "repos", "work", "workspace", "projects",
+    "project", "dev", "temp", "tmp", "test", "tests", "new", "untitled",
+    "documents", "downloads", "desktop", "home", "users", "user", "root",
+    "programming", "git", "build", "dist", "app", "apps", "main",
+}
+
+
+def project_from_path(path: str) -> str:
+    """A project key derived from the LAST meaningful folder of a path.
+
+    Lowercase, non-alphanumerics to underscores, trimmed to the data
+    plane's key rule. Returns "" when nothing usable comes out (a generic
+    container name, a leading digit, an empty basename) — the caller then
+    falls back to its configured default."""
+    parts = [p for p in re.split(r"[\\/]+", (path or "").strip()) if p]
+    for raw in reversed(parts[-2:] or parts):          # folder, else parent
+        name = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")[:16]
+        name = re.sub(r"_+", "_", name)
+        # len<2 also drops drive letters ("D:" -> "d"), which are a path
+        # artifact, never a project.
+        if len(name) < 2 or name in _GENERIC_DIRS:
+            continue
+        if name[0].isdigit():
+            name = "p_" + name[:14]
+        if valid_project(name):
+            return name
+    return ""
 
 
 def _env(*names: str) -> str:
@@ -129,6 +168,19 @@ class Config:
         if best_key:
             return best_key
         dp = self.default_project
+        # UNMAPPED FOLDER => ITS OWN PROJECT, never a dump into the shared
+        # layer (2026-08-07). A project IS a folder; when a new working
+        # directory appears, the memory that belongs to it is its own, and
+        # 'global' is only for facts true across projects. The old
+        # fall-through silently poured whole sessions into global — one
+        # unmapped folder cost 5,600 turns of a mixed archive that can
+        # never be cleanly re-filed. Separation is only cheap at write
+        # time. An EXPLICIT default_project is still an instruction and
+        # wins: this only replaces the implicit 'global' catch-all.
+        if dp == "global":
+            derived = project_from_path(cwd_n)
+            if derived:
+                return derived
         return dp if valid_project(dp) else "global"
 
 
