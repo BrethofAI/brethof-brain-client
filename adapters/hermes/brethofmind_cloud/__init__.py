@@ -11,7 +11,7 @@ The MemoryProvider hooks map onto the same endpoints the Claude Code client uses
   system_prompt_block() -> the cached brain block
   queue_prefetch()/prefetch() -> POST /v1/hooks/prompt-submit (ambient recall)
   sync_turn()           -> POST /v1/hooks/stop             (archive the turn)
-  brethofmind_* tools   -> POST /v1/mcp                    (recall/search/save/delete)
+  brethofmind_* tools   -> POST /v1/mcp                    (search/save/rule/delete)
 
 Drop this file into ``$HERMES_HOME/plugins/brethofmind_cloud/`` and activate with
 ``memory.provider: brethofmind_cloud``. Stdlib only — no dependency on the
@@ -24,7 +24,6 @@ Config (env):
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -157,39 +156,9 @@ class BrethofMindCloudProvider(MemoryProvider):
             body = r.read()
         return json.loads(body or b"{}")
 
-    _tool_names_cache: Optional[set] = None
-
-    def _tool_names(self) -> set:
-        """The tool names THIS key's tier actually has — asked once from
-        tools/list, cached for the process. The v2 server resolves a
-        toolset per key (full-access keys see the classic tools, panel
-        keys see the intent tools), so the provider adapts instead of
-        assuming: same brethofmind_* interface either way."""
-        if self._tool_names_cache is not None:
-            return self._tool_names_cache
-        try:
-            self._rpc_id += 1
-            resp = self._post("/v1/mcp", {
-                "jsonrpc": "2.0", "id": self._rpc_id, "method": "tools/list",
-                "params": {}})
-            names = {t.get("name") for t in
-                     (resp.get("result") or {}).get("tools", [])}
-        except Exception as e:  # noqa: BLE001 — degrade to classic names
-            logger.warning("brethofmind-cloud tools/list failed: %s", e)
-            names = set()
-        self._tool_names_cache = names
-        return names
-
-    def _pick(self, *candidates: str) -> str:
-        names = self._tool_names()
-        for c in candidates:
-            if c in names:
-                return c
-        return candidates[0]           # server answers unknown-tool cleanly
-
     def _mcp(self, tool: str, **arguments: Any) -> str:
-        """Call one of the 15 memory tools; return its text result. Raises on
-        a tool/JSON-RPC error."""
+        """Call one memory tool on the customer surface; return its text
+        result. Raises on a tool/JSON-RPC error."""
         self._rpc_id += 1
         resp = self._post("/v1/mcp", {
             "jsonrpc": "2.0", "id": self._rpc_id, "method": "tools/call",
@@ -278,33 +247,50 @@ class BrethofMindCloudProvider(MemoryProvider):
         except Exception as e:
             logger.warning("brethofmind-cloud sync_turn failed: %s", e)
 
-    # -- deliberate tools (same names/shape as the local provider) ----------
+    # -- deliberate tools (the customer surface, wrapped) -------------------
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
         return [
             {"name": "brethofmind_search",
-             "description": ("Search curated memory across your projects "
-                             "(decisions, conventions, runbooks, status) by meaning."),
+             "description": ("Search saved memory — the curated current truth "
+                             "(facts, decisions, preferences) — by meaning."),
              "parameters": {"type": "object", "properties": {
                  "query": {"type": "string", "description": "What to recall."},
                  "top_k": {"type": "integer", "description": "Max results (default 8)."}},
                  "required": ["query"]}},
             {"name": "brethofmind_recall",
-             "description": "Search past sessions (the chat archive) for what was discussed before.",
+             "description": "Search past sessions (the full conversation history) for what was discussed before.",
              "parameters": {"type": "object", "properties": {
                  "query": {"type": "string"}, "top_k": {"type": "integer"}},
                  "required": ["query"]}},
             {"name": "brethofmind_save",
-             "description": ("Write a durable record into a project's curated memory. "
-                             "Pass a stable record_id to update-in-place; omit for a new one."),
+             "description": ("Remember one fact. State it complete and "
+                             "standalone; the memory service files it — "
+                             "placement, dedupe and superseding are its job, "
+                             "not yours."),
              "parameters": {"type": "object", "properties": {
-                 "title": {"type": "string"}, "content": {"type": "string"},
-                 "memory_type": {"type": "string", "description":
-                                 "decision | architecture | project_status | bug | reference | note"},
-                 "project": {"type": "string", "description": "Target project (default the session's)."},
-                 "record_id": {"type": "string", "description": "Stable id to UPSERT (optional)."}},
-                 "required": ["title", "content"]}},
+                 "content": {"type": "string", "description":
+                             "The fact, self-contained (names, dates, numbers)."},
+                 "project": {"type": "string", "description":
+                             "Project it belongs to (default the session's); "
+                             "omit and set general=true for a cross-project fact."},
+                 "general": {"type": "boolean", "description":
+                             "True = not tied to one project."}},
+                 "required": ["content"]}},
+            {"name": "brethofmind_save_rule",
+             "description": ("Save a RULE — a standing convention the agent "
+                             "must follow every session without looking it "
+                             "up. THE TEST: does it change behavior every "
+                             "session? A fact, config or measurement is NOT "
+                             "a rule — use brethofmind_save for those."),
+             "parameters": {"type": "object", "properties": {
+                 "content": {"type": "string", "description": "The rule, one clear statement."},
+                 "scope": {"type": "string", "description":
+                           "'project' (default) = law in this project only; "
+                           "'general' = law in every project (costly — use sparingly)."},
+                 "project": {"type": "string", "description": "Project for scope='project'."}},
+                 "required": ["content"]}},
             {"name": "brethofmind_delete",
-             "description": "Delete a stale curated record by id (cannot touch *_chat archives).",
+             "description": "Delete a stale saved record by id (conversation history is never touched).",
              "parameters": {"type": "object", "properties": {
                  "project": {"type": "string"}, "record_id": {"type": "string"}},
                  "required": ["project", "record_id"]}},
@@ -318,39 +304,45 @@ class BrethofMindCloudProvider(MemoryProvider):
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
                 return json.dumps({"result": self._mcp(
-                    self._pick("semantic_search", "search_memory"),
-                    query_text=q, project=_project(), top_k=k)})
+                    "search_memory", query_text=q, project=_project(),
+                    top_k=k)})
             if tool_name == "brethofmind_recall":
                 q = (args.get("query") or "").strip()
                 if not q:
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
                 return json.dumps({"result": self._mcp(
-                    self._pick("search_chat", "search_history"),
-                    query_text=q, project=_project(), top_k=k)})
+                    "search_history", query_text=q, project=_project(),
+                    top_k=k)})
             if tool_name == "brethofmind_save":
-                title = (args.get("title") or "").strip()
                 content = (args.get("content") or "").strip()
-                if not title or not content:
-                    return tool_error("brethofmind_save needs both title and content")
-                proj = (args.get("project") or _project()).strip()
-                if not _PROJECT_RE.match(proj):
-                    return tool_error(f"invalid project '{proj}'")
-                if "save_memory" in self._tool_names():
-                    # Full-access key: classic upsert with a stable id.
-                    rid = self._record_id(args.get("record_id", ""), title,
-                                          content)
-                    out = self._mcp("save_memory", project=proj,
-                                    record_id=rid,
-                                    memory_type=args.get("memory_type",
-                                                         "note"),
-                                    title=title, content=content)
+                title = (args.get("title") or "").strip()   # legacy callers
+                if title:
+                    content = f"{title}: {content}" if content else title
+                if not content:
+                    return tool_error("brethofmind_save needs content")
+                # An INTENT — the memory service files it (placement, id,
+                # dedupe, supersede are its business, not ours).
+                if args.get("general"):
+                    out = self._mcp("save_general", content=content)
                 else:
-                    # Panel key: an INTENT — the memory service files it
-                    # (placement, dedupe, supersede). record_id and
-                    # memory_type are the service's business, not ours.
-                    out = self._mcp("save_project",
-                                    content=f"{title}: {content}",
+                    proj = (args.get("project") or _project()).strip()
+                    if not _PROJECT_RE.match(proj):
+                        return tool_error(f"invalid project '{proj}'")
+                    out = self._mcp("save_project", content=content,
+                                    project=proj)
+                return json.dumps({"result": out})
+            if tool_name == "brethofmind_save_rule":
+                content = (args.get("content") or "").strip()
+                if not content:
+                    return tool_error("brethofmind_save_rule needs content")
+                if (args.get("scope") or "project").strip() == "general":
+                    out = self._mcp("save_general_rule", content=content)
+                else:
+                    proj = (args.get("project") or _project()).strip()
+                    if not _PROJECT_RE.match(proj):
+                        return tool_error(f"invalid project '{proj}'")
+                    out = self._mcp("save_project_rule", content=content,
                                     project=proj)
                 return json.dumps({"result": out})
             if tool_name == "brethofmind_delete":
@@ -369,13 +361,6 @@ class BrethofMindCloudProvider(MemoryProvider):
         except Exception as e:  # noqa: BLE001
             return tool_error(f"brethofmind-cloud error: {e}")
         return tool_error(f"Unknown tool: {tool_name}")
-
-    @staticmethod
-    def _record_id(record_id: str, title: str, content: str) -> str:
-        if record_id and record_id.strip():
-            return re.sub(r"[^a-zA-Z0-9_]+", "_", record_id.strip()).strip("_")[:60] or "note"
-        slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")[:40] or "note"
-        return slug + "_" + hashlib.sha1((title + content).encode()).hexdigest()[:8]
 
     # -- optional hooks -----------------------------------------------------
     def on_pre_compress(self, messages):

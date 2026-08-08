@@ -24,6 +24,7 @@ can never break an OpenClaw run.
 from __future__ import annotations
 
 from brethof_mind_client import AgentHooks
+from brethof_mind_client.client import Client
 
 
 class MemorySession:
@@ -33,6 +34,8 @@ class MemorySession:
         self.hooks = AgentHooks(project=project, session_id=session_id)
         self.base_system_prompt = base_system_prompt
         self._memory_block = ""
+        self._http = Client(self.hooks.cfg, timeout=20.0)
+        self._rpc_id = 0
 
     def start(self) -> str:
         """Call once at session start; returns the memory-augmented system prompt."""
@@ -53,6 +56,39 @@ class MemorySession:
     def record(self, user_prompt: str, assistant_reply: str) -> dict:
         """Archive a completed turn into long-term memory."""
         return self.hooks.archive(user_prompt, assistant_reply)
+
+    # -- deliberate writes (the customer surface's two kinds) ---------------
+    def _tool(self, name: str, **arguments) -> str:
+        self._rpc_id += 1
+        resp = self._http.post("/v1/mcp", {
+            "jsonrpc": "2.0", "id": self._rpc_id, "method": "tools/call",
+            "params": {"name": name, "arguments": {
+                k: v for k, v in arguments.items() if v is not None}}})
+        content = (resp.get("result") or {}).get("content") or []
+        return "\n".join(c.get("text", "") for c in content
+                         if c.get("type") == "text")
+
+    def save_fact(self, content: str, project: str | None = None,
+                  general: bool = False) -> str:
+        """Remember one durable fact. State it self-contained; the memory
+        service does the filing (placement, dedupe, superseding).
+        ``general=True`` for a fact not tied to one project."""
+        if general:
+            return self._tool("save_general", content=content)
+        return self._tool("save_project", content=content,
+                          project=project or self.hooks.project)
+
+    def save_rule(self, content: str, scope: str = "project",
+                  project: str | None = None) -> str:
+        """Save a RULE — a standing convention that binds every future
+        session without being looked up. THE TEST: does it change what the
+        agent DOES every session? Facts, configs and measurements are NOT
+        rules — use :meth:`save_fact`. scope='general' makes it law in
+        every project (costly; use sparingly)."""
+        if scope == "general":
+            return self._tool("save_general_rule", content=content)
+        return self._tool("save_project_rule", content=content,
+                          project=project or self.hooks.project)
 
 
 def demo(call_model=None) -> bool:

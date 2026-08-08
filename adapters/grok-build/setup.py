@@ -25,6 +25,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows consoles default to cp1252 — the ✓/✗ glyphs below would crash the
+# script mid-setup. Force UTF-8 on the script's own streams, always.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 DEFAULT_ENDPOINT = "https://api.brethof.cloud"
 
 
@@ -144,8 +150,9 @@ def install_hooks():
         "`search_history`.\n"
         "3. Memory LEARNS AUTOMATICALLY from every archived exchange — the "
         "service curates as you work. Save explicitly only what the user "
-        "asks to remember or what must be recorded exactly, with the save "
-        "tool the server lists.\n"
+        "asks to remember or what must be recorded exactly: facts with "
+        "`save_project`/`save_general`, standing RULES (conventions that "
+        "bind every session) with `save_project_rule`/`save_general_rule`.\n"
         "4. Turns are archived automatically by the Stop hook — do not save "
         "chat history manually.\n\n"
         "Do NOT use Grok's built-in markdown memory — brethof-mind is the "
@@ -198,7 +205,7 @@ def main():
     print()
     print("=" * 40)
     if ok_mcp:
-        print("✓ MCP server: brethof-mind connected (15 tools)")
+        print("✓ MCP server: brethof-mind connected")
     else:
         print("✗ MCP server: failed — check your API key and endpoint")
 

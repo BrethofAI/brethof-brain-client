@@ -19,9 +19,17 @@ Use this skill for the cases automation shouldn't guess at:
 - A fact matters for **other projects** than the one you're in.
 
 ## Your tools
-- `the memory save tool your brethof-mind MCP server lists (save_project / save_general, or save_memory on a full-access key)` — save one durable fact. Write
-  it self-contained: a reader a month from now must understand it without
-  this conversation. Include concrete names, dates, numbers.
+- `save_project(content, project)` / `save_general(content)` — save one
+  durable fact. State it self-contained: a reader a month from now must
+  understand it without this conversation; include concrete names, dates,
+  numbers. The memory service does the filing — placement, dedupe, and
+  superseding of stale records are its job, not yours.
+- `save_project_rule(content, project)` / `save_general_rule(content)` —
+  save a RULE: a standing convention that must bind every future session
+  without being looked up. THE TEST: does it change what you DO every
+  session? A fact, setting, or measurement is knowledge — save it with the
+  fact tools, never as a rule. General rules load in every project; use
+  them sparingly.
 - `search_memory(query)` — check first whether memory already holds it;
   if a result already says the same thing, saving again is noise.
 - `delete_memory` — remove a saved memory the user
@@ -29,7 +37,8 @@ Use this skill for the cases automation shouldn't guess at:
 
 ## Steps
 1. Search first. If memory already knows it, stop — or save only the delta.
-2. Save ONE fact per call, self-contained, under the project it is about.
+2. Decide the kind: standing convention → rule tool; everything else → fact
+   tool, under the project it is about. ONE fact per call.
 3. Confirm to the user in one line what was saved and where.
 
 Most of what happens in a session should NOT be explicitly saved — the

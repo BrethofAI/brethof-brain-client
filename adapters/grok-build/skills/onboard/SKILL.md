@@ -32,11 +32,15 @@ revoked: back to the panel.
 - **Recall is unlimited** on every plan — search freely, always.
 - **Two stores**: saved memory (current truth, curated) and conversation
   history (complete, raw). The /recall skill explains when to use which.
+- **Two kinds of saves**: FACTS (`save_project` / `save_general`) and
+  RULES (`save_project_rule` / `save_general_rule`). A rule is a standing
+  convention that binds every session; everything else is a fact.
 - **Explicit saves** are for emphasis: "remember this" → /curate skill.
 - Usage and plan live in the account panel; the service emails a heads-up
   when usage approaches the plan's allowance.
 
 ## 4. First real moment
 Ask the user to tell you one durable fact about their work (a preference,
-a convention, a current goal) and save it with `the save tool your brethof-mind MCP server lists (save_project / save_general, or save_memory on a full-access key)`. Then
-search for it — showing the round trip beats explaining it.
+a convention, a current goal) and save it with `save_project` (or
+`save_general` if it isn't tied to one project). Then search for it —
+showing the round trip beats explaining it.
