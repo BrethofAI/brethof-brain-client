@@ -44,7 +44,11 @@ except Exception:  # import surface may differ for a user plugin
         return json.dumps({"error": msg})
 
 USER_AGENT = "brethof-mind-hermes/1.0"          # a real UA (the edge challenges generic ones)
-_PROJECT_RE = re.compile(r"^[a-z][a-z0-9_]{0,15}$")
+# Mirrors the SERVICE's project-name rule exactly (32 chars). It was 16 here
+# until 2026-08-08, so a legal name the service accepts — anything 17-32 chars
+# — was refused by the plugin with a confusing "invalid project". A client-side
+# validator that is stricter than the server is a bug, not extra safety.
+_PROJECT_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 # Config is resolved at CALL time, not import time, reading os.environ first
 # and falling back to parsing $HERMES_HOME/.env ourselves. Rationale: not every
