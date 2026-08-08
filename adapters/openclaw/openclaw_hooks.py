@@ -58,11 +58,15 @@ class MemorySession:
         return self.hooks.archive(user_prompt, assistant_reply)
 
     # -- deliberate writes (the customer surface's two kinds) ---------------
-    def _tool(self, name: str, **arguments) -> str:
+    def _tool(self, tool, /, **arguments) -> str:
+        # POSITIONAL-ONLY (the '/'): tool arguments are passed as **kwargs, and
+        # the customer surface has tools whose OWN parameter is called 'name'
+        # (graph). Without this, graph(name=...) collides with the dispatcher's
+        # parameter and raises TypeError instead of calling the tool.
         self._rpc_id += 1
         resp = self._http.post("/v1/mcp", {
             "jsonrpc": "2.0", "id": self._rpc_id, "method": "tools/call",
-            "params": {"name": name, "arguments": {
+            "params": {"name": tool, "arguments": {
                 k: v for k, v in arguments.items() if v is not None}}})
         content = (resp.get("result") or {}).get("content") or []
         return "\n".join(c.get("text", "") for c in content
@@ -89,6 +93,85 @@ class MemorySession:
             return self._tool("save_general_rule", content=content)
         return self._tool("save_project_rule", content=content,
                           project=project or self.hooks.project)
+
+    # -- the rest of the customer surface ----------------------------------
+    # Full parity, added 2026-08-08: an OpenClaw agent must be able to do
+    # everything an agent on any other platform can. Before this it could
+    # only save — it could not read back a record, browse a project, list
+    # its own rules, or manage the project lifecycle.
+    def search(self, query: str, project: str | None = None,
+               top_k: int = 8) -> str:
+        """Search SAVED MEMORY — the curated current truth. Start here."""
+        return self._tool("search_memory", query_text=query,
+                          project=project or self.hooks.project, top_k=top_k)
+
+    def search_history(self, query: str, project: str | None = None,
+                       top_k: int = 8) -> str:
+        """Search the FULL RAW conversation history — complete but unfiltered;
+        use when saved memory does not hold the detail."""
+        return self._tool("search_history", query_text=query,
+                          project=project or self.hooks.project, top_k=top_k)
+
+    def list_memory(self, project: str | None = None,
+                    limit: int | None = None) -> str:
+        """Browse a project's saved memory — ids and titles."""
+        return self._tool("list_memory", project=project or self.hooks.project,
+                          limit=limit)
+
+    def get(self, record_id: str, project: str | None = None) -> str:
+        """Read ONE saved memory in full, by id."""
+        return self._tool("get_memory", record_id=record_id, project=project)
+
+    def list_rules(self, project: str | None = None) -> str:
+        """The saved rules — all, or those active for one project."""
+        return self._tool("list_rules", project=project)
+
+    def list_projects(self) -> str:
+        """Every project in this memory and how many memories each holds."""
+        return self._tool("list_projects")
+
+    def add_project(self, project: str, purpose: str,
+                    rules: str | None = None) -> str:
+        """Create a project AND tell memory what it is for. `purpose` is
+        mandatory by design: one owner sentence teaches this project's
+        curator what matters here, and beats anything it can infer alone."""
+        return self._tool("add_project", project=project, purpose=purpose,
+                          rules=rules)
+
+    def delete_project(self, project: str, confirm: str) -> str:
+        """DESTRUCTIVE — delete everything saved under one project. `confirm`
+        must equal the project name; the guard is here as well as on the
+        server so a mis-wired caller cannot wipe a project by accident.
+        Conversation history is not affected."""
+        if (confirm or "").strip().lower() != (project or "").strip().lower():
+            return (f"Refusing: confirm must equal the project name "
+                    f"('{project}') — this deletes everything saved there.")
+        return self._tool("delete_project", project=project, confirm=confirm)
+
+    def delete(self, project: str, record_id: str) -> str:
+        """Delete ONE saved record (works for rules too, project='rules').
+        The conversation archive is never touched."""
+        return self._tool("delete_memory", project=project,
+                          record_id=record_id)
+
+    def graph(self, name: str, project: str | None = None) -> str:
+        """Look up a person / tool / service / decision in the knowledge
+        graph: what it is, its status, aliases, when it came up."""
+        return self._tool("graph", name=name, project=project)
+
+    def session_context(self, project: str | None = None) -> str:
+        """The full session-start briefing, on demand (mid-session refresh)."""
+        return self._tool("session_context",
+                          project=project or self.hooks.project)
+
+    def cleanup_history(self, project: str, older_than_days: int | None = None,
+                        mode: str | None = None,
+                        confirm: str | None = None) -> str:
+        """DESTRUCTIVE — remove conversation history older than a cutoff
+        (90-day floor). Without `confirm` this returns a PREVIEW only."""
+        return self._tool("cleanup_history", project=project,
+                          older_than_days=older_than_days, mode=mode,
+                          confirm=confirm)
 
 
 def demo(call_model=None) -> bool:

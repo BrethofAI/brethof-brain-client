@@ -176,18 +176,35 @@ def test_grok_stop_hook_fails_open_on_garbage(tmp_path, monkeypatch):
 
 # ════════════════════ B. CUSTOMER SURFACE ONLY ══════════════════════════════
 def test_hermes_tool_schemas_are_customer_shaped():
-    """The tools hermes OFFERS its model must be our wrappers, and their
-    descriptions must not teach owner-tier vocabulary."""
+    """The tools hermes OFFERS its model must cover the whole customer
+    surface, must all actually dispatch, and must not teach owner-tier
+    vocabulary. Full parity is the point: an agent on Hermes must be able to
+    do what an agent on any other platform can (before 2026-08-08 only 5 of
+    these existed — no project lifecycle, no reading a record back)."""
     cls = _hermes_provider_class()
     schemas = cls().get_tool_schemas()
     names = {s["name"] for s in schemas}
-    assert names == {"brethofmind_search", "brethofmind_recall",
-                     "brethofmind_save", "brethofmind_save_rule",
-                     "brethofmind_delete"}, names
+    expected = {"brethofmind_search", "brethofmind_recall", "brethofmind_save",
+                "brethofmind_save_rule", "brethofmind_delete",
+                "brethofmind_list", "brethofmind_get", "brethofmind_rules",
+                "brethofmind_projects", "brethofmind_new_project",
+                "brethofmind_delete_project", "brethofmind_graph",
+                "brethofmind_context", "brethofmind_cleanup_history"}
+    assert names == expected, f"missing {expected - names}, extra {names - expected}"
+
     blob = json.dumps(schemas).lower()
     for owner_only in ("query_raw", "search_chat_text", "semantic_search",
                        "save_record", "supersede_memory"):
         assert owner_only not in blob, f"owner tool '{owner_only}' in schemas"
+
+    # DISPATCH PARITY: a declared tool that no branch handles would return
+    # None and read as success to the host. Called with empty args every tool
+    # must produce a STRING — a validation complaint is fine, silence is not.
+    p = cls()
+    for n in sorted(names):
+        out = p.handle_tool_call(n, {})
+        assert isinstance(out, str) and out, f"{n} returned {out!r}"
+        assert "unknown tool" not in out.lower(), f"{n} is declared but not handled"
 
 
 def test_every_adapter_call_targets_a_live_customer_tool():
@@ -250,6 +267,214 @@ def test_live_roundtrip(monkeypatch, adapter):
         assert "error" not in out.lower(), f"{adapter} {label} failed: {out[:200]}"
     if found:
         assert "error" not in found.lower(), f"search failed: {found[:200]}"
+
+
+# ═══════════ C2. THE WHOLE SURFACE — full project lifecycle ═════════════════
+# Founder, 2026-08-08: "other agents creating project, deleting project,
+# creating rules, general rules, project rules, deleting them, checking
+# curated data, adding curated records... if you skip something, it hasn't
+# been tested, and no one will test it."
+# So: every customer capability, including the DESTRUCTIVE ones, exercised
+# end to end on a disposable tenant — written once, demanded of every adapter.
+class _Facade:
+    """One uniform interface over each adapter's own API, so the lifecycle
+    below is written ONCE and both adapters must satisfy it identically."""
+
+    def __init__(self, kind, project):
+        self.kind = kind
+        self.project = project
+        if kind == "hermes":
+            self.p = _hermes_provider_class()()
+            self.p.initialize(f"lifecycle-{project}")
+        else:
+            self.s = _openclaw_session_class()(project=project,
+                                               session_id=f"lc-{project}")
+
+    def _h(self, tool, **args):
+        out = self.p.handle_tool_call(tool, args)
+        data = json.loads(out)
+        if "error" in data:
+            return f"ERROR: {data['error']}"
+        return str(data.get("result", ""))
+
+    # each capability, mapped onto whatever the adapter calls it
+    def new_project(self, purpose):
+        return (self._h("brethofmind_new_project", project=self.project,
+                        purpose=purpose) if self.kind == "hermes"
+                else self.s.add_project(self.project, purpose))
+
+    def save_fact(self, content):
+        return (self._h("brethofmind_save", content=content,
+                        project=self.project) if self.kind == "hermes"
+                else self.s.save_fact(content, project=self.project))
+
+    def save_general_fact(self, content):
+        return (self._h("brethofmind_save", content=content, general=True)
+                if self.kind == "hermes"
+                else self.s.save_fact(content, general=True))
+
+    def save_project_rule(self, content):
+        return (self._h("brethofmind_save_rule", content=content,
+                        scope="project", project=self.project)
+                if self.kind == "hermes"
+                else self.s.save_rule(content, scope="project",
+                                      project=self.project))
+
+    def save_general_rule(self, content):
+        return (self._h("brethofmind_save_rule", content=content,
+                        scope="general") if self.kind == "hermes"
+                else self.s.save_rule(content, scope="general"))
+
+    def list_projects(self):
+        return (self._h("brethofmind_projects") if self.kind == "hermes"
+                else self.s.list_projects())
+
+    def list_memory(self):
+        return (self._h("brethofmind_list", project=self.project)
+                if self.kind == "hermes"
+                else self.s.list_memory(project=self.project))
+
+    def get(self, rid):
+        return (self._h("brethofmind_get", record_id=rid,
+                        project=self.project) if self.kind == "hermes"
+                else self.s.get(rid, project=self.project))
+
+    def list_rules(self):
+        return (self._h("brethofmind_rules", project=self.project)
+                if self.kind == "hermes"
+                else self.s.list_rules(project=self.project))
+
+    def search(self, q):
+        return (self._h("brethofmind_search", query=q, project=self.project)
+                if self.kind == "hermes"
+                else self.s.search(q, project=self.project))
+
+    def search_history(self, q):
+        return (self._h("brethofmind_recall", query=q, project=self.project)
+                if self.kind == "hermes"
+                else self.s.search_history(q, project=self.project))
+
+    def graph(self, name):
+        return (self._h("brethofmind_graph", name=name, project=self.project)
+                if self.kind == "hermes"
+                else self.s.graph(name, project=self.project))
+
+    def context(self):
+        return (self._h("brethofmind_context", project=self.project)
+                if self.kind == "hermes"
+                else self.s.session_context(project=self.project))
+
+    def delete(self, project, rid):
+        return (self._h("brethofmind_delete", project=project, record_id=rid)
+                if self.kind == "hermes" else self.s.delete(project, rid))
+
+    def cleanup_preview(self):
+        return (self._h("brethofmind_cleanup_history", project=self.project)
+                if self.kind == "hermes"
+                else self.s.cleanup_history(self.project))
+
+    def delete_project(self, confirm):
+        return (self._h("brethofmind_delete_project", project=self.project,
+                        confirm=confirm) if self.kind == "hermes"
+                else self.s.delete_project(self.project, confirm))
+
+
+def _wait_for(fn, needle, what, budget=150):
+    """Saves go through the async write gate, so reads poll. Returns the text
+    once `needle` appears; fails loudly with what it DID see."""
+    last = ""
+    deadline = time.time() + budget
+    while time.time() < deadline:
+        last = fn() or ""
+        if needle.lower() in last.lower():
+            return last
+        time.sleep(5)
+    raise AssertionError(f"{what}: '{needle}' never appeared in {budget}s. "
+                         f"Last saw: {last[:400]}")
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("adapter", ["hermes", "openclaw"])
+def test_full_lifecycle_every_capability(monkeypatch, adapter):
+    key = _key()
+    stamp = str(int(time.time()))[-6:]
+    project = f"lc_{adapter[:4]}_{stamp}"
+    monkeypatch.setenv("BRETHOF_MIND_API_KEY", key)
+    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", ENDPOINT)
+    monkeypatch.setenv("HERMES_MEMORY_PROJECT", project)
+    a = _Facade(adapter, project)
+
+    # 1. CREATE a project, with the purpose that teaches its curator.
+    # The purpose text must be DISTINCT per run: purpose statements are RULES,
+    # and the service refuses near-identical law tenant-wide (correctly — twin
+    # rules are the thing that rots a rule pool). Two runs sharing one purpose
+    # sentence is a test artefact, not a customer shape.
+    out = a.new_project(
+        f"Disposable {adapter} project {stamp} used by the adapter "
+        f"conformance suite to exercise every memory capability of the "
+        f"{adapter} plugin end to end, then delete itself.")
+    assert "error" not in out.lower(), f"add_project failed: {out[:200]}"
+    assert _wait_for(a.list_projects, project, "created project appears")
+
+    # 2. ADD curated records — project-scoped and cross-project
+    rec = f"Lifecycle canary {stamp}: the {adapter} adapter created this record."
+    assert "error" not in a.save_fact(rec).lower()
+    assert "error" not in a.save_general_fact(
+        f"Lifecycle general canary {stamp}: not tied to one project.").lower()
+
+    # 3. ADD rules — both scopes (the law door, both kinds)
+    assert "error" not in a.save_project_rule(
+        f"Project {project} is disposable test data, never real facts.").lower()
+    assert "error" not in a.save_general_rule(
+        f"Conformance run {stamp} is a test; ignore its records.").lower()
+
+    # 4. CHECK the curated data landed and is READABLE
+    listed = _wait_for(a.list_memory, "canary", "saved record is browsable")
+    import re as _re
+    ids = _re.findall(r"([a-z0-9_]*canary[a-z0-9_]*)", listed.lower())
+    assert ids, f"no record id found in list_memory output: {listed[:300]}"
+    rid = ids[0]
+    full = a.get(rid)
+    assert stamp in full, f"get_memory did not return the record body: {full[:300]}"
+
+    # 5. CHECK the rules landed (both scopes visible to this project)
+    rules = _wait_for(a.list_rules, "disposable", "project rule is listed")
+    assert "conformance run" in rules.lower(), (
+        f"general rule not visible to the project: {rules[:400]}")
+
+    # 6. SEARCH finds it; history search and graph and context all answer
+    assert "canary" in _wait_for(lambda: a.search("lifecycle canary"),
+                                 "canary", "search finds the record").lower()
+    for label, out in (("search_history", a.search_history("lifecycle")),
+                       ("graph", a.graph("conformance")),
+                       ("session_context", a.context())):
+        assert isinstance(out, str) and not out.lower().startswith("error"), \
+            f"{label} failed: {out[:200]}"
+
+    # 7. DELETE a record, and DELETE A RULE (dead law must be removable)
+    assert "deleted" in a.delete(project, rid).lower(), "record delete failed"
+    rule_ids = _re.findall(r"rules:([a-z0-9_]+)", rules.lower()) or \
+        _re.findall(r"^\s*-?\s*([a-z0-9_]{6,})", rules.lower(), _re.M)
+    if rule_ids:
+        assert "deleted" in a.delete("rules", rule_ids[0]).lower(), \
+            "rule delete failed — dead law must be removable"
+
+    # 8. CLEANUP HISTORY preview — must NOT destroy anything without confirm
+    prev = a.cleanup_preview()
+    assert isinstance(prev, str) and prev, "cleanup_history preview returned nothing"
+    assert "deleted" not in prev.lower() or "preview" in prev.lower(), \
+        f"cleanup preview looks like it acted without confirm: {prev[:200]}"
+
+    # 9. DELETE THE PROJECT — refused without the typed confirmation, then done
+    refused = a.delete_project("wrong-name")
+    assert "refus" in refused.lower() or "error" in refused.lower(), (
+        f"delete_project accepted a WRONG confirm — data-loss guard broken: "
+        f"{refused[:200]}")
+    gone = a.delete_project(project)
+    assert "error" not in gone.lower(), f"delete_project failed: {gone[:200]}"
+    left = a.list_memory()
+    assert "canary" not in left.lower(), (
+        f"project deleted but its records still listed: {left[:300]}")
 
 
 # ════════════════ D. NOTHING SECRET IN USER-VISIBLE TEXT ════════════════════

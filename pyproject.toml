@@ -30,3 +30,6 @@ brethof-mind-hook = "brethof_mind_client.hook:main"
 
 [tool.setuptools]
 packages = ["brethof_mind_client"]
+
+[tool.pytest.ini_options]
+markers = ["slow: live multi-minute conformance runs (deselect with -m 'not slow')"]

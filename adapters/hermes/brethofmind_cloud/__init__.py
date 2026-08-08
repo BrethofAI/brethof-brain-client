@@ -251,21 +251,35 @@ class BrethofMindCloudProvider(MemoryProvider):
         except Exception as e:
             logger.warning("brethofmind-cloud sync_turn failed: %s", e)
 
-    # -- deliberate tools (the customer surface, wrapped) -------------------
+    # -- deliberate tools: FULL customer-surface parity ---------------------
+    # An agent running on Hermes must be able to do everything an agent on any
+    # other platform can. Until 2026-08-08 this wrapper exposed 5 of the
+    # service's 16 customer tools: no project lifecycle (create / list /
+    # delete), no way to browse or read a curated record, no rule listing, no
+    # graph, no history cleanup. Those were not "untested" — they were
+    # MISSING, and a half-a-product plugin is worse than none.
+    #
+    # Spec table, not an if-ladder: adding a service tool is one row, so the
+    # next surface change cannot quietly skip this adapter (the conformance
+    # suite asserts every row still resolves to a live customer tool).
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
+        s = lambda t: {"type": "string"}                        # noqa: E731
         return [
             {"name": "brethofmind_search",
              "description": ("Search saved memory — the curated current truth "
                              "(facts, decisions, preferences) — by meaning."),
              "parameters": {"type": "object", "properties": {
                  "query": {"type": "string", "description": "What to recall."},
-                 "top_k": {"type": "integer", "description": "Max results (default 8)."}},
+                 "top_k": {"type": "integer", "description": "Max results (default 8)."},
+                 "project": {"type": "string", "description": "Search one project (default the session's)."}},
                  "required": ["query"]}},
             {"name": "brethofmind_recall",
-             "description": "Search past sessions (the full conversation history) for what was discussed before.",
+             "description": ("Search past sessions (the full raw conversation "
+                             "history) for what was discussed before. Use when "
+                             "saved memory does not hold the detail."),
              "parameters": {"type": "object", "properties": {
-                 "query": {"type": "string"}, "top_k": {"type": "integer"}},
-                 "required": ["query"]}},
+                 "query": {"type": "string"}, "top_k": {"type": "integer"},
+                 "project": s(1)}, "required": ["query"]}},
             {"name": "brethofmind_save",
              "description": ("Remember one fact. State it complete and "
                              "standalone; the memory service files it — "
@@ -294,30 +308,95 @@ class BrethofMindCloudProvider(MemoryProvider):
                  "project": {"type": "string", "description": "Project for scope='project'."}},
                  "required": ["content"]}},
             {"name": "brethofmind_delete",
-             "description": "Delete a stale saved record by id (conversation history is never touched).",
+             "description": ("Delete ONE saved record that is wrong or dead, "
+                             "by its id. Works for rules too (project "
+                             "'rules'). Conversation history is never touched."),
              "parameters": {"type": "object", "properties": {
-                 "project": {"type": "string"}, "record_id": {"type": "string"}},
+                 "project": s(1), "record_id": s(1)},
                  "required": ["project", "record_id"]}},
+            {"name": "brethofmind_list",
+             "description": "Browse a project's saved memory — ids and titles.",
+             "parameters": {"type": "object", "properties": {
+                 "project": s(1), "limit": {"type": "integer"}},
+                 "required": []}},
+            {"name": "brethofmind_get",
+             "description": "Read ONE saved memory in full, by its id.",
+             "parameters": {"type": "object", "properties": {
+                 "record_id": s(1), "project": s(1)},
+                 "required": ["record_id"]}},
+            {"name": "brethofmind_rules",
+             "description": ("See the saved rules — all of them, or those "
+                             "active for one project."),
+             "parameters": {"type": "object", "properties": {"project": s(1)},
+                            "required": []}},
+            {"name": "brethofmind_projects",
+             "description": "List the projects in memory and how many memories each holds.",
+             "parameters": {"type": "object", "properties": {}, "required": []}},
+            {"name": "brethofmind_new_project",
+             "description": ("Create a project and tell memory what it is FOR. "
+                             "purpose is required — one or two sentences that "
+                             "teach this project's memory what matters here "
+                             "from day one."),
+             "parameters": {"type": "object", "properties": {
+                 "project": s(1),
+                 "purpose": {"type": "string", "description":
+                             "What this project IS and what to remember about it."},
+                 "rules": {"type": "string", "description":
+                           "Optional: what to always record / never record."}},
+                 "required": ["project", "purpose"]}},
+            {"name": "brethofmind_delete_project",
+             "description": ("DESTRUCTIVE: delete everything saved under one "
+                             "project. Requires confirm to equal the project "
+                             "name. Conversation history is not affected."),
+             "parameters": {"type": "object", "properties": {
+                 "project": s(1),
+                 "confirm": {"type": "string", "description":
+                             "Must equal the project name, typed again."}},
+                 "required": ["project", "confirm"]}},
+            {"name": "brethofmind_graph",
+             "description": ("Look something up in the knowledge graph — a "
+                             "person, tool, service or decision: what it is, "
+                             "its status (superseded = a dead end), other "
+                             "names for it, and when it came up."),
+             "parameters": {"type": "object", "properties": {
+                 "name": s(1), "project": s(1)}, "required": ["name"]}},
+            {"name": "brethofmind_context",
+             "description": ("The full session-start briefing for a project "
+                             "(rules, projects, state, open loops). Use to "
+                             "refresh mid-session."),
+             "parameters": {"type": "object", "properties": {"project": s(1)},
+                            "required": []}},
+            {"name": "brethofmind_cleanup_history",
+             "description": ("DESTRUCTIVE: remove one project's conversation "
+                             "history older than a cutoff (minimum 90 days). "
+                             "Shows a preview first; only acts when confirm "
+                             "equals the project name. Saved memories are "
+                             "never touched."),
+             "parameters": {"type": "object", "properties": {
+                 "project": s(1), "older_than_days": {"type": "integer"},
+                 "mode": {"type": "string", "description":
+                          "'summarize' saves a compact summary before removal; "
+                          "plain delete is free."},
+                 "confirm": s(1)}, "required": ["project"]}},
         ]
 
     def handle_tool_call(self, tool_name: str, args: dict, **kwargs) -> str:
+        def proj_arg(default_to_session: bool = True) -> str:
+            p = (args.get("project") or
+                 (_project() if default_to_session else "")).strip().lower()
+            return p
+
         try:
-            if tool_name == "brethofmind_search":
+            if tool_name in ("brethofmind_search", "brethofmind_recall"):
                 q = (args.get("query") or "").strip()
                 if not q:
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
+                tool = ("search_memory" if tool_name == "brethofmind_search"
+                        else "search_history")
                 return json.dumps({"result": self._mcp(
-                    "search_memory", query_text=q, project=_project(),
-                    top_k=k)})
-            if tool_name == "brethofmind_recall":
-                q = (args.get("query") or "").strip()
-                if not q:
-                    return tool_error("Missing required parameter: query")
-                k = max(1, min(int(args.get("top_k", 8)), 25))
-                return json.dumps({"result": self._mcp(
-                    "search_history", query_text=q, project=_project(),
-                    top_k=k)})
+                    tool, query_text=q, project=proj_arg(), top_k=k)})
+
             if tool_name == "brethofmind_save":
                 content = (args.get("content") or "").strip()
                 title = (args.get("title") or "").strip()   # legacy callers
@@ -328,42 +407,111 @@ class BrethofMindCloudProvider(MemoryProvider):
                 # An INTENT — the memory service files it (placement, id,
                 # dedupe, supersede are its business, not ours).
                 if args.get("general"):
-                    out = self._mcp("save_general", content=content)
-                else:
-                    proj = (args.get("project") or _project()).strip()
-                    if not _PROJECT_RE.match(proj):
-                        return tool_error(f"invalid project '{proj}'")
-                    out = self._mcp("save_project", content=content,
-                                    project=proj)
-                return json.dumps({"result": out})
+                    return json.dumps({"result": self._mcp("save_general",
+                                                           content=content)})
+                proj = proj_arg()
+                if not _PROJECT_RE.match(proj):
+                    return tool_error(f"invalid project '{proj}'")
+                return json.dumps({"result": self._mcp(
+                    "save_project", content=content, project=proj)})
+
             if tool_name == "brethofmind_save_rule":
                 content = (args.get("content") or "").strip()
                 if not content:
                     return tool_error("brethofmind_save_rule needs content")
                 if (args.get("scope") or "project").strip() == "general":
-                    out = self._mcp("save_general_rule", content=content)
-                else:
-                    proj = (args.get("project") or _project()).strip()
-                    if not _PROJECT_RE.match(proj):
-                        return tool_error(f"invalid project '{proj}'")
-                    out = self._mcp("save_project_rule", content=content,
-                                    project=proj)
-                return json.dumps({"result": out})
+                    return json.dumps({"result": self._mcp(
+                        "save_general_rule", content=content)})
+                proj = proj_arg()
+                if not _PROJECT_RE.match(proj):
+                    return tool_error(f"invalid project '{proj}'")
+                return json.dumps({"result": self._mcp(
+                    "save_project_rule", content=content, project=proj)})
+
             if tool_name == "brethofmind_delete":
-                proj = (args.get("project") or "").strip()
-                rid = re.sub(r"[^a-zA-Z0-9_]+", "_", (args.get("record_id") or "").strip()).strip("_")
+                proj = proj_arg(default_to_session=False)
+                rid = (args.get("record_id") or "").strip()
                 if not proj or not rid:
                     return tool_error("brethofmind_delete needs project and record_id")
-                if not _PROJECT_RE.match(proj) or proj.endswith(("_chat", "_commit")):
-                    return tool_error("cannot delete from that table")
-                # v2: the id-scoped delete tool on BOTH tiers — it refuses
-                # the chat archive by construction. (The old path here was
-                # a query_raw with SurrealDB syntax: doubly dead on v2,
-                # where query_raw is read-only Postgres.)
-                out = self._mcp("delete_memory", project=proj, record_id=rid)
-                return json.dumps({"result": out})
+                if proj.endswith(("_chat", "_commit")):
+                    return tool_error("conversation history cannot be deleted")
+                # 'rules' is a real project here — deleting dead law is a
+                # first-class customer action, not an edge case.
+                if proj != "rules" and not _PROJECT_RE.match(proj):
+                    return tool_error(f"invalid project '{proj}'")
+                return json.dumps({"result": self._mcp(
+                    "delete_memory", project=proj, record_id=rid)})
+
+            if tool_name == "brethofmind_list":
+                return json.dumps({"result": self._mcp(
+                    "list_memory", project=proj_arg(),
+                    limit=args.get("limit"))})
+
+            if tool_name == "brethofmind_get":
+                rid = (args.get("record_id") or "").strip()
+                if not rid:
+                    return tool_error("brethofmind_get needs record_id")
+                return json.dumps({"result": self._mcp(
+                    "get_memory", record_id=rid,
+                    project=proj_arg(default_to_session=False) or None)})
+
+            if tool_name == "brethofmind_rules":
+                return json.dumps({"result": self._mcp(
+                    "list_rules",
+                    project=proj_arg(default_to_session=False) or None)})
+
+            if tool_name == "brethofmind_projects":
+                return json.dumps({"result": self._mcp("list_projects")})
+
+            if tool_name == "brethofmind_new_project":
+                proj = proj_arg(default_to_session=False)
+                purpose = (args.get("purpose") or "").strip()
+                if not proj or not purpose:
+                    return tool_error("brethofmind_new_project needs project "
+                                      "and purpose (purpose teaches memory "
+                                      "what matters there)")
+                return json.dumps({"result": self._mcp(
+                    "add_project", project=proj, purpose=purpose,
+                    rules=(args.get("rules") or "").strip() or None)})
+
+            if tool_name == "brethofmind_delete_project":
+                proj = proj_arg(default_to_session=False)
+                confirm = (args.get("confirm") or "").strip().lower()
+                if not proj:
+                    return tool_error("brethofmind_delete_project needs project")
+                if confirm != proj:
+                    return tool_error(
+                        f"refusing: confirm must equal the project name "
+                        f"('{proj}') — this deletes everything saved there")
+                return json.dumps({"result": self._mcp(
+                    "delete_project", project=proj, confirm=confirm)})
+
+            if tool_name == "brethofmind_graph":
+                name = (args.get("name") or "").strip()
+                if not name:
+                    return tool_error("brethofmind_graph needs name")
+                return json.dumps({"result": self._mcp(
+                    "graph", name=name,
+                    project=proj_arg(default_to_session=False) or None)})
+
+            if tool_name == "brethofmind_context":
+                return json.dumps({"result": self._mcp(
+                    "session_context", project=proj_arg())})
+
+            if tool_name == "brethofmind_cleanup_history":
+                proj = proj_arg(default_to_session=False)
+                if not proj:
+                    return tool_error("brethofmind_cleanup_history needs project")
+                return json.dumps({"result": self._mcp(
+                    "cleanup_history", project=proj,
+                    older_than_days=args.get("older_than_days"),
+                    mode=(args.get("mode") or "").strip() or None,
+                    confirm=(args.get("confirm") or "").strip() or None)})
         except Exception as e:  # noqa: BLE001
             return tool_error(f"brethofmind-cloud error: {e}")
+        # Falling through means a tool was DECLARED but not dispatched — a
+        # silent None here would look like success to the host. Say so.
+        return tool_error(f"Unknown tool: {tool_name}")
         return tool_error(f"Unknown tool: {tool_name}")
 
     # -- optional hooks -----------------------------------------------------
