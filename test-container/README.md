@@ -3,7 +3,7 @@
 A small **containerized integration test** for brethof-mind cloud. It stands in
 for an OpenClaw-style deployment: a headless, non-Claude-Code Python agent that
 talks to the live service from inside Docker. Use it to confirm the whole path —
-auth, the 15 MCP tools, and turn archival — works from a clean container, on any
+auth, the customer MCP tools, and turn archival — works from a clean container, on any
 host, before shipping.
 
 > Scope note: this is a **test harness**, not a production OpenClaw integration.

@@ -6,14 +6,20 @@ For everything else (a Hermes toolset, an OpenClaw job, a plain script, a test),
 
     from brethof_mind_client import MindClient
     mind = MindClient()                 # reads ~/.brethof-mind/config.json / env
-    print(mind.recall("how do we deploy the website?"))
-    mind.save_memory("global", "note_x", "reference", "Title", "Body [[link]]")
+    print(mind.search_memory("how do we deploy the website?"))
+    mind.save_project("Deploys go out via `git push vps main`.", "website")
 
-The 15 memory tools are called over the remote MCP endpoint (/v1/mcp, stateless
-JSON-RPC ``tools/call``); ``archive_turns`` and ``usage`` hit the hook/usage
-endpoints. Every tool returns the server's text; ``query_raw``/``usage`` return
-parsed JSON. Raises :class:`~brethof_mind_client.client.ClientError` on transport
-failure and :class:`MindToolError` when the server flags a tool error.
+The customer memory tools are called over the remote MCP endpoint (/v1/mcp,
+stateless JSON-RPC ``tools/call``); ``archive_turns`` and ``usage`` hit the
+hook/usage endpoints. Every tool returns the server's text; ``usage`` returns
+parsed JSON. Raises :class:`~brethof_mind_client.client.ClientError` on
+transport failure and :class:`MindToolError` when the server flags a tool
+error.
+
+SAVES ARE INTENTS, NOT FILING INSTRUCTIONS. You state the fact; the service
+picks the id, merges duplicates, and retires what the fact contradicts — and
+does it asynchronously, so a save returns before the record is searchable.
+Poll ``search_memory`` if you need to see it land.
 """
 from __future__ import annotations
 
@@ -72,76 +78,110 @@ class MindClient:
                                           "method": "tools/list", "params": {}})
         return (resp.get("result") or {}).get("tools", [])
 
-    # ── the 15 tools (thin, typed) ──────────────────────────────────────────
+    # ── the customer surface, thin and typed ────────────────────────────────
+    #
+    # REWRITTEN 2026-08-08. Every method here used to name an OWNER-tier tool
+    # (recall, save_memory, save_record, query_raw, semantic_search,
+    # search_chat…). Those tools do not exist for a customer key, so this —
+    # the documented programmatic API for "any Python agent" — failed with
+    # "unknown tool" on almost every call the moment a real customer used it.
+    # A clean-room container install with a freshly provisioned account is
+    # what finally said so out loud.
+    #
+    # The rule that keeps it fixed: this library speaks the CUSTOMER surface
+    # ONLY. It ships to customers and the repo goes public; our admin
+    # vocabulary has no business in it. The conformance suite asserts every
+    # name below still exists on the live tools/list.
 
-    def recall(self, query_text: str, project: str = None, top_k: int = None,
-               include_chat: bool = None) -> str:
-        return self.call_tool("recall", query_text=query_text, project=project,
-                              top_k=top_k, include_chat=include_chat)
-
-    def semantic_search(self, query_text: str, project: str = None,
-                        top_k: int = None) -> str:
-        return self.call_tool("semantic_search", query_text=query_text,
+    # -- read -----------------------------------------------------------
+    def search_memory(self, query_text: str, project: str = None,
+                      top_k: int = None) -> str:
+        """Saved memory — the curated current truth. Start here."""
+        return self.call_tool("search_memory", query_text=query_text,
                               project=project, top_k=top_k)
 
-    def search_memory(self, query_text: str, project: str = None) -> str:
-        return self.call_tool("search_memory", query_text=query_text, project=project)
-
-    def search_chat(self, query_text: str, project: str = None, top_k: int = None) -> str:
-        return self.call_tool("search_chat", query_text=query_text, project=project,
-                              top_k=top_k)
-
-    def search_chat_text(self, query_text: str, project: str = None,
-                         top_k: int = None) -> str:
-        return self.call_tool("search_chat_text", query_text=query_text,
+    def search_history(self, query_text: str, project: str = None,
+                       top_k: int = None) -> str:
+        """The full raw conversation archive, for detail saved memory does
+        not hold."""
+        return self.call_tool("search_history", query_text=query_text,
                               project=project, top_k=top_k)
 
     def get_memory(self, record_id: str, project: str = None) -> str:
         return self.call_tool("get_memory", record_id=record_id, project=project)
 
-    def list_memory(self, project: str, memory_type: str = None, limit: int = None) -> str:
-        return self.call_tool("list_memory", project=project, memory_type=memory_type,
-                              limit=limit)
+    def list_memory(self, project: str, memory_type: str = None,
+                    limit: int = None) -> str:
+        return self.call_tool("list_memory", project=project,
+                              memory_type=memory_type, limit=limit)
 
-    def recent_records(self, project: str, days: int = None, where: str = None,
-                       limit: int = None) -> str:
-        return self.call_tool("recent_records", project=project, days=days,
-                              where=where, limit=limit)
+    def list_projects(self) -> str:
+        return self.call_tool("list_projects")
 
-    def query_raw(self, sql: str) -> Any:
-        out = self.call_tool("query_raw", sql=sql)
-        try:
-            return json.loads(out)
-        except Exception:
-            return out
+    def list_rules(self, project: str = None) -> str:
+        return self.call_tool("list_rules", project=project)
 
-    def memory_health(self, project: str = None) -> str:
-        return self.call_tool("memory_health", project=project)
+    def graph(self, name: str, project: str = None) -> str:
+        """A person / tool / service / decision in the knowledge graph.
 
-    def save_memory(self, project: str, record_id: str, memory_type: str,
-                    title: str, content: str) -> str:
-        return self.call_tool("save_memory", project=project, record_id=record_id,
-                              memory_type=memory_type, title=title, content=content)
+        Uses the ``arguments`` dict, not kwargs: this tool's own parameter is
+        called ``name``, which would collide with call_tool's first parameter
+        and raise TypeError instead of calling the tool. The identical trap
+        bit the OpenClaw wrapper the same day."""
+        return self.call_tool("graph", {"name": name, "project": project})
 
-    def save_record(self, project: str, record_id: str, fields: Any,
-                    embed_text: str = None) -> str:
-        if not isinstance(fields, str):
-            fields = json.dumps(fields)
-        return self.call_tool("save_record", project=project, record_id=record_id,
-                              fields=fields, embed_text=embed_text)
+    def session_context(self, project: str) -> str:
+        """The full session-start briefing for a project."""
+        return self.call_tool("session_context", project=project)
 
-    def supersede_memory(self, project: str, old_record_id: str,
-                         new_record_id: str) -> str:
-        return self.call_tool("supersede_memory", project=project,
-                              old_record_id=old_record_id, new_record_id=new_record_id)
+    # -- write (INTENTS: the service does the filing) --------------------
+    def save_project(self, content: str, project: str) -> str:
+        """Remember one fact about a project. State it self-contained; the
+        service decides placement, id, dedupe and what it supersedes."""
+        return self.call_tool("save_project", content=content, project=project)
 
-    def save_commit(self, project: str, commit_hash: str, message: str,
-                    files_changed: str, branch: str = None) -> str:
-        return self.call_tool("save_commit", project=project, commit_hash=commit_hash,
-                              message=message, files_changed=files_changed, branch=branch)
+    def save_general(self, content: str) -> str:
+        """Remember one fact true across all projects."""
+        return self.call_tool("save_general", content=content)
 
-    def load_project(self, project: str) -> str:
-        return self.call_tool("load_project", project=project)
+    def save_project_rule(self, content: str, project: str) -> str:
+        """LAW for one project: it changes what an agent DOES every session
+        there. A fact or measurement is knowledge — use save_project."""
+        return self.call_tool("save_project_rule", content=content,
+                              project=project)
+
+    def save_general_rule(self, content: str) -> str:
+        """LAW for every project. Costly by design — it loads into every
+        session and teaches every project's curator. Use sparingly."""
+        return self.call_tool("save_general_rule", content=content)
+
+    def delete_memory(self, record_id: str, project: str = None) -> str:
+        """Delete one saved record (works for rules too, project='rules').
+        The conversation archive is never touched."""
+        return self.call_tool("delete_memory", record_id=record_id,
+                              project=project)
+
+    # -- project lifecycle -----------------------------------------------
+    def add_project(self, project: str, purpose: str, rules: str = None) -> str:
+        """Create a project AND tell memory what it is for. `purpose` is
+        mandatory by design — one owner sentence teaches this project's
+        curator more than anything it can infer alone."""
+        return self.call_tool("add_project", project=project, purpose=purpose,
+                              rules=rules)
+
+    def delete_project(self, project: str, confirm: str) -> str:
+        """DESTRUCTIVE. `confirm` must equal the project name. Conversation
+        history is not affected."""
+        return self.call_tool("delete_project", project=project,
+                              confirm=confirm)
+
+    def cleanup_history(self, project: str, older_than_days: int = None,
+                        mode: str = None, confirm: str = None) -> str:
+        """DESTRUCTIVE past a 90-day floor. Without `confirm` this returns a
+        PREVIEW only."""
+        return self.call_tool("cleanup_history", project=project,
+                              older_than_days=older_than_days, mode=mode,
+                              confirm=confirm)
 
     # ── non-MCP endpoints ───────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@
 
 Runs INSIDE the OpenClaw-style test container: a non-Claude-Code, headless
 Python agent exercising the full client against the live service. Proves the
-whole loop works from a plain container — auth, the 15 MCP tools, and turn
+whole loop works from a plain container — auth, the customer MCP tools, and turn
 archival — with clear PASS/FAIL output and a non-zero exit on any failure.
 
 Config comes from the environment (BRETHOF_MIND_API_KEY, optionally
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 
 from brethof_mind_client import MindClient
 from brethof_mind_client.client import ClientError
@@ -51,10 +52,21 @@ def main() -> int:
 
     print(f"endpoint: {m.cfg.endpoint}  project: {PROJECT}")
 
-    # 1. transport + tool discovery
+    # 1. transport + tool discovery.
+    # NO MAGIC NUMBER: this asserted "15 tools" and failed the day the
+    # surface grew to 16 — a number in a test is a fact that rots. What
+    # matters is that the tools this library CALLS actually exist.
     try:
-        tools = m.list_tools()
-        check("MCP tools/list returns 15 tools", len(tools) == 15, f"got {len(tools)}")
+        tools = {t["name"] for t in m.list_tools()}
+        needed = {"search_memory", "search_history", "get_memory",
+                  "list_memory", "list_projects", "list_rules", "graph",
+                  "session_context", "save_project", "save_general",
+                  "save_project_rule", "save_general_rule", "delete_memory",
+                  "add_project", "delete_project", "cleanup_history"}
+        missing = sorted(needed - tools)
+        check("every tool this client calls exists on the live surface",
+              not missing, f"{len(tools)} tools; missing {missing}" if missing
+              else f"{len(tools)} tools")
     except Exception as e:  # noqa: BLE001
         check("MCP tools/list", False, str(e))
 
@@ -65,22 +77,30 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         check("usage()", False, str(e))
 
-    # 3. write → read round-trip
+    # 3. write → read round-trip, through the CUSTOMER doors. Saves are
+    # INTENTS filed asynchronously by the service, so the read polls instead
+    # of assuming the record is there the instant save returns.
     try:
-        m.save_memory(PROJECT, REC_ID, "reference", "Container smoke probe",
-                      "Written by the OpenClaw-style test container. [[brethof-mind-client]]")
-        got = m.get_memory(f"{PROJECT}:{REC_ID}")
-        check("save_memory → get_memory round-trip", "smoke probe" in got.lower(),
-              "record read back")
+        m.save_project(f"Container smoke probe {REC_ID}: written by the "
+                       f"containerised install test to prove a brand-new "
+                       f"account can save and read back.", PROJECT)
+        found = ""
+        for _ in range(24):
+            time.sleep(5)
+            found = m.search_memory(REC_ID, project=PROJECT)
+            if REC_ID.lower() in found.lower():
+                break
+        check("save_project → search_memory round-trip",
+              REC_ID.lower() in found.lower(), "record read back")
     except Exception as e:  # noqa: BLE001
-        check("save/get round-trip", False, str(e))
+        check("save/read round-trip", False, str(e))
 
-    # 4. recall finds it
+    # 4. the second store — the raw conversation archive — answers too
     try:
-        hits = m.recall("container smoke probe", project=PROJECT, top_k=5)
-        check("recall() finds the probe", REC_ID in hits, "in results")
+        m.search_history("container", project=PROJECT)
+        check("search_history() answers", True, "ok")
     except Exception as e:  # noqa: BLE001
-        check("recall()", False, str(e))
+        check("search_history()", False, str(e))
 
     # 5. archive a turn
     try:

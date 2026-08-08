@@ -167,7 +167,7 @@ def cmd_setup(args) -> int:
 
     print("\nNext:")
     print("  brethof-mind install-hooks   # auto-load & archive memory in Claude Code")
-    print("  brethof-mind mcp-command     # wire the 15 memory tools (remote MCP)")
+    print("  brethof-mind mcp-command     # wire the memory tools (remote MCP)")
     return 0
 
 
@@ -269,7 +269,7 @@ def cmd_mcp_command(args) -> int:
     cfg = Config.load()
     key = cfg.api_key or "bm_live_YOUR_KEY"
     url = cfg.endpoint + MCP_PATH
-    print("Run this once to add the 15 memory tools to Claude Code:\n")
+    print("Run this once to add the memory tools to Claude Code:\n")
     # ONE line, no continuation characters — POSIX `\` breaks in PowerShell/cmd.
     print(f'  claude mcp add --transport http brethof-mind {url} '
           f'--header "Authorization: Bearer {key}"')

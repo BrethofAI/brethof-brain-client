@@ -16,8 +16,9 @@ only:
 
 1. forwards agent **hook events** to the service over HTTPS, and pastes back
    the memory it returns, and
-2. wires the **remote MCP** endpoint so the 15 memory tools
-   (`recall`, `save_memory`, `get_memory`, …) are available on demand.
+2. wires the **remote MCP** endpoint so the memory tools
+   (`search_memory`, `search_history`, `save_project`, `save_project_rule`,
+   `get_memory`, …) are available on demand.
 
 It has **no third-party dependencies** — pure Python standard library, so it
 runs anywhere Python 3.9+ does.
@@ -36,7 +37,7 @@ links to them.
 
 ### Claude Code (recommended)
 
-The plugin bundles this client, wires the hooks + the 15 memory tools, and adds
+The plugin bundles this client, wires the hooks + the memory tools, and adds
 the `/recall` `/curate` `/heal` `/onboard` commands — no `pip install` needed,
 only Python 3.9+ on your PATH.
 

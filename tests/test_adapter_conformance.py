@@ -422,11 +422,20 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     assert "error" not in a.save_general_fact(
         f"Lifecycle general canary {stamp}: not tied to one project.").lower()
 
-    # 3. ADD rules — both scopes (the law door, both kinds)
+    # 3. ADD rules — both scopes (the law door, both kinds).
+    # The PROJECT rule names the project, so it is unique per run and must
+    # land. The GENERAL rule is deliberately near-identical run to run, and
+    # the service is RIGHT to refuse a twin — general law is capped, pooled
+    # and loaded into every session, so letting a test pile up look-alike law
+    # every run would be the bug. Accept either outcome, demand a coherent
+    # one, and clean the general rule up below if it did land.
     assert "error" not in a.save_project_rule(
         f"Project {project} is disposable test data, never real facts.").lower()
-    assert "error" not in a.save_general_rule(
-        f"Conformance run {stamp} is a test; ignore its records.").lower()
+    gen = a.save_general_rule(
+        f"Conformance run {stamp} is a test; ignore its records.")
+    gen_landed = "not saved" not in gen.lower()
+    assert gen_landed or "near-identical" in gen.lower(), (
+        f"save_general_rule neither filed nor explained itself: {gen[:300]}")
 
     # 4. CHECK the curated data landed and is READABLE
     listed = _wait_for(a.list_memory, "canary", "saved record is browsable")
@@ -437,10 +446,13 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     full = a.get(rid)
     assert stamp in full, f"get_memory did not return the record body: {full[:300]}"
 
-    # 5. CHECK the rules landed (both scopes visible to this project)
+    # 5. CHECK the project's own law is listed and reaches this project
     rules = _wait_for(a.list_rules, "disposable", "project rule is listed")
-    assert "conformance run" in rules.lower(), (
-        f"general rule not visible to the project: {rules[:400]}")
+    assert project in rules.lower(), (
+        f"the project's own rule is not scoped to it: {rules[:400]}")
+    if gen_landed:
+        _wait_for(a.list_rules, f"conformance run {stamp}",
+                  "general rule reaches the project")
 
     # 6. SEARCH finds it; history search and graph and context all answer
     assert "canary" in _wait_for(lambda: a.search("lifecycle canary"),
@@ -451,7 +463,16 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
         assert isinstance(out, str) and not out.lower().startswith("error"), \
             f"{label} failed: {out[:200]}"
 
-    # 7. DELETE a record, and DELETE A RULE (dead law must be removable)
+    # 7. DELETE a record, and DELETE A RULE (dead law must be removable).
+    # The general rule goes first when this run created one — a test must not
+    # leave law behind in a pool that every session pays for.
+    if gen_landed:
+        for line in rules.splitlines():
+            if f"conformance run {stamp}".lower() in line.lower():
+                m = _re.search(r"rules:([a-z0-9_]+)", line.lower())
+                if m:
+                    a.delete("rules", m.group(1))
+                break
     assert "deleted" in a.delete(project, rid).lower(), "record delete failed"
     rule_ids = _re.findall(r"rules:([a-z0-9_]+)", rules.lower()) or \
         _re.findall(r"^\s*-?\s*([a-z0-9_]{6,})", rules.lower(), _re.M)
