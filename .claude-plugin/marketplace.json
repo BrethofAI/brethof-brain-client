@@ -10,7 +10,7 @@
     {
       "name": "brethof-mind",
       "source": "./",
-      "description": "Shared long-term memory for your AI agents (auto-recall, auto-archive, 15 tools, /recall /curate /heal /onboard).",
+      "description": "Shared long-term memory for your AI agents (auto-recall, auto-archive, the full memory toolset, /recall /curate /heal /onboard).",
       "version": "1.0.1",
       "category": "productivity",
       "tags": ["memory", "mcp", "recall", "curate"]

@@ -379,9 +379,17 @@ class _Facade:
                 else self.s.delete_project(self.project, confirm))
 
 
-def _wait_for(fn, needle, what, budget=150):
+def _wait_for(fn, needle, what, budget=360):
     """Saves go through the async write gate, so reads poll. Returns the text
-    once `needle` appears; fails loudly with what it DID see."""
+    once `needle` appears; fails loudly with what it DID see.
+
+    BUDGET IS DELIBERATELY GENEROUS. Filing is queued work on ONE inference
+    lane shared by every tenant, so latency depends on what else the estate is
+    doing — the release gate saw this suite take 250s where it takes 43s idle,
+    because it ran while a freshly provisioned account's own writes were still
+    draining. A gate that flickers red on queue depth is a gate people learn
+    to ignore, and a test that only passes on an idle system is not testing
+    the system customers use."""
     last = ""
     deadline = time.time() + budget
     while time.time() < deadline:
@@ -422,20 +430,22 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     assert "error" not in a.save_general_fact(
         f"Lifecycle general canary {stamp}: not tied to one project.").lower()
 
-    # 3. ADD rules — both scopes (the law door, both kinds).
-    # The PROJECT rule names the project, so it is unique per run and must
-    # land. The GENERAL rule is deliberately near-identical run to run, and
-    # the service is RIGHT to refuse a twin — general law is capped, pooled
-    # and loaded into every session, so letting a test pile up look-alike law
-    # every run would be the bug. Accept either outcome, demand a coherent
-    # one, and clean the general rule up below if it did land.
+    # 3. ADD rules — both scopes (the law door, both kinds). Both name this
+    # run, so both are unique law and both MUST land.
+    #
+    # This assertion used to accept a refusal as an outcome, because a leftover
+    # general rule from the previous run made every later run a near-twin. That
+    # tolerance hid the bug the release gate was built to catch (2026-08-08):
+    # the gate ACCEPTED a rule it could not file, answered "Remembering it",
+    # and dropped it in silence. A save that reports success and then vanishes
+    # is the failure — so demand the rule land, and delete it at step 7 so the
+    # next run starts from a clean pool instead of arguing with its own litter.
     assert "error" not in a.save_project_rule(
         f"Project {project} is disposable test data, never real facts.").lower()
     gen = a.save_general_rule(
         f"Conformance run {stamp} is a test; ignore its records.")
-    gen_landed = "not saved" not in gen.lower()
-    assert gen_landed or "near-identical" in gen.lower(), (
-        f"save_general_rule neither filed nor explained itself: {gen[:300]}")
+    assert "not saved" not in gen.lower(), (
+        f"save_general_rule was refused: {gen[:300]}")
 
     # 4. CHECK the curated data landed and is READABLE
     listed = _wait_for(a.list_memory, "canary", "saved record is browsable")
@@ -450,9 +460,11 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     rules = _wait_for(a.list_rules, "disposable", "project rule is listed")
     assert project in rules.lower(), (
         f"the project's own rule is not scoped to it: {rules[:400]}")
-    if gen_landed:
-        _wait_for(a.list_rules, f"conformance run {stamp}",
-                  "general rule reaches the project")
+    # Keep the FRESHEST listing: the general rule files a moment after the
+    # project one, and step 7 deletes law by id out of this text. Reusing the
+    # older snapshot is why an earlier version left its general rule behind.
+    rules = _wait_for(a.list_rules, f"conformance run {stamp}",
+                      "general rule reaches the project")
 
     # 6. SEARCH finds it; history search and graph and context all answer
     assert "canary" in _wait_for(lambda: a.search("lifecycle canary"),
@@ -466,19 +478,32 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     # 7. DELETE a record, and DELETE A RULE (dead law must be removable).
     # The general rule goes first when this run created one — a test must not
     # leave law behind in a pool that every session pays for.
-    if gen_landed:
-        for line in rules.splitlines():
-            if f"conformance run {stamp}".lower() in line.lower():
-                m = _re.search(r"rules:([a-z0-9_]+)", line.lower())
-                if m:
-                    a.delete("rules", m.group(1))
-                break
+    gen_id = ""
+    for line in rules.splitlines():
+        if f"conformance run {stamp}".lower() in line.lower():
+            m = _re.search(r"rules:([a-z0-9_]+)", line.lower()) or \
+                _re.search(r"^\s*-?\s*([a-z0-9_]{6,})", line.lower())
+            gen_id = m.group(1) if m else ""
+            break
+    assert gen_id, (
+        f"could not find the general rule's id to clean it up — a test that "
+        f"cannot delete its own law poisons every later run: {rules[:400]}")
+    assert "deleted" in a.delete("rules", gen_id).lower(), \
+        f"general rule {gen_id} could not be deleted"
     assert "deleted" in a.delete(project, rid).lower(), "record delete failed"
-    rule_ids = _re.findall(r"rules:([a-z0-9_]+)", rules.lower()) or \
-        _re.findall(r"^\s*-?\s*([a-z0-9_]{6,})", rules.lower(), _re.M)
-    if rule_ids:
-        assert "deleted" in a.delete("rules", rule_ids[0]).lower(), \
-            "rule delete failed — dead law must be removable"
+    # This project's own law goes too — including the PURPOSE rule add_project
+    # seeded. delete_project (step 9) clears records, not law, so anything left
+    # here is permanent litter in a pool every session of this account pays to
+    # load. Found by reading a test tenant's rules table: three dead runs' law
+    # still resident days later.
+    own = [m.group(1) for line in rules.splitlines() if project in line.lower()
+           for m in [_re.search(r"rules:([a-z0-9_]+)", line.lower()) or
+                     _re.search(r"^\s*-?\s*([a-z0-9_]{6,})", line.lower())]
+           if m and m.group(1) != gen_id]
+    assert own, f"this project's own law is not listed by id: {rules[:400]}"
+    for rid2 in dict.fromkeys(own):
+        assert "deleted" in a.delete("rules", rid2).lower(), \
+            f"rule delete failed for {rid2} — dead law must be removable"
 
     # 8. CLEANUP HISTORY preview — must NOT destroy anything without confirm
     prev = a.cleanup_preview()

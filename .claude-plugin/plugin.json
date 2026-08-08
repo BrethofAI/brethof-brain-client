@@ -2,7 +2,7 @@
   "name": "brethof-mind",
   "displayName": "brethof-mind",
   "version": "1.0.1",
-  "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and 15 memory tools, backed by brethof-mind cloud.",
+  "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and the full memory toolset on demand, backed by brethof-mind cloud.",
   "author": {
     "name": "Brethof AI",
     "email": "hello@brethof.ai",
