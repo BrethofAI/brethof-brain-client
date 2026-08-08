@@ -41,12 +41,20 @@ class MindClient:
 
     # ── MCP tool plumbing ───────────────────────────────────────────────────
 
-    def call_tool(self, name: str, **arguments: Any) -> str:
-        """Invoke one of the 15 memory tools; return its text result."""
+    def call_tool(self, name: str, arguments: dict | None = None,
+                  **kwargs: Any) -> str:
+        """Invoke a memory tool; return its text result.
+
+        Tool arguments go in **kwargs, or in the ``arguments`` dict when a
+        tool's own parameter collides with this method's signature — the
+        ``graph`` tool takes a parameter literally called ``name``, which
+        kwargs cannot express (found 2026-08-08).
+        """
         self._id += 1
+        merged = {**(arguments or {}), **kwargs}
         payload = {"jsonrpc": "2.0", "id": self._id, "method": "tools/call",
                    "params": {"name": name,
-                              "arguments": {k: v for k, v in arguments.items()
+                              "arguments": {k: v for k, v in merged.items()
                                             if v is not None}}}
         resp = self._http.post(MCP_PATH, payload)
         if "error" in resp:
