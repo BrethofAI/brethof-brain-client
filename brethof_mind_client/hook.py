@@ -97,6 +97,18 @@ def _injection_from_envelope(env: dict) -> str:
 
 # ── event handlers ──────────────────────────────────────────────────────────
 
+RESUME_CHECK = (
+    "=== POST-RESUME CHECK (mandatory) ===\n"
+    "This session was RESUMED — the one harness path known to re-attach a "
+    "session WITHOUT its MCP servers (2026-08-09: an agent worked memoryless "
+    "in silence for hours this way). FIRST ACTION: call any brethof-mind "
+    "tool (recall / session_context) to verify Mind is connected. If the "
+    "tools are missing from your toolset or the call fails: STOP — tell the "
+    "user plainly \"Mind MCP is down — restart Claude Code or reconnect via "
+    "/mcp\" and ask for a decision before doing ANY work. Never work "
+    "memoryless in silence.")
+
+
 def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # Claude Code caps EACH hook's output at 10k chars, so the payload is
     # delivered as budgeted parts — settings registers this event once per
@@ -110,7 +122,15 @@ def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
         except (TypeError, ValueError):
             pass
     env = Client(cfg).post("/v1/hooks/session-start", payload)
-    _emit_context("SessionStart", _injection_from_envelope(env))
+    text = _injection_from_envelope(env)
+    # THE RESUME HANDSHAKE: hooks stay alive when the MCP attachment dies, so
+    # the hook is the one messenger that can still reach the model. Turning
+    # the warning into a first ACTION makes the failure self-diagnosing: a
+    # healthy session's verify call succeeds and work continues; a broken one
+    # fails on turn one instead of hour seven. Emitted on the first part only.
+    if inp.get("source") == "resume" and payload.get("part", 1) == 1:
+        text = RESUME_CHECK + ("\n\n" + text if text else "")
+    _emit_context("SessionStart", text)
 
 
 def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
