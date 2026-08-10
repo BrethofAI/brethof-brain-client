@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "brethof-mind": {
+    "brain": {
       "type": "http",
       "url": "${user_config.endpoint}/v1/mcp",
       "headers": {

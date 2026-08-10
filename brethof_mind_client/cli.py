@@ -269,12 +269,14 @@ def cmd_mcp_command(args) -> int:
     cfg = Config.load()
     key = cfg.api_key or "bm_live_YOUR_KEY"
     url = cfg.endpoint + MCP_PATH
-    print("Run this once to add the memory tools to Claude Code:\n")
+    print("Run this once to add the Brain to Claude Code:\n")
     # ONE line, no continuation characters — POSIX `\` breaks in PowerShell/cmd.
-    print(f'  claude mcp add --transport http brethof-mind {url} '
+    # The server registers as "brain": the harness stamps that name into
+    # every tool id the model reads (mcp__brain__search_brain).
+    print(f'  claude mcp add --transport http brain {url} '
           f'--header "Authorization: Bearer {key}"')
     print("\n(That stores the server in Claude Code's MCP config; the tools then "
-          "appear as recall, save_memory, get_memory, ...)")
+          "appear as save_project, search_brain, list_brain, ...)")
     if cfg.api_key:
         print("note: the line contains your real API key and will land in shell "
               "history - clear it afterwards if the machine is shared.")
