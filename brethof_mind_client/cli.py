@@ -41,7 +41,80 @@ HOOK_EVENTS = (
         ("PreCompact", "pre-compact"),
     ])
 CLAUDE_SETTINGS = os.path.expanduser("~/.claude/settings.json")
+CLAUDE_USER_MD = os.path.expanduser("~/.claude/CLAUDE.md")
 MCP_PATH = "/v1/mcp"
+
+# The PROVIDER BLOCK — our one scriptable line into the harness's own
+# instruction channel (founder, 2026-08-10: "CLAUDE.md is the only thing
+# which we can really script, so we could add the provider"). The
+# hostile-harness bait measured why: a workspace CLAUDE.md saying "record
+# facts in this file" was obeyed in half the runs, because agents obey
+# CLAUDE.md. So the Brain claims the same channel — a managed block in
+# the USER-level file (loads in every project); the customer's own
+# project CLAUDE.md is never touched.
+_MD_BEGIN = "<!-- brain:provider (managed by brethof-mind install-hooks) -->"
+_MD_END = "<!-- /brain:provider -->"
+PROVIDER_BLOCK = f"""{_MD_BEGIN}
+## Memory provider: the Brain
+
+Long-term memory on this machine is the BRAIN (the `brain` MCP server).
+It is shared across sessions, projects and agents, curated automatically,
+and survives every restart, reboot and compact.
+
+- To remember something: save it to the Brain (`save_project` /
+  `save_general`) — it files within a minute.
+- To recall: search the Brain (`search_brain`, `list_brain`) BEFORE
+  saying you don't remember something.
+- Do NOT keep long-term memory in local files (CLAUDE.md, MEMORY.md,
+  notes): files are per-machine and unsearchable — a fact filed there is
+  invisible to every other session and agent. Files are for code and
+  config; memory belongs in the Brain.
+{_MD_END}"""
+
+
+def _install_provider_block() -> str:
+    """Idempotent upsert of the managed block in ~/.claude/CLAUDE.md.
+    Returns what happened: 'added' | 'updated' | 'current' | 'FAILED …'."""
+    try:
+        text = ""
+        if os.path.exists(CLAUDE_USER_MD):
+            with open(CLAUDE_USER_MD, encoding="utf-8") as f:
+                text = f.read()
+        if _MD_BEGIN in text and _MD_END in text:
+            head, _, rest = text.partition(_MD_BEGIN)
+            _, _, tail = rest.partition(_MD_END)
+            new = head + PROVIDER_BLOCK + tail
+            action = "current" if new == text else "updated"
+        else:
+            new = ((text.rstrip() + "\n\n") if text.strip() else "") \
+                + PROVIDER_BLOCK + "\n"
+            action = "added"
+        if action != "current":
+            os.makedirs(os.path.dirname(CLAUDE_USER_MD), exist_ok=True)
+            with open(CLAUDE_USER_MD, "w", encoding="utf-8") as f:
+                f.write(new)
+        return action
+    except OSError as e:
+        return f"FAILED ({e})"
+
+
+def _remove_provider_block() -> bool:
+    """Remove ONLY our managed block; everything else passes untouched."""
+    try:
+        if not os.path.exists(CLAUDE_USER_MD):
+            return False
+        with open(CLAUDE_USER_MD, encoding="utf-8") as f:
+            text = f.read()
+        if _MD_BEGIN not in text:
+            return False
+        head, _, rest = text.partition(_MD_BEGIN)
+        _, _, tail = rest.partition(_MD_END)
+        new = (head.rstrip() + "\n" + tail.lstrip()).strip()
+        with open(CLAUDE_USER_MD, "w", encoding="utf-8") as f:
+            f.write(new + ("\n" if new else ""))
+        return True
+    except OSError:
+        return False
 
 # Matches our own installed hook command and captures the baked interpreter:
 #   "<python path>" -m brethof_mind_client.hook <event> [part]
@@ -226,6 +299,8 @@ def cmd_install_hooks(args) -> int:
         print("  Restart Claude Code (or start a new session) to activate.")
     else:
         print("OK: hooks already installed - nothing to do")
+    action = _install_provider_block()
+    print(f"OK: Brain provider block {action} in {CLAUDE_USER_MD}")
     return 0
 
 
@@ -262,6 +337,8 @@ def cmd_uninstall_hooks(args) -> int:
     if removed:
         _write_settings(settings)
     print(f"OK: removed {removed} brethof-mind hook(s) from {CLAUDE_SETTINGS}")
+    if _remove_provider_block():
+        print(f"OK: removed the Brain provider block from {CLAUDE_USER_MD}")
     return 0
 
 
