@@ -118,6 +118,10 @@ class MemorySession:
         return self._tool("list_brain", project=project or self.hooks.project,
                           limit=limit)
 
+    # Deprecated alias (pre-Brain name, 2026-08 rename) — existing OpenClaw
+    # integrations keep working; the wire only speaks list_brain.
+    list_memory = list_brain
+
     def get(self, record_id: str, project: str | None = None) -> str:
         """Read ONE saved memory in full, by id."""
         return self._tool("get_record", record_id=record_id, project=project)
