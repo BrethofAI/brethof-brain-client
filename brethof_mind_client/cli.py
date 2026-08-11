@@ -32,11 +32,18 @@ from .config import (CONFIG_PATH, Config, ensure_dirs, save_file, valid_project)
 # briefing sections; same-event hooks run in parallel, so empty slots are
 # almost free.
 SESSION_START_PARTS = 12
+# UserPromptSubmit is registered once per ambient part: part 1 = rule
+# reminder + dead-end cards + top record, part 2 = the second strong match
+# alone. One record per hook keeps every injection WHOLE under the 10k
+# per-hook cap — a cut record misleads (the model uses cut text as if
+# complete), so nothing is ever trimmed to fit.
+PROMPT_SUBMIT_PARTS = 2
 HOOK_EVENTS = (
     [("SessionStart", f"session-start {i}")
      for i in range(1, SESSION_START_PARTS + 1)]
+    + [("UserPromptSubmit", f"prompt-submit {i}")
+       for i in range(1, PROMPT_SUBMIT_PARTS + 1)]
     + [
-        ("UserPromptSubmit", "prompt-submit"),
         ("Stop", "stop"),
         ("PreCompact", "pre-compact"),
     ])

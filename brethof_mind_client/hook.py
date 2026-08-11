@@ -137,14 +137,23 @@ def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
 
 
 def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    # Like session-start, the ambient payload is delivered as parts — one
+    # registered hook per injected record, each under the harness's 10K
+    # per-hook cap ("prompt-submit 1" = rule + dead-ends + record #1,
+    # "prompt-submit 2" = the second strong match alone). No part argument =
+    # the legacy single-blob shape; old registrations keep working.
     project = cfg.project_for(inp.get("cwd", ""))
     prompt = (inp.get("prompt") or "").strip()
     session_id = inp.get("session_id") or ""
     if not prompt or not session_id:
         return
-    env = Client(cfg).post("/v1/hooks/prompt-submit",
-                           {"project": project, "prompt": prompt,
-                            "session_id": session_id})
+    payload = {"project": project, "prompt": prompt, "session_id": session_id}
+    if args:
+        try:
+            payload["part"] = int(args[0])
+        except (TypeError, ValueError):
+            pass
+    env = Client(cfg).post("/v1/hooks/prompt-submit", payload)
     _emit_context("UserPromptSubmit", _injection_from_envelope(env))
 
 
