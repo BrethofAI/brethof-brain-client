@@ -19,7 +19,7 @@ cloud and starts working on the first conversation.
 - Never echo the key back, never store it in memory or logs.
 
 ## 2. Verify the connection
-Call `search_memory("test")`. Any well-formed response — even "no
+Call `search_brain("test")`. Any well-formed response — even "no
 results" — means the key works. An auth error means the key is wrong or
 revoked: back to the panel.
 

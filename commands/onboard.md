@@ -8,7 +8,7 @@ concrete — a guided setup, not a lecture. There is nothing to install and no
 local database — the tenant lives on the server; you write to it with the tools.
 
 ## 0. Sense the state
-Try `get_memory global:memory_index` and `list_memory global`. If empty, this is
+Try `get_record global:memory_index` and `list_brain global`. If empty, this is
 a fresh tenant — proceed. If they already have projects/records, treat this as a
 re-tune: confirm before overwriting anything.
 

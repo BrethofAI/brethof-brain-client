@@ -35,7 +35,7 @@ project with `BRETHOF_MIND_PROJECT` (default `global`).
 
 1. **MCP transport** — `tools/list` returns all 15 tools.
 2. **Auth** — `usage()` succeeds and reports a plan.
-3. **Write→read** — `save_memory` then `get_memory` round-trip.
+3. **Write→read** — `save_memory` then `get_record` round-trip.
 4. **Recall** — `recall()` finds the just-written probe.
 5. **Archive** — `archive_turns()` stores two turns and returns `status: ok`.
 

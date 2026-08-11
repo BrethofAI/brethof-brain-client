@@ -11,7 +11,7 @@ Find what's already known before assuming or asking. Recall is unlimited —
 search as often as you like, on every plan.
 
 ## The two stores, and which to trust
-- `search_memory(query)` — **saved memory: the current truth.** The
+- `search_brain(query)` — **saved memory: the current truth.** The
   service keeps it curated — superseded decisions are updated or removed, so
   what you find here is what the team believes NOW. Start here, always.
 - `search_history(query)` — **conversation history: complete but raw.**
@@ -21,7 +21,7 @@ search as often as you like, on every plan.
   their moment, not as current truth.
 
 ## Steps
-1. `search_memory` with natural-language keywords for the topic (not
+1. `search_brain` with natural-language keywords for the topic (not
    boolean `X OR Y`, not bare project names).
 2. Thin result? Re-probe once with different wording — different words
    surface different memories.

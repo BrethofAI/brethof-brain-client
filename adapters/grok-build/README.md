@@ -15,7 +15,7 @@ each prompt, archiving every turn, and the memory tools on demand**.
 | **Session-start injection** | `~/.claude/settings.json` hooks → cloud API | Memory index + rules + state loaded into system prompt |
 | **Ambient recall** | `~/.claude/settings.json` hooks → cloud API | Relevant memory injected before each prompt |
 | **Turn archival** | `~/.claude/settings.json` hooks → cloud API | Each user+assistant turn archived to chat memory |
-| **Memory tools** | `grok mcp add` → cloud MCP endpoint | The server lists the toolset your key is entitled to — `search_memory`, `search_history`, the save tools, `list_memory`, `get_memory`, `delete_memory`, `cleanup_history`, etc. |
+| **Memory tools** | `grok mcp add` → cloud MCP endpoint | The server lists the toolset your key is entitled to — `search_brain`, `search_history`, the save tools, `list_brain`, `get_record`, `delete_record`, `cleanup_history`, etc. |
 | **`/recall` `/curate` `/onboard`** | Skills copied to `~/.grok/` | Slash commands for memory management |
 
 ## Install
@@ -73,7 +73,7 @@ cp -r skills/* ~/.grok/skills/
 grok mcp doctor
 
 # In a Grok session, the agent should be able to call:
-#   search_memory("your topic")    — saved memory: the current truth
+#   search_brain("your topic")    — saved memory: the current truth
 #   search_history("exact string") — full conversation history, raw
 #   save_project("fact", project)  — save one durable fact (the service
 #                                    files it; memory also learns from

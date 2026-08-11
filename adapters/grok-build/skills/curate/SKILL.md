@@ -30,9 +30,9 @@ Use this skill for the cases automation shouldn't guess at:
   session? A fact, setting, or measurement is knowledge — save it with the
   fact tools, never as a rule. General rules load in every project; use
   them sparingly.
-- `search_memory(query)` — check first whether memory already holds it;
+- `search_brain(query)` — check first whether memory already holds it;
   if a result already says the same thing, saving again is noise.
-- `delete_memory` — remove a saved memory the user
+- `delete_record` — remove a saved memory the user
   says is wrong or dead. Conversation history is never touched by this.
 
 ## Steps

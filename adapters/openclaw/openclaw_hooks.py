@@ -102,7 +102,7 @@ class MemorySession:
     def search(self, query: str, project: str | None = None,
                top_k: int = 8) -> str:
         """Search SAVED MEMORY — the curated current truth. Start here."""
-        return self._tool("search_memory", query_text=query,
+        return self._tool("search_brain", query_text=query,
                           project=project or self.hooks.project, top_k=top_k)
 
     def search_history(self, query: str, project: str | None = None,
@@ -112,15 +112,15 @@ class MemorySession:
         return self._tool("search_history", query_text=query,
                           project=project or self.hooks.project, top_k=top_k)
 
-    def list_memory(self, project: str | None = None,
+    def list_brain(self, project: str | None = None,
                     limit: int | None = None) -> str:
         """Browse a project's saved memory — ids and titles."""
-        return self._tool("list_memory", project=project or self.hooks.project,
+        return self._tool("list_brain", project=project or self.hooks.project,
                           limit=limit)
 
     def get(self, record_id: str, project: str | None = None) -> str:
         """Read ONE saved memory in full, by id."""
-        return self._tool("get_memory", record_id=record_id, project=project)
+        return self._tool("get_record", record_id=record_id, project=project)
 
     def list_rules(self, project: str | None = None) -> str:
         """The saved rules — all, or those active for one project."""
@@ -151,7 +151,7 @@ class MemorySession:
     def delete(self, project: str, record_id: str) -> str:
         """Delete ONE saved record (works for rules too, project='rules').
         The conversation archive is never touched."""
-        return self._tool("delete_memory", project=project,
+        return self._tool("delete_record", project=project,
                           record_id=record_id)
 
     def graph(self, name: str, project: str | None = None) -> str:

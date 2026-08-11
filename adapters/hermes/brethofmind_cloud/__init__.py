@@ -392,7 +392,7 @@ class BrethofMindCloudProvider(MemoryProvider):
                 if not q:
                     return tool_error("Missing required parameter: query")
                 k = max(1, min(int(args.get("top_k", 8)), 25))
-                tool = ("search_memory" if tool_name == "brethofmind_search"
+                tool = ("search_brain" if tool_name == "brethofmind_search"
                         else "search_history")
                 return json.dumps({"result": self._mcp(
                     tool, query_text=q, project=proj_arg(), top_k=k)})
@@ -440,11 +440,11 @@ class BrethofMindCloudProvider(MemoryProvider):
                 if proj != "rules" and not _PROJECT_RE.match(proj):
                     return tool_error(f"invalid project '{proj}'")
                 return json.dumps({"result": self._mcp(
-                    "delete_memory", project=proj, record_id=rid)})
+                    "delete_record", project=proj, record_id=rid)})
 
             if tool_name == "brethofmind_list":
                 return json.dumps({"result": self._mcp(
-                    "list_memory", project=proj_arg(),
+                    "list_brain", project=proj_arg(),
                     limit=args.get("limit"))})
 
             if tool_name == "brethofmind_get":
@@ -452,7 +452,7 @@ class BrethofMindCloudProvider(MemoryProvider):
                 if not rid:
                     return tool_error("brethofmind_get needs record_id")
                 return json.dumps({"result": self._mcp(
-                    "get_memory", record_id=rid,
+                    "get_record", record_id=rid,
                     project=proj_arg(default_to_session=False) or None)})
 
             if tool_name == "brethofmind_rules":

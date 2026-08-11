@@ -6,7 +6,7 @@ For everything else (a Hermes toolset, an OpenClaw job, a plain script, a test),
 
     from brethof_mind_client import MindClient
     mind = MindClient()                 # reads ~/.brethof-mind/config.json / env
-    print(mind.search_memory("how do we deploy the website?"))
+    print(mind.search_brain("how do we deploy the website?"))
     mind.save_project("Deploys go out via `git push vps main`.", "website")
 
 The customer memory tools are called over the remote MCP endpoint (/v1/mcp,
@@ -19,7 +19,7 @@ error.
 SAVES ARE INTENTS, NOT FILING INSTRUCTIONS. You state the fact; the service
 picks the id, merges duplicates, and retires what the fact contradicts — and
 does it asynchronously, so a save returns before the record is searchable.
-Poll ``search_memory`` if you need to see it land.
+Poll ``search_brain`` if you need to see it land.
 """
 from __future__ import annotations
 
@@ -94,10 +94,10 @@ class MindClient:
     # name below still exists on the live tools/list.
 
     # -- read -----------------------------------------------------------
-    def search_memory(self, query_text: str, project: str = None,
+    def search_brain(self, query_text: str, project: str = None,
                       top_k: int = None) -> str:
         """Saved memory — the curated current truth. Start here."""
-        return self.call_tool("search_memory", query_text=query_text,
+        return self.call_tool("search_brain", query_text=query_text,
                               project=project, top_k=top_k)
 
     def search_history(self, query_text: str, project: str = None,
@@ -107,12 +107,12 @@ class MindClient:
         return self.call_tool("search_history", query_text=query_text,
                               project=project, top_k=top_k)
 
-    def get_memory(self, record_id: str, project: str = None) -> str:
-        return self.call_tool("get_memory", record_id=record_id, project=project)
+    def get_record(self, record_id: str, project: str = None) -> str:
+        return self.call_tool("get_record", record_id=record_id, project=project)
 
-    def list_memory(self, project: str, memory_type: str = None,
+    def list_brain(self, project: str, memory_type: str = None,
                     limit: int = None) -> str:
-        return self.call_tool("list_memory", project=project,
+        return self.call_tool("list_brain", project=project,
                               memory_type=memory_type, limit=limit)
 
     def list_projects(self) -> str:
@@ -155,11 +155,25 @@ class MindClient:
         session and teaches every project's curator. Use sparingly."""
         return self.call_tool("save_general_rule", content=content)
 
-    def delete_memory(self, record_id: str, project: str = None) -> str:
+    def delete_record(self, record_id: str, project: str = None) -> str:
         """Delete one saved record (works for rules too, project='rules').
         The conversation archive is never touched."""
-        return self.call_tool("delete_memory", record_id=record_id,
+        return self.call_tool("delete_record", record_id=record_id,
                               project=project)
+
+    # -- deprecated aliases (pre-Brain names, kept so existing integrations
+    #    survive the 2026-08 rename; the wire only speaks the new names) ---
+    def search_memory(self, *a, **kw):  # noqa: D102
+        return self.search_brain(*a, **kw)
+
+    def list_memory(self, *a, **kw):  # noqa: D102
+        return self.list_brain(*a, **kw)
+
+    def get_memory(self, *a, **kw):  # noqa: D102
+        return self.get_record(*a, **kw)
+
+    def delete_memory(self, *a, **kw):  # noqa: D102
+        return self.delete_record(*a, **kw)
 
     # -- project lifecycle -----------------------------------------------
     def add_project(self, project: str, purpose: str, rules: str = None) -> str:

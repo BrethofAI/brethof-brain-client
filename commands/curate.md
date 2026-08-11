@@ -12,8 +12,8 @@ Curated memory is DISPOSABLE: the only protected store is the `*_chat` archive
    compacted and the early half is gone, rebuild it with `search_chat` /
    `search_chat_text` (your session's turns are archived server-side) — curate
    from THAT, not only from what survives in context.
-1. Read the GENERAL index (`get_memory global:memory_index`) and, for each area
-   you touched, that project's own index (`get_memory <project>:memory_index`).
+1. Read the GENERAL index (`get_record global:memory_index`) and, for each area
+   you touched, that project's own index (`get_record <project>:memory_index`).
    Navigate from them — do not guess.
 2. Walk the WHOLE session and group what happened by AREA. Capture GENEROUSLY:
    every decision, correction, fact figured out, gotcha, runbook, dead-end ruled
@@ -24,7 +24,7 @@ Curated memory is DISPOSABLE: the only protected store is the `*_chat` archive
      `save_memory` (record_id = the area): refreshed `status`, prepend a dated
      one-line `recent_changes`, `next_actions`.
    - **knowledge** — save genuinely new decisions / facts / runbooks / gotchas
-     to that area's table. Search first (`recall`/`search_memory`); update in
+     to that area's table. Search first (`recall`/`search_brain`); update in
      place, never duplicate. Link related records with `[[other-id]]`.
    - **index** — if you added/renamed records or changed an area's shape, update
      that `<project>:memory_index` so it still maps reality.

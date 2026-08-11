@@ -58,10 +58,10 @@ def main() -> int:
     # matters is that the tools this library CALLS actually exist.
     try:
         tools = {t["name"] for t in m.list_tools()}
-        needed = {"search_memory", "search_history", "get_memory",
-                  "list_memory", "list_projects", "list_rules", "graph",
+        needed = {"search_brain", "search_history", "get_record",
+                  "list_brain", "list_projects", "list_rules", "graph",
                   "session_context", "save_project", "save_general",
-                  "save_project_rule", "save_general_rule", "delete_memory",
+                  "save_project_rule", "save_general_rule", "delete_record",
                   "add_project", "delete_project", "cleanup_history"}
         missing = sorted(needed - tools)
         check("every tool this client calls exists on the live surface",
@@ -87,10 +87,10 @@ def main() -> int:
         found = ""
         for _ in range(24):
             time.sleep(5)
-            found = m.search_memory(REC_ID, project=PROJECT)
+            found = m.search_brain(REC_ID, project=PROJECT)
             if REC_ID.lower() in found.lower():
                 break
-        check("save_project → search_memory round-trip",
+        check("save_project → search_brain round-trip",
               REC_ID.lower() in found.lower(), "record read back")
     except Exception as e:  # noqa: BLE001
         check("save/read round-trip", False, str(e))
