@@ -47,7 +47,10 @@ _EVENT_NAMES = {"session-start": "SessionStart", "prompt-submit": "UserPromptSub
 
 def _read_stdin() -> dict:
     try:
-        data = json.load(sys.stdin)
+        # lstrip the BOM: Windows PowerShell pipes stamp U+FEFF onto the
+        # payload (bit a live probe 2026-08-11) — a customer's wrapper script
+        # can do the same, and a hook that no-ops on it is invisible amnesia.
+        data = json.loads(sys.stdin.read().lstrip("﻿"))
         return data if isinstance(data, dict) else {}
     except Exception:
         # A parse failure degrades to {} and every handler no-ops on the
