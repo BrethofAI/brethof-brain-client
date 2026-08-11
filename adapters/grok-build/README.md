@@ -1,21 +1,26 @@
 # brethof-mind cloud + Grok Build
 
-Grok Build (xAI's open-source coding CLI) is **Claude Code-compatible**: it
-reads `~/.claude/settings.json` for hooks and `.claude/CLAUDE.md` for system
-prompts. It also has its own `grok mcp` command for MCP server management.
+Grok Build (xAI's open-source coding CLI) has its own `grok mcp` command for
+MCP servers and a native hook system under `~/.grok/hooks/`.
 
-This adapter wires Grok Build to brethof-mind cloud so it gets the same memory
-as Claude Code and Hermes: **auto-recall at session start, ambient recall before
-each prompt, archiving every turn, and the memory tools on demand**.
+> **Note:** Grok advertises Claude Code hook compatibility
+> (`~/.claude/settings.json`), but the Claude hook entries **cannot work**
+> there (verified on grok 0.2.106): payloads are camelCase, passive-hook
+> stdout (`additionalContext`) is ignored, and the Windows spawner mangles
+> quoted commands. This adapter therefore uses grok's NATIVE hooks plus a
+> pull-model memory rule — not the Claude hook files.
+
+This adapter wires Grok Build to brethof-mind cloud: **the Brain's memory
+tools on demand, pull-model recall taught by a global rule, and every turn
+archived via a native Stop hook**.
 
 ## What you get
 
 | Feature | How | Effect |
 |---|---|---|
-| **Session-start injection** | `~/.claude/settings.json` hooks → cloud API | Memory index + rules + state loaded into system prompt |
-| **Ambient recall** | `~/.claude/settings.json` hooks → cloud API | Relevant memory injected before each prompt |
-| **Turn archival** | `~/.claude/settings.json` hooks → cloud API | Each user+assistant turn archived to chat memory |
 | **Memory tools** | `grok mcp add` → cloud MCP endpoint | The server lists the toolset your key is entitled to — `search_brain`, `search_history`, the save tools, `list_brain`, `get_record`, `delete_record`, `cleanup_history`, etc. |
+| **Pull-model recall** | Global rule in `~/.grok/rules/` | Grok is taught to call `search_brain`/`search_history` itself (grok has no context-injection channel) |
+| **Turn archival** | Native Stop hook in `~/.grok/hooks/` | Each session's transcript archived to chat memory |
 | **`/recall` `/curate` `/onboard`** | Skills copied to `~/.grok/` | Slash commands for memory management |
 
 ## Install
@@ -29,7 +34,8 @@ python setup.py
 
 The setup script:
 1. Adds the `brethof-mind` HTTP MCP server to `~/.grok/config.toml` via `grok mcp add`
-2. Verifies the Claude Code hooks in `~/.claude/settings.json` are wired (Grok reads these)
+2. Installs the NATIVE Stop-hook archiver (`~/.grok/hooks/`) + the pull-model
+   memory rule (`~/.grok/rules/brethof-mind-memory.md`)
 3. Copies the `/recall` `/curate` `/onboard` skills to `~/.grok/skills/`
 
 You'll need your **API key** from [brethof.ai/account](https://brethof.ai) →
@@ -49,16 +55,15 @@ grok mcp add --transport http brethof-mind https://api.brethof.cloud/v1/mcp \
   --header "Authorization: Bearer bm_live_YOUR_KEY"
 ```
 
-**2. Verify hooks** (Grok reads `~/.claude/settings.json` — the Claude Code
-hooks fire automatically if already installed):
+**2. Install the native hooks + rule** (do NOT rely on `~/.claude/settings.json`
+— Claude-style hooks verifiably cannot fire in grok; see the note at the top).
+Run `python setup.py` for this part even if you added the MCP server manually,
+or hand-create `~/.grok/hooks/brethof-mind.json` (Stop → `grok_hook.py stop`)
+and `~/.grok/rules/brethof-mind-memory.md` from this adapter.
 
 ```bash
 grok mcp doctor    # should show brethof-mind: ✓ handshake OK, tools discovered
 ```
-
-If the Claude Code hooks aren't installed yet, install the Claude Code plugin
-first (`/plugin install brethof-mind@brethof` in Claude Code) or copy the hooks
-from the root of this repo into `~/.claude/hooks/`.
 
 **3. Copy skills** (optional — adds `/recall` `/curate` `/onboard`):
 
@@ -82,9 +87,13 @@ grok mcp doctor
 
 ## How it works
 
-Grok Build shares Claude Code's hook infrastructure (`~/.claude/settings.json`),
-so the brethof-mind hooks fire for both agents. The hooks call the cloud API
-at `api.brethof.cloud` (or your self-hosted endpoint) with your API key.
+Memory INJECTION is replaced by the PULL model: grok has no working
+context-injection channel, so a global rule (`~/.grok/rules/`) teaches the
+agent to call `search_brain`/`search_history` itself. Turn ARCHIVAL is a
+native grok Stop hook (`~/.grok/hooks/brethof-mind.json` → `grok_hook.py`)
+that ships grok's own `updates.jsonl` transcript to the cloud API with your
+key. On Windows the hook runs through a `.cmd` wrapper because grok's spawner
+breaks on quoted inline commands.
 
 The MCP server is added separately via `grok mcp add` because Grok has its own
 MCP server registry in `~/.grok/config.toml` (it doesn't read `.mcp.json` from
@@ -112,7 +121,9 @@ default = "glm-5.2-cloud"
 - Grok Build's `grok mcp doctor` is the fastest way to verify connectivity.
 - The hooks are **fail-open**: if the cloud is unreachable, Grok continues
   normally without memory (no session blocking).
-- The `BRETHOF_MIND_API_KEY` environment variable is read by the hooks; the
-  MCP server uses the key embedded in the `grok mcp add` command.
-- If you use both Claude Code and Grok Build on the same machine, they share
-  the same hooks — turns from both agents are archived to the same memory.
+- The `BRETHOF_MIND_API_KEY` environment variable is read by the Stop-hook
+  archiver; the MCP server uses the key embedded in the `grok mcp add` command.
+- If you also run Claude Code on the same machine, set
+  `[compat.claude] hooks = false` in `~/.grok/config.toml` — the Claude-sourced
+  hook entries fail inside grok and only add log noise. Both agents can still
+  archive to the same memory (each through its own working hook path).

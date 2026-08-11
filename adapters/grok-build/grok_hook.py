@@ -59,6 +59,42 @@ MAX_BYTES_PER_FLUSH = 800_000
 TEXT_CAP = 50_000
 
 
+def _grok_own_key() -> str:
+    """Key from grok's own MCP server entry in ~/.grok/config.toml.
+
+    The archiver must ship transcripts to the SAME tenant grok's MCP tools
+    write to. The shared Config fallback (~/.brethof-mind/config.json) can
+    belong to a DIFFERENT agent on the same machine (e.g. Claude Code's owner
+    key) — using it split-brains the memory: tools on one tenant, transcripts
+    on another (observed 2026-08-11). So grok's config.toml wins; env var and
+    config.json remain fallbacks for grok-only installs that never ran
+    `grok mcp add`."""
+    path = os.path.expanduser("~/.grok/config.toml")
+    try:
+        with open(path, "rb") as f:
+            try:
+                import tomllib
+                data = tomllib.load(f)
+                servers = data.get("mcp_servers", {})
+                for name, entry in servers.items():
+                    if "brethof" in name and isinstance(entry, dict):
+                        auth = (entry.get("headers") or {}).get("Authorization", "")
+                        if auth.startswith("Bearer "):
+                            return auth[7:].strip()
+            except ModuleNotFoundError:
+                f.seek(0)
+                import re
+                text = f.read().decode("utf-8", "replace")
+                m = re.search(
+                    r"\[mcp_servers\.[^\]]*brethof[^\]]*\.headers\][^\[]*?"
+                    r"Authorization\s*=\s*\"Bearer ([^\"]+)\"", text)
+                if m:
+                    return m.group(1).strip()
+    except OSError:
+        pass
+    return ""
+
+
 def _read_stdin() -> dict:
     try:
         d = json.load(sys.stdin)
@@ -183,6 +219,9 @@ def main(argv=None) -> int:
         return 0
     try:
         cfg = Config.load()
+        own = _grok_own_key()
+        if own:
+            cfg.api_key = own
         if not cfg.configured():
             return 0
         handler(cfg, _read_stdin())

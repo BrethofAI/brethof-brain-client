@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Setup script — wire Grok Build to brethof-mind cloud.
 
-Grok Build is Claude Code-compatible (reads ~/.claude/settings.json for hooks)
-and has its own `grok mcp` command for MCP servers. This script:
+Grok Build has its own `grok mcp` command for MCP servers and a native hook
+system under ~/.grok/hooks/ (Claude-style ~/.claude/settings.json hooks
+verifiably CANNOT fire in grok — see install_hooks below). This script:
 
 1. Adds the brethof-mind HTTP MCP server via `grok mcp add`
-2. Verifies the Claude Code hooks are wired (Grok reads these too)
+2. Installs the native Stop-hook archiver + pull-model memory rule
 3. Copies the /recall /curate /onboard skills to ~/.grok/skills/
 
 Run from this directory:
@@ -90,6 +91,45 @@ def add_mcp_server(grok_bin: str, api_key: str, endpoint: str):
     else:
         print(f"  ✗ Failed: {result.stderr or result.stdout}")
         return False
+
+
+def persist_key(api_key: str, endpoint: str):
+    """Make sure the Stop-hook archiver can find the key AFTER this shell dies.
+
+    The hook resolves its key via brethof_mind_client.Config: env var first,
+    then ~/.brethof-mind/config.json. grok spawns hooks WITHOUT this shell's
+    environment, so an env-only key means the archiver runs keyless and
+    fail-open — silently archiving nothing. Persist the key to config.json
+    unless one is already configured there (never overwrite an existing key:
+    on a machine that also runs the Claude Code plugin, config.json may hold
+    a different key on purpose)."""
+    print("=== Persisting key for the Stop-hook archiver ===")
+    import json as _json
+    cfg_dir = Path(os.path.expanduser(os.environ.get("BRETHOF_MIND_HOME",
+                                                     "~/.brethof-mind")))
+    cfg_path = cfg_dir / "config.json"
+    existing = {}
+    if cfg_path.exists():
+        try:
+            existing = _json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:                                    # noqa: BLE001
+            existing = {}
+    if existing.get("api_key"):
+        print(f"  {cfg_path} already has a key — leaving it untouched")
+        return True
+    existing["api_key"] = api_key
+    if endpoint != DEFAULT_ENDPOINT:
+        existing["endpoint"] = endpoint
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    tmp = cfg_path.with_suffix(".json.tmp")
+    tmp.write_text(_json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, cfg_path)
+    try:
+        os.chmod(cfg_path, 0o600)
+    except OSError:
+        pass
+    print(f"  ✓ key persisted to {cfg_path}")
+    return True
 
 
 def install_hooks():
@@ -199,7 +239,8 @@ def main():
     print()
 
     ok_mcp = add_mcp_server(grok_bin, api_key, endpoint)
-    ok_hooks = install_hooks()
+    ok_key = persist_key(api_key, endpoint)
+    ok_hooks = install_hooks() and ok_key
     ok_skills = copy_skills()
 
     print()
