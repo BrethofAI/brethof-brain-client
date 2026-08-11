@@ -102,7 +102,9 @@ def test_hook_commands_point_at_real_files_and_use_forward_slashes():
 
 
 def test_the_mcp_server_is_wired_to_user_config_not_a_baked_in_key():
-    mcp = _json(REPO / ".mcp.json")["mcpServers"]["brethof-mind"]
+    # "brain" since 2026-08-10 — the server name stamps the tool ids the
+    # agent sees (mcp__brain__*), which is itself a product feature.
+    mcp = _json(REPO / ".mcp.json")["mcpServers"]["brain"]
     assert "${user_config.api_key}" in json.dumps(mcp), (
         "the MCP server does not read the key from user config — a key baked "
         "into a published bundle would be OUR key, shipped to every customer")
