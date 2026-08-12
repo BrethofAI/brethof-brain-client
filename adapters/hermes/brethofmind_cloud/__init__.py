@@ -344,15 +344,9 @@ class BrethofMindCloudProvider(MemoryProvider):
                  "rules": {"type": "string", "description":
                            "Optional: what to always record / never record."}},
                  "required": ["project", "purpose"]}},
-            {"name": "brethofmind_delete_project",
-             "description": ("DESTRUCTIVE: delete everything saved under one "
-                             "project. Requires confirm to equal the project "
-                             "name. Conversation history is not affected."),
-             "parameters": {"type": "object", "properties": {
-                 "project": s(1),
-                 "confirm": {"type": "string", "description":
-                             "Must equal the project name, typed again."}},
-                 "required": ["project", "confirm"]}},
+            # brethofmind_delete_project removed 2026-08-12 (founder): full
+            # project deletion — including conversation history — is a HUMAN
+            # act, done in the account panel, never by an agent.
             {"name": "brethofmind_graph",
              "description": ("Look something up in the knowledge graph — a "
                              "person, tool, service or decision: what it is, "
@@ -473,18 +467,6 @@ class BrethofMindCloudProvider(MemoryProvider):
                 return json.dumps({"result": self._mcp(
                     "add_project", project=proj, purpose=purpose,
                     rules=(args.get("rules") or "").strip() or None)})
-
-            if tool_name == "brethofmind_delete_project":
-                proj = proj_arg(default_to_session=False)
-                confirm = (args.get("confirm") or "").strip().lower()
-                if not proj:
-                    return tool_error("brethofmind_delete_project needs project")
-                if confirm != proj:
-                    return tool_error(
-                        f"refusing: confirm must equal the project name "
-                        f"('{proj}') — this deletes everything saved there")
-                return json.dumps({"result": self._mcp(
-                    "delete_project", project=proj, confirm=confirm)})
 
             if tool_name == "brethofmind_graph":
                 name = (args.get("name") or "").strip()

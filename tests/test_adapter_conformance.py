@@ -188,9 +188,12 @@ def test_hermes_tool_schemas_are_customer_shaped():
                 "brethofmind_save_rule", "brethofmind_delete",
                 "brethofmind_list", "brethofmind_get", "brethofmind_rules",
                 "brethofmind_projects", "brethofmind_new_project",
-                "brethofmind_delete_project", "brethofmind_graph",
+                "brethofmind_graph",
                 "brethofmind_context", "brethofmind_cleanup_history"}
     assert names == expected, f"missing {expected - names}, extra {names - expected}"
+    # delete_project left every agent surface 2026-08-12 (founder): full
+    # project deletion is a HUMAN act, panel-only.
+    assert "brethofmind_delete_project" not in names
 
     blob = json.dumps(schemas).lower()
     for owner_only in ("query_raw", "search_chat_text", "semantic_search",
@@ -373,10 +376,14 @@ class _Facade:
                 if self.kind == "hermes"
                 else self.s.cleanup_history(self.project))
 
-    def delete_project(self, confirm):
-        return (self._h("brethofmind_delete_project", project=self.project,
-                        confirm=confirm) if self.kind == "hermes"
-                else self.s.delete_project(self.project, confirm))
+    def delete_project_attempt(self):
+        """The verb is GONE from every agent surface (2026-08-12) — this
+        helper exists only to prove that. Hermes: unknown tool. SDK/OpenClaw:
+        no such method, and the raw wire call is refused by the server."""
+        if self.kind == "hermes":
+            return self._h("brethofmind_delete_project", project=self.project,
+                           confirm=self.project)
+        return "ABSENT" if not hasattr(self.s, "delete_project") else "PRESENT"
 
 
 def _wait_for(fn, needle, what, budget=360):
@@ -492,10 +499,12 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
         f"general rule {gen_id} could not be deleted"
     assert "deleted" in a.delete(project, rid).lower(), "record delete failed"
     # This project's own law goes too — including the PURPOSE rule add_project
-    # seeded. delete_project (step 9) clears records, not law, so anything left
-    # here is permanent litter in a pool every session of this account pays to
-    # load. Found by reading a test tenant's rules table: three dead runs' law
-    # still resident days later.
+    # seeded. Since 2026-08-12 no agent verb deletes the project itself, so
+    # per-record cleanup here is the WHOLE cleanup: anything left is permanent
+    # litter in a pool every session of this account pays to load. Found by
+    # reading a test tenant's rules table: three dead runs' law still
+    # resident days later. (The empty project shell is dropped with the
+    # gate's throwaway tenant.)
     own = [m.group(1) for line in rules.splitlines() if project in line.lower()
            for m in [_re.search(r"rules:([a-z0-9_]+)", line.lower()) or
                      _re.search(r"^\s*-?\s*([a-z0-9_]{6,})", line.lower())]
@@ -511,16 +520,20 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     assert "deleted" not in prev.lower() or "preview" in prev.lower(), \
         f"cleanup preview looks like it acted without confirm: {prev[:200]}"
 
-    # 9. DELETE THE PROJECT — refused without the typed confirmation, then done
-    refused = a.delete_project("wrong-name")
-    assert "refus" in refused.lower() or "error" in refused.lower(), (
-        f"delete_project accepted a WRONG confirm — data-loss guard broken: "
-        f"{refused[:200]}")
-    gone = a.delete_project(project)
-    assert "error" not in gone.lower(), f"delete_project failed: {gone[:200]}"
-    left = a.list_memory()
-    assert "canary" not in left.lower(), (
-        f"project deleted but its records still listed: {left[:300]}")
+    # 9. DELETE PROJECT IS GONE (2026-08-12): full project deletion is a
+    # HUMAN act, panel-only. Every agent surface must refuse or lack the
+    # verb entirely — an adapter that still carries it is stale.
+    attempt = a.delete_project_attempt()
+    low = attempt.lower()
+    assert ("absent" in low or "unknown" in low or "error" in low), (
+        f"delete_project still reachable from the {a.kind} surface — the "
+        f"panel-only law is broken: {attempt[:200]}")
+    # And the attempt must have destroyed NOTHING: the project's records are
+    # already cleaned above, but its shell must still exist server-side.
+    left = a.list_projects()
+    assert project in left.lower(), (
+        f"project vanished after a refused/absent delete attempt — something "
+        f"still deletes on the agent surface: {left[:300]}")
 
 
 # ════════════════ D. NOTHING SECRET IN USER-VISIBLE TEXT ════════════════════

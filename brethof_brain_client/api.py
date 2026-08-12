@@ -183,11 +183,10 @@ class MindClient:
         return self.call_tool("add_project", project=project, purpose=purpose,
                               rules=rules)
 
-    def delete_project(self, project: str, confirm: str) -> str:
-        """DESTRUCTIVE. `confirm` must equal the project name. Conversation
-        history is not affected."""
-        return self.call_tool("delete_project", project=project,
-                              confirm=confirm)
+    # delete_project was removed 2026-08-12 (founder ruling): deleting a
+    # whole project — including its conversation history — is a HUMAN act,
+    # done in the account panel at brethof.cloud. No agent-reachable verb
+    # touches the conversation archive.
 
     def cleanup_history(self, project: str, older_than_days: int = None,
                         mode: str = None, confirm: str = None) -> str:

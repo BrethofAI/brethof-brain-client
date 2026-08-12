@@ -62,11 +62,15 @@ def main() -> int:
                   "list_brain", "list_projects", "list_rules", "graph",
                   "session_context", "save_project", "save_general",
                   "save_project_rule", "save_general_rule", "delete_record",
-                  "add_project", "delete_project", "cleanup_history"}
+                  "add_project", "cleanup_history"}
         missing = sorted(needed - tools)
         check("every tool this client calls exists on the live surface",
               not missing, f"{len(tools)} tools; missing {missing}" if missing
               else f"{len(tools)} tools")
+        # delete_project left the agent surface 2026-08-12 (founder): full
+        # project deletion is panel-only. Its reappearance = a regression.
+        check("delete_project stays OFF the agent surface",
+              "delete_project" not in tools, "delete_project is back")
     except Exception as e:  # noqa: BLE001
         check("MCP tools/list", False, str(e))
 

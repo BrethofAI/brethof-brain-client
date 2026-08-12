@@ -142,15 +142,9 @@ class MemorySession:
         return self._tool("add_project", project=project, purpose=purpose,
                           rules=rules)
 
-    def delete_project(self, project: str, confirm: str) -> str:
-        """DESTRUCTIVE — delete everything saved under one project. `confirm`
-        must equal the project name; the guard is here as well as on the
-        server so a mis-wired caller cannot wipe a project by accident.
-        Conversation history is not affected."""
-        if (confirm or "").strip().lower() != (project or "").strip().lower():
-            return (f"Refusing: confirm must equal the project name "
-                    f"('{project}') — this deletes everything saved there.")
-        return self._tool("delete_project", project=project, confirm=confirm)
+    # delete_project was removed 2026-08-12 (founder ruling): deleting a
+    # whole project — including its conversation history — is a HUMAN act,
+    # done in the account panel at brethof.cloud, never by an agent.
 
     def delete(self, project: str, record_id: str) -> str:
         """Delete ONE saved record (works for rules too, project='rules').
