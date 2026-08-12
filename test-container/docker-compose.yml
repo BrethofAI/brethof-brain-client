@@ -1,13 +1,13 @@
 # OpenClaw-style test container: a headless, non-Claude-Code agent exercising
-# brethof-mind cloud end-to-end. Run:
-#   BRETHOF_MIND_API_KEY=bm_test_xxx docker compose -f test-container/docker-compose.yml up --build
+# brethof-brain cloud end-to-end. Run:
+#   BRETHOF_BRAIN_API_KEY=bm_test_xxx docker compose -f test-container/docker-compose.yml up --build
 # Exit code reflects the smoke test (0 = all passed).
 services:
-  brethof-mind-smoke:
+  brethof-brain-smoke:
     build:
       context: ..                      # repo root — needed to install the client
       dockerfile: test-container/Dockerfile
     environment:
-      BRETHOF_MIND_API_KEY: ${BRETHOF_MIND_API_KEY:?set BRETHOF_MIND_API_KEY}
-      BRETHOF_MIND_ENDPOINT: ${BRETHOF_MIND_ENDPOINT:-https://api.brethof.cloud}
-      BRETHOF_MIND_PROJECT: ${BRETHOF_MIND_PROJECT:-global}
+      BRETHOF_BRAIN_API_KEY: ${BRETHOF_BRAIN_API_KEY:?set BRETHOF_BRAIN_API_KEY}
+      BRETHOF_BRAIN_ENDPOINT: ${BRETHOF_BRAIN_ENDPOINT:-https://api.brethof.cloud}
+      BRETHOF_BRAIN_PROJECT: ${BRETHOF_BRAIN_PROJECT:-global}

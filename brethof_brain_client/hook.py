@@ -2,7 +2,7 @@
 
 One dispatcher wired to Claude Code's hook events. Invoke as::
 
-    python -m brethof_mind_client.hook <event>
+    python -m brethof_brain_client.hook <event>
 
 where ``<event>`` is one of: session-start, prompt-submit, stop, pre-compact,
 commit. Each reads the hook JSON on stdin, forwards it to the data plane, and —
@@ -30,11 +30,11 @@ from .client import Client, ClientError
 from .config import Config
 from . import transcript
 
-# BRETHOF_MIND_HOOK_DEBUG=1 turns the fail-open silence into stderr truth.
+# BRETHOF_BRAIN_HOOK_DEBUG=1 turns the fail-open silence into stderr truth.
 # The 2026-07-06 audit named silent swallowing this client's biggest risk;
 # 2026-07-28 proved it: a pre-compact that never enqueued took four probing
 # rounds to even OBSERVE because every layer ate the evidence.
-DEBUG = bool(os.environ.get("BRETHOF_MIND_HOOK_DEBUG"))
+DEBUG = bool(os.environ.get("BRETHOF_BRAIN_HOOK_DEBUG"))
 
 # Chunked archive flush: bounded batches, state committed per confirmed batch,
 # so a large backlog (fresh install on an old session, over_cap period, outage)
@@ -75,8 +75,8 @@ def _emit_context(event_name: str, text: str) -> None:
     json.dump(out, sys.stdout)
 
 
-AUTH_NOTICE = ("[brethof-mind: API key rejected — memory and archiving are OFF. "
-               "Check brethof.ai/account, then run `brethof-mind setup`.]")
+AUTH_NOTICE = ("[brethof-brain: API key rejected — memory and archiving are OFF. "
+               "Check brethof.ai/account, then run `brethof-brain setup`.]")
 
 
 def _injection_from_envelope(env: dict) -> str:
@@ -93,7 +93,7 @@ def _injection_from_envelope(env: dict) -> str:
     if status in ("provisioning", "over_cap", "read_only", "unknown_project"):
         tag = {"provisioning": "setting up", "over_cap": "memory full",
                "read_only": "read-only", "unknown_project": "no memory"}[status]
-        return injection or (f"[brethof-mind: {tag}"
+        return injection or (f"[brethof-brain: {tag}"
                              + (f" — {notice}" if notice else "") + "]")
     return injection  # server_error → transient, inject nothing extra
 
@@ -104,7 +104,7 @@ RESUME_CHECK = (
     "=== POST-RESUME CHECK (mandatory) ===\n"
     "This session was RESUMED — the one harness path known to re-attach a "
     "session WITHOUT its MCP servers (2026-08-09: an agent worked memoryless "
-    "in silence for hours this way). FIRST ACTION: call any brethof-mind "
+    "in silence for hours this way). FIRST ACTION: call any brethof-brain "
     "tool (recall / session_context) to verify Mind is connected. If the "
     "tools are missing from your toolset or the call fails: STOP — tell the "
     "user plainly \"Mind MCP is down — restart Claude Code or reconnect via "
@@ -192,7 +192,7 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
             # DON'T advance past this chunk — retry next turn. stderr only
             # (shows in hook debug, never in the session).
             sys.stderr.write(
-                f"brethof-mind: archive deferred ({env.get('notice') or env.get('status')})\n")
+                f"brethof-brain: archive deferred ({env.get('notice') or env.get('status')})\n")
             return
         last = chunk[-1]
         transcript.save_state(session_id, last["_offset"], last["index"] + 1)
@@ -256,12 +256,12 @@ def _pre_compact(cfg: Config, inp: dict, args: tuple = ()) -> None:
             env = _handshake()
             if env.get("flush_needed"):
                 sys.stderr.write(
-                    "brethof-mind: archive STILL behind this transcript "
+                    "brethof-brain: archive STILL behind this transcript "
                     "after full re-flush — some turns may be lost to "
                     "compaction (server last_index="
                     f"{env.get('server_last_index')}).\n")
             else:
-                sys.stderr.write("brethof-mind: archive gap detected and "
+                sys.stderr.write("brethof-brain: archive gap detected and "
                                  "healed before compact.\n")
     except ClientError:
         if DEBUG:
@@ -287,7 +287,7 @@ def main(argv=None) -> int:
     try:
         cfg = Config.load()
         if not cfg.configured():
-            return 0  # not set up yet — stay silent, `brethof-mind setup` handles UX
+            return 0  # not set up yet — stay silent, `brethof-brain setup` handles UX
         inp = _read_stdin()
         if DEBUG:
             sys.stderr.write(f"[hook-debug] event={event} "
@@ -303,8 +303,8 @@ def main(argv=None) -> int:
             if event in _EVENT_NAMES:
                 _emit_context(_EVENT_NAMES[event], AUTH_NOTICE)
             else:
-                sys.stderr.write("brethof-mind: API key rejected — archiving off; "
-                                 "run `brethof-mind doctor`\n")
+                sys.stderr.write("brethof-brain: API key rejected — archiving off; "
+                                 "run `brethof-brain doctor`\n")
         # Anything else: data plane unreachable → memory just doesn't load.
     except Exception:  # noqa: BLE001 — absolute last resort; never break the turn
         if DEBUG:

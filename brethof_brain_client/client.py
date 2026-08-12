@@ -1,4 +1,4 @@
-"""HTTP transport to the brethof-mind data plane.
+"""HTTP transport to the brethof-brain data plane.
 
 Two methods — ``post`` and ``get`` — that speak the uniform response envelope
 (``{status, injection, notice, retry_after, ...}``). It is deliberately
@@ -56,7 +56,7 @@ class Client:
     def _request(self, path: str, data: bytes | None, method: str,
                  timeout: float | None) -> dict:
         if not self.cfg.api_key:
-            raise ClientError("no API key configured (run: brethof-mind setup)")
+            raise ClientError("no API key configured (run: brethof-brain setup)")
         try:
             req = urllib.request.Request(self.cfg.endpoint + path, data=data,
                                          headers=self._headers(), method=method)

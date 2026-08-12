@@ -17,7 +17,7 @@ current. This proves its BEHAVIOUR:
   D. NO SECRETS IN USER-VISIBLE TEXT — nothing an adapter returns may carry
      the API key, a tenant id, or our internal infrastructure names.
 
-Live parts need a CUSTOMER-tier key in BRETHOF_MIND_CONFORMANCE_KEY (use a
+Live parts need a CUSTOMER-tier key in BRETHOF_BRAIN_CONFORMANCE_KEY (use a
 disposable test tenant — section C writes). Without it those skip and the
 offline contract (A, B, D) still runs everywhere.
 """
@@ -36,7 +36,7 @@ import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 ADAPTERS = REPO / "adapters"
-ENDPOINT = os.environ.get("BRETHOF_MIND_CONFORMANCE_ENDPOINT",
+ENDPOINT = os.environ.get("BRETHOF_BRAIN_CONFORMANCE_ENDPOINT",
                           "https://api.brethof.cloud").rstrip("/")
 # A disposable project the live section writes into.
 PROJECT = "plugin_conformance"
@@ -48,9 +48,9 @@ FORBIDDEN_IN_OUTPUT = ("187.127", "mkt-cf", "prod-cf", "mind-pg", "mind-api",
 
 
 def _key() -> str:
-    k = os.environ.get("BRETHOF_MIND_CONFORMANCE_KEY", "")
+    k = os.environ.get("BRETHOF_BRAIN_CONFORMANCE_KEY", "")
     if not k:
-        pytest.skip("BRETHOF_MIND_CONFORMANCE_KEY not set — live section needs it")
+        pytest.skip("BRETHOF_BRAIN_CONFORMANCE_KEY not set — live section needs it")
     return k
 
 
@@ -97,7 +97,7 @@ def live_customer_tools() -> set[str]:
         ENDPOINT + "/mcp", data=body,
         headers={"Authorization": "Bearer " + _key(),
                  "Content-Type": "application/json",
-                 "User-Agent": "brethof-mind-conformance/1.0"})
+                 "User-Agent": "brethof-brain-conformance/1.0"})
     with urllib.request.urlopen(req, timeout=20) as r:
         return {t["name"] for t in json.load(r)["result"]["tools"]}
 
@@ -118,8 +118,8 @@ def test_hermes_provider_fails_open(monkeypatch, tmp_path, key, endpoint, label)
     Hermes entrypoint loads the user .env before plugins import). Without this
     redirect a developer's real key leaks in and the no-key case never runs."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", key)
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", endpoint)
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", endpoint)
     monkeypatch.setenv("HERMES_MEMORY_PROJECT", PROJECT)
     cls = _hermes_provider_class()
     p = cls()
@@ -137,9 +137,9 @@ def test_openclaw_session_refuses_to_start_without_a_key(monkeypatch):
     """OpenClaw's wrapper is constructed explicitly by the integrator, so an
     unconfigured key must raise a NAMED, actionable error at construction —
     not fail silently halfway through a run."""
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", "")
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", "https://api.brethof.cloud")
-    from brethof_mind_client.client import ClientError
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "https://api.brethof.cloud")
+    from brethof_brain_client.client import ClientError
     cls = _openclaw_session_class()
     with pytest.raises(ClientError) as e:
         cls(project=PROJECT, session_id="conformance")
@@ -147,8 +147,8 @@ def test_openclaw_session_refuses_to_start_without_a_key(monkeypatch):
 
 
 def test_openclaw_session_fails_open_on_dead_endpoint(monkeypatch):
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", "bm_live_deadbeefdeadbeef")
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bm_live_deadbeefdeadbeef")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
     cls = _openclaw_session_class()
     s = cls(project=PROJECT, session_id="conformance", base_system_prompt="P")
     assert s.start() == "P"                  # base prompt survives, no memory
@@ -159,8 +159,8 @@ def test_openclaw_session_fails_open_on_dead_endpoint(monkeypatch):
 def test_grok_stop_hook_fails_open_on_garbage(tmp_path, monkeypatch):
     """The grok archiver is a hook: whatever happens, exit 0. A non-zero exit
     or a traceback would surface as a broken tool call in the user's CLI."""
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", "")
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
     import subprocess
     hook = ADAPTERS / "grok-build" / "grok_hook.py"
     for payload in ('{"transcriptPath": "/nonexistent/path.jsonl"}',
@@ -230,8 +230,8 @@ def test_live_roundtrip(monkeypatch, adapter):
     """Session-start injects, a turn archives, a fact saves, a rule saves —
     through the adapter's own code, against the live service."""
     key = _key()
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", key)
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", ENDPOINT)
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", ENDPOINT)
     monkeypatch.setenv("HERMES_MEMORY_PROJECT", PROJECT)
     stamp = str(int(time.time()))
     fact = (f"Conformance canary {stamp}: the {adapter} adapter completed a "
@@ -407,8 +407,8 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     key = _key()
     stamp = str(int(time.time()))[-6:]
     project = f"lc_{adapter[:4]}_{stamp}"
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", key)
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", ENDPOINT)
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", ENDPOINT)
     monkeypatch.setenv("HERMES_MEMORY_PROJECT", project)
     a = _Facade(adapter, project)
 
@@ -526,8 +526,8 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
 # ════════════════ D. NOTHING SECRET IN USER-VISIBLE TEXT ════════════════════
 def test_live_output_carries_no_secrets_or_infrastructure(monkeypatch):
     key = _key()
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", key)
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", ENDPOINT)
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", ENDPOINT)
     monkeypatch.setenv("HERMES_MEMORY_PROJECT", PROJECT)
     p = _hermes_provider_class()()
     p.initialize("conformance-secrets")

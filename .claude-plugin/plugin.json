@@ -1,24 +1,24 @@
 {
-  "name": "brethof-mind",
-  "displayName": "brethof-mind",
-  "version": "1.0.1",
-  "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and the full memory toolset on demand, backed by brethof-mind cloud.",
+  "name": "brethof-brain",
+  "displayName": "brethof-brain",
+  "version": "1.1.0",
+  "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and the full memory toolset on demand, backed by brethof-brain cloud.",
   "author": {
     "name": "Brethof AI",
     "email": "hello@brethof.ai",
     "url": "https://brethof.cloud"
   },
   "homepage": "https://brethof.cloud",
-  "repository": "https://github.com/BrethofAI/brethof-mind-client",
-  "license": "LicenseRef-brethof-mind-Client-License",
+  "repository": "https://github.com/BrethofAI/brethof-brain-client",
+  "license": "LicenseRef-brethof-brain-Client-License",
   "keywords": ["memory", "mcp", "claude", "agents", "recall", "curate"],
   "hooks": "./hooks/hooks.json",
   "mcpServers": "./.mcp.json",
   "userConfig": {
     "api_key": {
       "type": "string",
-      "title": "brethof-mind API key",
-      "description": "From brethof.ai/account -> brethof-mind tab (bm_live_... or bm_test_...).",
+      "title": "brethof-brain API key",
+      "description": "From brethof.ai/account -> brethof-brain tab (bm_live_... or bm_test_...).",
       "sensitive": true,
       "required": true
     },
@@ -31,7 +31,7 @@
     "project": {
       "type": "string",
       "title": "Default project",
-      "description": "Default memory project for this account (per-directory mapping still works via ~/.brethof-mind/config.json).",
+      "description": "Default memory project for this account (per-directory mapping still works via ~/.brethof-brain/config.json).",
       "default": "global"
     }
   }

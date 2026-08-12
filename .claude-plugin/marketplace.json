@@ -4,14 +4,14 @@
     "name": "Brethof AI",
     "email": "hello@brethof.ai"
   },
-  "description": "Brethof AI plugins — brethof-mind shared long-term memory for your agents.",
-  "version": "1.0.1",
+  "description": "Brethof AI plugins — brethof-brain shared long-term memory for your agents.",
+  "version": "1.1.0",
   "plugins": [
     {
-      "name": "brethof-mind",
+      "name": "brethof-brain",
       "source": "./",
       "description": "Shared long-term memory for your AI agents (auto-recall, auto-archive, the full memory toolset, /recall /curate /heal /onboard).",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "productivity",
       "tags": ["memory", "mcp", "recall", "curate"]
     }

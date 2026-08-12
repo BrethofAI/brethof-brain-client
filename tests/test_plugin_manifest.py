@@ -1,4 +1,4 @@
-"""THE PLUGIN BUNDLE — the artifact `/plugin install brethof-mind@brethof`
+"""THE PLUGIN BUNDLE — the artifact `/plugin install brethof-brain@brethof`
 actually installs.
 
 Everything else in this repo tests the library. This tests the PACKAGE: the

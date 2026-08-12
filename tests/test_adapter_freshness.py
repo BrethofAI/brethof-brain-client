@@ -8,7 +8,7 @@ adapters referenced `save_state` (never existed on v2), `recall`/`save_memory`
 customer key. This test makes that rot loud: every tool-shaped reference in
 adapters/ must exist in the LIVE customer tools/list.
 
-Needs BRETHOF_MIND_FRESHNESS_KEY (any customer-tier key; conftest scrubs the
+Needs BRETHOF_BRAIN_FRESHNESS_KEY (any customer-tier key; conftest scrubs the
 normal auth vars for isolation) — skipped when absent, so the offline suite
 stays green; run it wherever the live API is reachable.
 """
@@ -41,18 +41,18 @@ NOT_TOOLS = {"load_env", "get_json", "save_file", "load_config", "load_json",
 
 
 def live_customer_tools() -> set[str]:
-    key = os.environ.get("BRETHOF_MIND_FRESHNESS_KEY", "")
-    endpoint = os.environ.get("BRETHOF_MIND_FRESHNESS_ENDPOINT",
+    key = os.environ.get("BRETHOF_BRAIN_FRESHNESS_KEY", "")
+    endpoint = os.environ.get("BRETHOF_BRAIN_FRESHNESS_ENDPOINT",
                               "https://api.brethof.cloud").rstrip("/")
     if not key:
-        pytest.skip("BRETHOF_MIND_FRESHNESS_KEY not set — needs the live API")
+        pytest.skip("BRETHOF_BRAIN_FRESHNESS_KEY not set — needs the live API")
     body = json.dumps({"jsonrpc": "2.0", "id": 1,
                        "method": "tools/list"}).encode()
     req = urllib.request.Request(
         endpoint + "/mcp", data=body,
         headers={"Authorization": "Bearer " + key,
                  "Content-Type": "application/json",
-                 "User-Agent": "brethof-mind-client-tests/1.0"})
+                 "User-Agent": "brethof-brain-client-tests/1.0"})
     with urllib.request.urlopen(req, timeout=20) as r:
         payload = json.load(r)
     tools = {t["name"] for t in payload["result"]["tools"]}

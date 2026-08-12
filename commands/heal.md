@@ -1,5 +1,5 @@
 ---
-description: Deep brethof-mind heal — dedupe, contradictions, stale state, dead records. Run ~weekly.
+description: Deep brethof-brain heal — dedupe, contradictions, stale state, dead records. Run ~weekly.
 ---
 Heal the WHOLE memory system. `/curate` covers one session; `/heal` covers
 everything that accumulated between heals. Be thorough and DECISIVE — this pass

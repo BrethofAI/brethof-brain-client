@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Grok Build hook adapter — archive Grok sessions into brethof-mind cloud.
+"""Grok Build hook adapter — archive Grok sessions into brethof-brain cloud.
 
 Grok Build has a full hooks system (SessionStart / UserPromptSubmit / Stop …)
 and even auto-loads Claude Code's ~/.claude/settings.json hooks — but three
@@ -12,7 +12,7 @@ on grok 0.2.106, 2026-07-24):
   2. Passive-hook stdout is IGNORED (docs + injection probe): there is NO
      additionalContext channel, so session-brain / ambient-recall injection is
      impossible via hooks. Injection is replaced by the PULL model: a global
-     rule in ~/.grok/rules/ tells Grok to call the brethof-mind MCP tools.
+     rule in ~/.grok/rules/ tells Grok to call the brethof-brain MCP tools.
   3. On Windows, Grok's spawner mangles the ``"exe" "script" arg`` quoted
      command form (exit 1 before Python starts) — hooks must be wired through
      a .cmd wrapper (setup.py generates it).
@@ -28,11 +28,11 @@ hook_execution, turn_completed, …}; text at ``params.update.content.text``.
 Streaming may split one message across MANY chunk lines — consecutive
 same-role chunks are coalesced into one turn.
 
-Reuses brethof_mind_client (Config / Client / per-session offset state), so
-install the client package first (``pip install brethof-mind-client`` or run
+Reuses brethof_brain_client (Config / Client / per-session offset state), so
+install the client package first (``pip install brethof-brain-client`` or run
 from a checkout — sys.path bootstrap below handles the checkout case).
 
-FAIL-OPEN: like every brethof-mind hook, any error exits 0 and never breaks
+FAIL-OPEN: like every brethof-brain hook, any error exits 0 and never breaks
 the session.
 """
 from __future__ import annotations
@@ -42,15 +42,15 @@ import os
 import sys
 
 # Checkout bootstrap: allow running straight from the repo (adapters/grok-build/
-# is two levels below the repo root where brethof_mind_client lives).
+# is two levels below the repo root where brethof_brain_client lives).
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 try:
-    from brethof_mind_client.client import Client, ClientError
-    from brethof_mind_client.config import Config
-    from brethof_mind_client import transcript as tstate   # state helpers only
+    from brethof_brain_client.client import Client, ClientError
+    from brethof_brain_client.config import Config
+    from brethof_brain_client import transcript as tstate   # state helpers only
 except Exception:                                          # noqa: BLE001
     sys.exit(0)   # client not installed — memory off, never break the session
 
@@ -63,7 +63,7 @@ def _grok_own_key() -> str:
     """Key from grok's own MCP server entry in ~/.grok/config.toml.
 
     The archiver must ship transcripts to the SAME tenant grok's MCP tools
-    write to. The shared Config fallback (~/.brethof-mind/config.json) can
+    write to. The shared Config fallback (~/.brethof-brain/config.json) can
     belong to a DIFFERENT agent on the same machine (e.g. Claude Code's owner
     key) — using it split-brains the memory: tools on one tenant, transcripts
     on another (observed 2026-08-11). So grok's config.toml wins; env var and
@@ -106,7 +106,7 @@ def _read_stdin() -> dict:
 def read_new_grok_turns(path: str, session_id: str):
     """Incremental read of a grok updates.jsonl → (turns, tail_offset, next_index).
 
-    Same contract as brethof_mind_client.transcript.read_new_turns: byte-offset
+    Same contract as brethof_brain_client.transcript.read_new_turns: byte-offset
     state per session, only newline-terminated lines consumed, each turn carries
     ``_offset`` (just past its LAST consumed line) so flushes can commit state
     per confirmed chunk. Consecutive same-role chunks coalesce into one turn; a
@@ -201,7 +201,7 @@ def _stop(cfg: Config, inp: dict) -> None:
                                              "session_id": session_id,
                                              "turns": payload})
         if env.get("status", "ok") != "ok":
-            sys.stderr.write("brethof-mind(grok): archive deferred "
+            sys.stderr.write("brethof-brain(grok): archive deferred "
                              f"({env.get('notice') or env.get('status')})\n")
             return
         last = chunk[-1]
@@ -227,8 +227,8 @@ def main(argv=None) -> int:
         handler(cfg, _read_stdin())
     except ClientError as e:
         if e.status_code in (401, 403):
-            sys.stderr.write("brethof-mind(grok): API key rejected — archiving "
-                             "off; run `brethof-mind doctor`\n")
+            sys.stderr.write("brethof-brain(grok): API key rejected — archiving "
+                             "off; run `brethof-brain doctor`\n")
     except Exception:                                        # noqa: BLE001
         pass
     return 0

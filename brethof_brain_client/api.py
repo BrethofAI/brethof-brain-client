@@ -1,18 +1,18 @@
-"""Programmatic API — use brethof-mind cloud from any Python code.
+"""Programmatic API — use brethof-brain cloud from any Python code.
 
 The Claude Code hooks and MCP wiring cover agents that speak those protocols.
 For everything else (a Hermes toolset, an OpenClaw job, a plain script, a test),
 ``MindClient`` is a small typed wrapper over the same remote endpoints:
 
-    from brethof_mind_client import MindClient
-    mind = MindClient()                 # reads ~/.brethof-mind/config.json / env
+    from brethof_brain_client import MindClient
+    mind = MindClient()                 # reads ~/.brethof-brain/config.json / env
     print(mind.search_brain("how do we deploy the website?"))
     mind.save_project("Deploys go out via `git push vps main`.", "website")
 
 The customer memory tools are called over the remote MCP endpoint (/v1/mcp,
 stateless JSON-RPC ``tools/call``); ``archive_turns`` and ``usage`` hit the
 hook/usage endpoints. Every tool returns the server's text; ``usage`` returns
-parsed JSON. Raises :class:`~brethof_mind_client.client.ClientError` on
+parsed JSON. Raises :class:`~brethof_brain_client.client.ClientError` on
 transport failure and :class:`MindToolError` when the server flags a tool
 error.
 
@@ -40,8 +40,8 @@ class MindClient:
     def __init__(self, config: Optional[Config] = None, timeout: float = 30.0):
         self.cfg = config or Config.load()
         if not self.cfg.configured():
-            raise ClientError("no API key configured (set BRETHOF_MIND_API_KEY "
-                              "or run: brethof-mind setup)")
+            raise ClientError("no API key configured (set BRETHOF_BRAIN_API_KEY "
+                              "or run: brethof-brain setup)")
         self._http = Client(self.cfg, timeout=timeout)
         self._id = 0
 

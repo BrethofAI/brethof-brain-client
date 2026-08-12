@@ -1,5 +1,5 @@
 """Config + project resolution — pure, cross-OS (path handling differs per OS)."""
-from brethof_mind_client.config import Config, valid_project
+from brethof_brain_client.config import Config, valid_project
 
 
 def test_valid_project():
@@ -12,13 +12,13 @@ def test_valid_project():
 
 
 def test_project_for_env_override(monkeypatch):
-    monkeypatch.setenv("BRETHOF_MIND_PROJECT", "envproj")
+    monkeypatch.setenv("BRETHOF_BRAIN_PROJECT", "envproj")
     c = Config(projects=[{"path": "/a", "key": "aproj"}], default_project="defproj")
     assert c.project_for("/a/sub") == "envproj"       # env wins over everything
 
 
 def test_project_for_longest_prefix(monkeypatch):
-    monkeypatch.delenv("BRETHOF_MIND_PROJECT", raising=False)
+    monkeypatch.delenv("BRETHOF_BRAIN_PROJECT", raising=False)
     c = Config(projects=[{"path": "/work/acme", "key": "acme"},
                          {"path": "/work", "key": "work"}],
                default_project="defproj")
@@ -28,8 +28,8 @@ def test_project_for_longest_prefix(monkeypatch):
 
 
 def test_default_project_env(monkeypatch):
-    monkeypatch.delenv("BRETHOF_MIND_PROJECT", raising=False)
-    monkeypatch.setenv("BRETHOF_MIND_DEFAULT_PROJECT", "softdefault")
+    monkeypatch.delenv("BRETHOF_BRAIN_PROJECT", raising=False)
+    monkeypatch.setenv("BRETHOF_BRAIN_DEFAULT_PROJECT", "softdefault")
     c = Config.load()
     # No file config in the test home → the soft-default env is used, and it must
     # NOT hard-override a matching path mapping (that's the whole point).

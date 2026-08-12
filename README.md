@@ -1,6 +1,6 @@
-# brethof-mind client
+# brethof-brain client
 
-Thin client for **[brethof-mind](https://brethof.cloud)** — shared long-term
+Thin client for **[brethof-brain](https://brethof.cloud)** — shared long-term
 memory for your AI coding agents. It gives your agents persistent, searchable
 memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
@@ -11,7 +11,7 @@ supports hooks and/or MCP.
 ## How it works
 
 The client is deliberately tiny. All the real work — storage, embeddings,
-retrieval-augmented recall — happens on the brethof-mind service. The client
+retrieval-augmented recall — happens on the brethof-brain service. The client
 only:
 
 1. forwards agent **hook events** to the service over HTTPS, and pastes back
@@ -42,17 +42,17 @@ the `/recall` `/curate` `/heal` `/onboard` commands — no `pip install` needed,
 only Python 3.9+ on your PATH.
 
 ```
-/plugin marketplace add BrethofAI/brethof-mind-client
-/plugin install brethof-mind@brethof
+/plugin marketplace add BrethofAI/brethof-brain-client
+/plugin install brethof-brain@brethof
 ```
 
 You'll be prompted for your **API key** (from
-[brethof.ai/account](https://brethof.ai) → brethof-mind tab); Claude Code stores
+[brethof.ai/account](https://brethof.ai) → brethof-brain tab); Claude Code stores
 it as plugin config (sensitive values go to your OS keychain where available)
 and passes it to the hooks via the environment — never on a command line.
 Restart Claude Code and memory is live. Commands are namespaced:
-`/brethof-mind:recall`, `/brethof-mind:curate`, `/brethof-mind:heal`,
-`/brethof-mind:onboard`.
+`/brethof-brain:recall`, `/brethof-brain:curate`, `/brethof-brain:heal`,
+`/brethof-brain:onboard`.
 
 ### Grok Build
 
@@ -62,7 +62,7 @@ hooks and has its own `grok mcp` command for MCP servers. See
 automated setup script, or add manually:
 
 ```bash
-grok mcp add --transport http --scope user brethof-mind \
+grok mcp add --transport http --scope user brethof-brain \
   https://api.brethof.cloud/v1/mcp \
   --header "Authorization: Bearer bm_live_YOUR_KEY"
 ```
@@ -82,7 +82,7 @@ path works. See [`adapters/openclaw/README.md`](adapters/openclaw/README.md).
 ## What leaves your machine (read this)
 
 The client is source-available precisely so you can verify this yourself — read
-[`brethof_mind_client/`](brethof_mind_client/); it's a few hundred lines.
+[`brethof_brain_client/`](brethof_brain_client/); it's a few hundred lines.
 
 - On **session start** and **each prompt**, it sends your **project name** and
   (for ambient recall) your **current prompt text** to the service, and injects
@@ -93,7 +93,7 @@ The client is source-available precisely so you can verify this yourself — rea
   one-line tool-call markers (`[tool_use: Bash]`). **Tool outputs are dropped
   client-side**: the contents of files the assistant reads and the output of
   commands it runs never leave your machine. A local offset file
-  (`~/.brethof-mind/state/`) ensures each line is sent once.
+  (`~/.brethof-brain/state/`) ensures each line is sent once.
 - Every request is authenticated with **your API key** and goes only to **your
   endpoint** (`api.brethof.cloud` by default). Your data lands in your own
   isolated tenant database, encrypted at rest.
@@ -109,29 +109,29 @@ one-line notice, because silently stopping archival would mean losing history.
 For non-plugin use (scripting, other agents), install the package directly:
 
 ```bash
-pip install brethof-mind-client
+pip install brethof-brain-client
 ```
 
-Get an API key from [brethof.ai/account](https://brethof.ai) (the brethof-mind
+Get an API key from [brethof.ai/account](https://brethof.ai) (the brethof-brain
 tab), then:
 
 ```bash
-brethof-mind setup --api-key bm_live_xxxxxxxx
-brethof-mind install-hooks      # auto-load & archive memory in Claude Code
-brethof-mind mcp-command        # prints the `claude mcp add …` line to run
+brethof-brain setup --api-key bm_live_xxxxxxxx
+brethof-brain install-hooks      # auto-load & archive memory in Claude Code
+brethof-brain mcp-command        # prints the `claude mcp add …` line to run
 ```
 
 Restart Claude Code (or open a new session) and your memory is live. Check
 everything with:
 
 ```bash
-brethof-mind doctor
-brethof-mind status
+brethof-brain doctor
+brethof-brain status
 ```
 
 ## Configuration
 
-Settings resolve from environment variables, then `~/.brethof-mind/config.json`,
+Settings resolve from environment variables, then `~/.brethof-brain/config.json`,
 then defaults. With the **CLI install**, the config file is where your key is
 stored — `setup` creates it owner-readable-only (`0600`) on Linux/macOS; on
 Windows your user-profile ACLs protect it. With the **plugin install**, Claude
@@ -150,11 +150,11 @@ Code holds the key instead and the config file isn't needed.
 ```
 
 - **Projects** partition your memory. The client picks a project per working
-  directory: `$BRETHOF_MIND_PROJECT` wins, else the longest matching `path`
+  directory: `$BRETHOF_BRAIN_PROJECT` wins, else the longest matching `path`
   prefix, else `default_project`. A project key matches `[a-z][a-z0-9_]{0,15}`.
-- Env overrides: `BRETHOF_MIND_ENDPOINT`, `BRETHOF_MIND_API_KEY`,
-  `BRETHOF_MIND_PROJECT` (this session's project), `BRETHOF_MIND_DEFAULT_PROJECT`
-  (fallback default), `BRETHOF_MIND_HOME` (move `~/.brethof-mind` elsewhere).
+- Env overrides: `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_API_KEY`,
+  `BRETHOF_BRAIN_PROJECT` (this session's project), `BRETHOF_BRAIN_DEFAULT_PROJECT`
+  (fallback default), `BRETHOF_BRAIN_HOME` (move `~/.brethof-brain` elsewhere).
 - Corporate proxies work out of the box: the client honors the standard
   `HTTPS_PROXY` / `HTTP_PROXY` environment variables.
 
@@ -162,25 +162,25 @@ Code holds the key instead and the config file isn't needed.
 
 | Command | Does |
 |---|---|
-| `brethof-mind setup` | Save credentials, verify connectivity |
-| `brethof-mind install-hooks` | Add the hooks to `~/.claude/settings.json` (idempotent, backs up first) |
-| `brethof-mind uninstall-hooks` | Remove them |
-| `brethof-mind mcp-command` | Print the `claude mcp add` line for the memory tools |
-| `brethof-mind status` | Show your plan and usage |
-| `brethof-mind doctor` | Diagnose config, connectivity, and hook wiring |
+| `brethof-brain setup` | Save credentials, verify connectivity |
+| `brethof-brain install-hooks` | Add the hooks to `~/.claude/settings.json` (idempotent, backs up first) |
+| `brethof-brain uninstall-hooks` | Remove them |
+| `brethof-brain mcp-command` | Print the `claude mcp add` line for the memory tools |
+| `brethof-brain status` | Show your plan and usage |
+| `brethof-brain doctor` | Diagnose config, connectivity, and hook wiring |
 
 ## Uninstall
 
 ```bash
-brethof-mind uninstall-hooks
-claude mcp remove brethof-mind
-grok mcp remove brethof-mind    # if using Grok Build adapter
-pip uninstall brethof-mind-client
+brethof-brain uninstall-hooks
+claude mcp remove brethof-brain
+grok mcp remove brethof-brain    # if using Grok Build adapter
+pip uninstall brethof-brain-client
 ```
 
 ## License
 
-Source-available under the **brethof-mind Client License** (see
-[`LICENSE`](LICENSE)) — free to read, audit, and use with the brethof-mind
+Source-available under the **brethof-brain Client License** (see
+[`LICENSE`](LICENSE)) — free to read, audit, and use with the brethof-brain
 service; not for redistribution or building a competing service. Not affiliated
 with Anthropic; "Claude" and "Claude Code" are trademarks of Anthropic.

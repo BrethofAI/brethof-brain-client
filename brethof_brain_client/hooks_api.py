@@ -4,7 +4,7 @@ Claude Code has its own hook wiring (``hook.py``) and Hermes has a memory
 provider; every OTHER agent — OpenClaw, a cron job, a custom loop — gets memory
 by calling these three hooks at its own lifecycle points:
 
-    from brethof_mind_client import AgentHooks
+    from brethof_brain_client import AgentHooks
     mem = AgentHooks(project="marketing", session_id=job_id)
 
     system_prompt += mem.session_start()          # once, at session start
@@ -15,7 +15,7 @@ by calling these three hooks at its own lifecycle points:
 
 All three are FAIL-OPEN: if the service is unreachable they return empty / do
 nothing rather than raising, so wiring memory in can never break the agent.
-``archive`` additionally SPOOLS failed turns to disk (``~/.brethof-mind/spool``)
+``archive`` additionally SPOOLS failed turns to disk (``~/.brethof-brain/spool``)
 and drains the spool on the next call, so a transient outage delays archiving
 instead of losing turns. The server does isolation, recall, embedding, and
 archival; this is just glue.
@@ -37,8 +37,8 @@ class AgentHooks:
                  config: Optional[Config] = None, timeout: float = 15.0):
         self.cfg = config or Config.load()
         if not self.cfg.configured():
-            raise ClientError("no API key configured (set BRETHOF_MIND_API_KEY "
-                              "or run: brethof-mind setup)")
+            raise ClientError("no API key configured (set BRETHOF_BRAIN_API_KEY "
+                              "or run: brethof-brain setup)")
         self._http = Client(self.cfg, timeout=timeout)
         self.project = project or self.cfg.default_project or "global"
         self.session_id = session_id or "default"

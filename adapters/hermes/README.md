@@ -1,10 +1,10 @@
-# brethof-mind cloud + Hermes
+# brethof-brain cloud + Hermes
 
-brethof-mind is designed to be Hermes's **sole** long-term memory (its built-in
+brethof-brain is designed to be Hermes's **sole** long-term memory (its built-in
 `MEMORY.md`/`USER.md` note store is disabled). Hermes integrates memory through a
 **`MemoryProvider`** — a plugin whose lifecycle methods are the hooks:
 
-| Hook | brethof-mind cloud endpoint | When Hermes calls it |
+| Hook | brethof-brain cloud endpoint | When Hermes calls it |
 |---|---|---|
 | `initialize()` → `system_prompt_block()` | `POST /v1/hooks/session-start` | session start — brain block into the system prompt |
 | `queue_prefetch()` / `prefetch()` | `POST /v1/hooks/prompt-submit` | before each model call — ambient recall |
@@ -23,8 +23,8 @@ recall, and metering. Stdlib only, so it drops in without new dependencies.
    `~/.hermes/plugins/brethofmind_cloud/` (or `$HERMES_HOME/plugins/...`).
 2. Set the environment (secrets belong in `~/.hermes/.env`):
    ```
-   BRETHOF_MIND_API_KEY=bm_live_your_key
-   BRETHOF_MIND_ENDPOINT=https://api.brethof.cloud   # optional, this is the default
+   BRETHOF_BRAIN_API_KEY=bm_live_your_key
+   BRETHOF_BRAIN_ENDPOINT=https://api.brethof.cloud   # optional, this is the default
    HERMES_MEMORY_PROJECT=global                        # project this agent reads/archives to
    ```
 3. Activate it in Hermes `config.yaml`:
@@ -72,4 +72,4 @@ provider does. Run `/onboard` once. Memory curates itself automatically as you w
 If you just want the memory tools in Hermes without the provider's automatic
 inject/archive hooks, register the remote MCP endpoint instead (see
 `mcp_servers.example.yaml`). The provider above is the fuller integration and the
-recommended path when brethof-mind is Hermes's memory.
+recommended path when brethof-brain is Hermes's memory.

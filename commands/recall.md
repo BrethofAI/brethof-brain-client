@@ -1,5 +1,5 @@
 ---
-description: Recall from brethof-mind using vector + graph + keyword (not just keyword)
+description: Recall from brethof-brain using vector + graph + keyword (not just keyword)
 argument-hint: <topic or question>
 ---
 Recall everything relevant to: $ARGUMENTS

@@ -1,13 +1,13 @@
-# brethof-mind cloud — test container
+# brethof-brain cloud — test container
 
-A small **containerized integration test** for brethof-mind cloud. It stands in
+A small **containerized integration test** for brethof-brain cloud. It stands in
 for an OpenClaw-style deployment: a headless, non-Claude-Code Python agent that
 talks to the live service from inside Docker. Use it to confirm the whole path —
 auth, the customer MCP tools, and turn archival — works from a clean container, on any
 host, before shipping.
 
 > Scope note: this is a **test harness**, not a production OpenClaw integration.
-> It proves containerized/non-interactive agents can use brethof-mind cloud via
+> It proves containerized/non-interactive agents can use brethof-brain cloud via
 > the same `MindClient` programmatic API any Python agent would use.
 
 ## Run it
@@ -15,19 +15,19 @@ host, before shipping.
 With Docker Compose (from the repo root):
 
 ```bash
-BRETHOF_MIND_API_KEY=bm_test_xxxxxxxx \
+BRETHOF_BRAIN_API_KEY=bm_test_xxxxxxxx \
   docker compose -f test-container/docker-compose.yml up --build
 ```
 
 Or plain Docker:
 
 ```bash
-docker build -f test-container/Dockerfile -t brethof-mind-smoke .
-docker run --rm -e BRETHOF_MIND_API_KEY=bm_test_xxxxxxxx brethof-mind-smoke
+docker build -f test-container/Dockerfile -t brethof-brain-smoke .
+docker run --rm -e BRETHOF_BRAIN_API_KEY=bm_test_xxxxxxxx brethof-brain-smoke
 ```
 
-Point it at a staging endpoint with `BRETHOF_MIND_ENDPOINT`, and pick the tenant
-project with `BRETHOF_MIND_PROJECT` (default `global`).
+Point it at a staging endpoint with `BRETHOF_BRAIN_ENDPOINT`, and pick the tenant
+project with `BRETHOF_BRAIN_PROJECT` (default `global`).
 
 ## What it checks
 

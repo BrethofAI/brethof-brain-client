@@ -1,7 +1,7 @@
 """Transcript turn extraction + offset bookkeeping."""
 import json
 
-from brethof_mind_client import transcript
+from brethof_brain_client import transcript
 
 
 def _write(tmp_path, lines, name="t.jsonl", tail=""):

@@ -1,5 +1,5 @@
 """An unmapped folder must become its OWN project, never a global dump."""
-from brethof_mind_client.config import Config, project_from_path
+from brethof_brain_client.config import Config, project_from_path
 
 
 def test_derives_from_folder_name():

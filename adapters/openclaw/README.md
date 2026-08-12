@@ -1,8 +1,8 @@
-# brethof-mind cloud + OpenClaw
+# brethof-brain cloud + OpenClaw
 
 OpenClaw has **no native memory or hook system** (unlike Claude Code's hooks or
 Hermes's memory provider). So this adapter *adds* one: a small `MemorySession`
-wrapper (`openclaw_hooks.py`) that gives an OpenClaw agent brethof-mind cloud
+wrapper (`openclaw_hooks.py`) that gives an OpenClaw agent brethof-brain cloud
 memory by calling three fail-open hooks at the right lifecycle points.
 
 | Hook | When | Effect |
@@ -17,7 +17,7 @@ handles memory. Every hook is fail-open, so memory can never break a run.
 ## Use it
 
 ```python
-from openclaw_hooks import MemorySession   # needs: pip install brethof-mind-client
+from openclaw_hooks import MemorySession   # needs: pip install brethof-brain-client
 
 sess = MemorySession(project="marketing", session_id=job_id,
                      base_system_prompt="You are OpenClaw, a marketing agent.")
@@ -29,7 +29,7 @@ for user_msg in conversation:
     sess.record(user_msg, reply)
 ```
 
-Set `BRETHOF_MIND_API_KEY` (and optionally `BRETHOF_MIND_ENDPOINT`) in the
+Set `BRETHOF_BRAIN_API_KEY` (and optionally `BRETHOF_BRAIN_ENDPOINT`) in the
 environment.
 
 ## Scope: this is our test harness

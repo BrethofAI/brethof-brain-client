@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Setup script — wire Grok Build to brethof-mind cloud.
+"""Setup script — wire Grok Build to brethof-brain cloud.
 
 Grok Build has its own `grok mcp` command for MCP servers and a native hook
 system under ~/.grok/hooks/ (Claude-style ~/.claude/settings.json hooks
 verifiably CANNOT fire in grok — see install_hooks below). This script:
 
-1. Adds the brethof-mind HTTP MCP server via `grok mcp add`
+1. Adds the brethof-brain HTTP MCP server via `grok mcp add`
 2. Installs the native Stop-hook archiver + pull-model memory rule
 3. Copies the /recall /curate /onboard skills to ~/.grok/skills/
 
@@ -13,8 +13,8 @@ Run from this directory:
     python setup.py
 
 Environment:
-    BRETHOF_MIND_API_KEY  — your brethof-mind API key (bm_live_... or bm_test_...)
-    BRETHOF_MIND_ENDPOINT — optional, defaults to https://api.brethof.cloud
+    BRETHOF_BRAIN_API_KEY  — your brethof-brain API key (bm_live_... or bm_test_...)
+    BRETHOF_BRAIN_ENDPOINT — optional, defaults to https://api.brethof.cloud
 
 Stdlib only — no pip install needed. Requires Python 3.9+.
 """
@@ -36,12 +36,12 @@ DEFAULT_ENDPOINT = "https://api.brethof.cloud"
 
 
 def get_env():
-    api_key = os.environ.get("BRETHOF_MIND_API_KEY", "")
-    endpoint = os.environ.get("BRETHOF_MIND_ENDPOINT", DEFAULT_ENDPOINT)
+    api_key = os.environ.get("BRETHOF_BRAIN_API_KEY", "")
+    endpoint = os.environ.get("BRETHOF_BRAIN_ENDPOINT", DEFAULT_ENDPOINT)
     if not api_key:
-        print("ERROR: BRETHOF_MIND_API_KEY not set in environment.")
-        print("Get your key from https://brethof.ai/account -> brethof-mind tab.")
-        print("Then: export BRETHOF_MIND_API_KEY=bm_live_your_key")
+        print("ERROR: BRETHOF_BRAIN_API_KEY not set in environment.")
+        print("Get your key from https://brethof.ai/account -> brethof-brain tab.")
+        print("Then: export BRETHOF_BRAIN_API_KEY=bm_live_your_key")
         sys.exit(1)
     return api_key, endpoint
 
@@ -62,27 +62,27 @@ def find_grok():
 
 
 def add_mcp_server(grok_bin: str, api_key: str, endpoint: str):
-    """Add brethof-mind as an HTTP MCP server to Grok."""
-    print("=== Adding brethof-mind MCP server ===")
+    """Add brethof-brain as an HTTP MCP server to Grok."""
+    print("=== Adding brethof-brain MCP server ===")
     url = f"{endpoint}/v1/mcp"
     header = f"Authorization: Bearer {api_key}"
 
     # Check if already added
     result = subprocess.run([grok_bin, "mcp", "list"], capture_output=True, text=True)
-    if "brethof-mind" in result.stdout:
-        print(f"  brethof-mind already configured -> {url}")
+    if "brethof-brain" in result.stdout:
+        print(f"  brethof-brain already configured -> {url}")
         # Verify it's healthy
         result = subprocess.run([grok_bin, "mcp", "doctor"], capture_output=True, text=True, timeout=30)
-        if "brethof-mind" in result.stdout and "handshake OK" in result.stdout:
+        if "brethof-brain" in result.stdout and "handshake OK" in result.stdout:
             print("  ✓ handshake OK — tools already working")
             return True
         # If not healthy, remove and re-add
         print("  Existing config not healthy, re-adding...")
-        subprocess.run([grok_bin, "mcp", "remove", "brethof-mind"], capture_output=True, text=True)
+        subprocess.run([grok_bin, "mcp", "remove", "brethof-brain"], capture_output=True, text=True)
 
     result = subprocess.run(
         [grok_bin, "mcp", "add", "--transport", "http", "--scope", "user",
-         "brethof-mind", url, "--header", header],
+         "brethof-brain", url, "--header", header],
         capture_output=True, text=True
     )
     if result.returncode == 0:
@@ -96,8 +96,8 @@ def add_mcp_server(grok_bin: str, api_key: str, endpoint: str):
 def persist_key(api_key: str, endpoint: str):
     """Make sure the Stop-hook archiver can find the key AFTER this shell dies.
 
-    The hook resolves its key via brethof_mind_client.Config: env var first,
-    then ~/.brethof-mind/config.json. grok spawns hooks WITHOUT this shell's
+    The hook resolves its key via brethof_brain_client.Config: env var first,
+    then ~/.brethof-brain/config.json. grok spawns hooks WITHOUT this shell's
     environment, so an env-only key means the archiver runs keyless and
     fail-open — silently archiving nothing. Persist the key to config.json
     unless one is already configured there (never overwrite an existing key:
@@ -105,8 +105,8 @@ def persist_key(api_key: str, endpoint: str):
     a different key on purpose)."""
     print("=== Persisting key for the Stop-hook archiver ===")
     import json as _json
-    cfg_dir = Path(os.path.expanduser(os.environ.get("BRETHOF_MIND_HOME",
-                                                     "~/.brethof-mind")))
+    cfg_dir = Path(os.path.expanduser(os.environ.get("BRETHOF_BRAIN_HOME",
+                                                     "~/.brethof-brain")))
     cfg_path = cfg_dir / "config.json"
     existing = {}
     if cfg_path.exists():
@@ -166,7 +166,7 @@ def install_hooks():
         wrapper.chmod(0o755)
         command = "bin/bm-grok-stop.sh"
 
-    hook_json = hooks_dir / "brethof-mind.json"
+    hook_json = hooks_dir / "brethof-brain.json"
     hook_json.write_text(_json.dumps({"hooks": {"Stop": [
         {"hooks": [{"type": "command", "command": command, "timeout": 25}]}
     ]}}, indent=2) + "\n", encoding="utf-8")
@@ -175,10 +175,10 @@ def install_hooks():
     # PULL-model memory rule (grok has no hook context-injection channel).
     rules_dir = Path.home() / ".grok" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
-    rule = rules_dir / "brethof-mind-memory.md"
+    rule = rules_dir / "brethof-brain-memory.md"
     rule.write_text(
-        "# brethof-mind memory (PULL model — you must call the tools)\n\n"
-        "You have persistent cross-session memory: the **brethof-mind** MCP "
+        "# brethof-brain memory (PULL model — you must call the tools)\n\n"
+        "You have persistent cross-session memory: the **brethof-brain** MCP "
         "server. Use the tools it lists — `search_brain` (saved memory, "
         "the current truth) and `search_history` (full conversation "
         "history, raw) are the core pair.\n\n"
@@ -195,7 +195,7 @@ def install_hooks():
         "bind every session) with `save_project_rule`/`save_general_rule`.\n"
         "4. Turns are archived automatically by the Stop hook — do not save "
         "chat history manually.\n\n"
-        "Do NOT use Grok's built-in markdown memory — brethof-mind is the "
+        "Do NOT use Grok's built-in markdown memory — brethof-brain is the "
         "single memory system.\n", encoding="utf-8")
     print(f"  ✓ Pull-model rule: {rule}")
     print("  NOTE: consider `[compat.claude] hooks = false` in ~/.grok/config.toml"
@@ -229,7 +229,7 @@ def copy_skills():
 
 
 def main():
-    print("brethof-mind cloud + Grok Build setup")
+    print("brethof-brain cloud + Grok Build setup")
     print("=" * 40)
 
     api_key, endpoint = get_env()
@@ -246,7 +246,7 @@ def main():
     print()
     print("=" * 40)
     if ok_mcp:
-        print("✓ MCP server: brethof-mind connected")
+        print("✓ MCP server: brethof-brain connected")
     else:
         print("✗ MCP server: failed — check your API key and endpoint")
 

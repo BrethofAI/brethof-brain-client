@@ -1,9 +1,9 @@
-"""brethof-mind CLOUD memory provider for Hermes.
+"""brethof-brain CLOUD memory provider for Hermes.
 
 The cloud counterpart of the local ``brethofmind`` provider. The local one talks
 straight to a self-hosted SurrealDB with root creds and embeds turns itself; a
 cloud TENANT can do none of that (no root, no direct DB, no server code). This
-provider therefore routes every hook through the brethof-mind cloud HTTP API
+provider therefore routes every hook through the brethof-brain cloud HTTP API
 with your API key — the server does isolation, embedding, recall, and metering.
 
 The MemoryProvider hooks map onto the same endpoints the Claude Code client uses:
@@ -15,11 +15,11 @@ The MemoryProvider hooks map onto the same endpoints the Claude Code client uses
 
 Drop this file into ``$HERMES_HOME/plugins/brethofmind_cloud/`` and activate with
 ``memory.provider: brethofmind_cloud``. Stdlib only — no dependency on the
-brethof-mind-client package, so it survives image rebuilds like its local twin.
+brethof-brain-client package, so it survives image rebuilds like its local twin.
 
 Config (env):
-  BRETHOF_MIND_API_KEY   your key (required; bm_live_… / bm_test_…)
-  BRETHOF_MIND_ENDPOINT  data plane (default https://api.brethof.cloud)
+  BRETHOF_BRAIN_API_KEY   your key (required; bm_live_… / bm_test_…)
+  BRETHOF_BRAIN_ENDPOINT  data plane (default https://api.brethof.cloud)
   HERMES_MEMORY_PROJECT  project this session reads/archives to (default 'global')
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ except Exception:  # import surface may differ for a user plugin
     def tool_error(msg: str) -> str:
         return json.dumps({"error": msg})
 
-USER_AGENT = "brethof-mind-hermes/1.0"          # a real UA (the edge challenges generic ones)
+USER_AGENT = "brethof-brain-hermes/1.0"          # a real UA (the edge challenges generic ones)
 # Mirrors the SERVICE's project-name rule exactly (32 chars). It was 16 here
 # until 2026-08-08, so a legal name the service accepts — anything 17-32 chars
 # — was refused by the plugin with a confusing "invalid project". A client-side
@@ -106,11 +106,11 @@ def _cfg(name: str, default: str = "") -> str:
 
 
 def _endpoint() -> str:
-    return _cfg("BRETHOF_MIND_ENDPOINT", "https://api.brethof.cloud").rstrip("/")
+    return _cfg("BRETHOF_BRAIN_ENDPOINT", "https://api.brethof.cloud").rstrip("/")
 
 
 def _api_key() -> str:
-    return _cfg("BRETHOF_MIND_API_KEY", "")
+    return _cfg("BRETHOF_BRAIN_API_KEY", "")
 
 
 def _project() -> str:
@@ -118,7 +118,7 @@ def _project() -> str:
 
 
 class BrethofMindCloudProvider(MemoryProvider):
-    """Routes Hermes memory through brethof-mind cloud (api.brethof.cloud)."""
+    """Routes Hermes memory through brethof-brain cloud (api.brethof.cloud)."""
 
     def __init__(self) -> None:
         self._session_id = ""
@@ -528,5 +528,5 @@ class BrethofMindCloudProvider(MemoryProvider):
 
 
 def register(ctx) -> None:
-    """Register brethof-mind cloud as the active memory provider."""
+    """Register brethof-brain cloud as the active memory provider."""
     ctx.register_memory_provider(BrethofMindCloudProvider())

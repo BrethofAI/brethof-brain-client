@@ -1,15 +1,15 @@
 ---
 name: recall
-description: "Recall from brethof-mind memory — current truth first, full conversation history second. Use before asking the user something that may already be answered. Trigger on: recall, remember, what did we decide, look it up, check memory."
+description: "Recall from brethof-brain memory — current truth first, full conversation history second. Use before asking the user something that may already be answered. Trigger on: recall, remember, what did we decide, look it up, check memory."
 version: 2.0.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [memory, recall, brethof-mind]
+    tags: [memory, recall, brethof-brain]
     related_skills: [curate]
 ---
 
-# Recall — search brethof-mind memory
+# Recall — search brethof-brain memory
 
 Find what's already known before assuming or asking. Recall is unlimited —
 search as often as you like, on every plan.

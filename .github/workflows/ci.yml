@@ -29,7 +29,7 @@ jobs:
         run: pytest -q
 
   # Full end-to-end against api.brethof.cloud on all 3 OSes — the real macOS
-  # proof. Runs only when the BRETHOF_MIND_API_KEY secret is present (a bm_test_
+  # proof. Runs only when the BRETHOF_BRAIN_API_KEY secret is present (a bm_test_
   # key), so forks/PRs without it don't fail.
   live-smoke:
     needs: client-tests
@@ -47,10 +47,10 @@ jobs:
       - name: Live smoke test
         shell: bash
         env:
-          BRETHOF_MIND_API_KEY: ${{ secrets.BRETHOF_MIND_API_KEY }}
+          BRETHOF_BRAIN_API_KEY: ${{ secrets.BRETHOF_BRAIN_API_KEY }}
         run: |
-          if [ -z "$BRETHOF_MIND_API_KEY" ]; then
-            echo "BRETHOF_MIND_API_KEY secret not set — skipping live smoke."
+          if [ -z "$BRETHOF_BRAIN_API_KEY" ]; then
+            echo "BRETHOF_BRAIN_API_KEY secret not set — skipping live smoke."
             exit 0
           fi
           # openclaw_hooks lives under adapters/ (not pip-installed) — put it on the path.

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Containerized smoke test for brethof-mind cloud.
+"""Containerized smoke test for brethof-brain cloud.
 
 Runs INSIDE the OpenClaw-style test container: a non-Claude-Code, headless
 Python agent exercising the full client against the live service. Proves the
 whole loop works from a plain container — auth, the customer MCP tools, and turn
 archival — with clear PASS/FAIL output and a non-zero exit on any failure.
 
-Config comes from the environment (BRETHOF_MIND_API_KEY, optionally
-BRETHOF_MIND_ENDPOINT / BRETHOF_MIND_PROJECT).
+Config comes from the environment (BRETHOF_BRAIN_API_KEY, optionally
+BRETHOF_BRAIN_ENDPOINT / BRETHOF_BRAIN_PROJECT).
 """
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ import os
 import sys
 import time
 
-from brethof_mind_client import MindClient
-from brethof_mind_client.client import ClientError
+from brethof_brain_client import MindClient
+from brethof_brain_client.client import ClientError
 
 # Windows consoles default to cp1252 — make our own output crash-proof so a
 # '→' in a label can't turn a passing check into a bogus FAIL.
@@ -26,7 +26,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:  # noqa: BLE001
         pass
 
-PROJECT = os.environ.get("BRETHOF_MIND_PROJECT", "global")
+PROJECT = os.environ.get("BRETHOF_BRAIN_PROJECT", "global")
 REC_ID = "openclaw_container_probe"          # UPSERT id → test is re-runnable
 SESSION = "openclaw-container-smoke"
 
@@ -42,12 +42,12 @@ def main() -> int:
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
         return ok
 
-    print("brethof-mind cloud — container smoke test")
+    print("brethof-brain cloud — container smoke test")
     try:
         m = MindClient()
     except ClientError as e:
         print(f"  [FAIL] configure client — {e}")
-        print("\nRESULT: FAIL (no credentials — set BRETHOF_MIND_API_KEY)")
+        print("\nRESULT: FAIL (no credentials — set BRETHOF_BRAIN_API_KEY)")
         return 1
 
     print(f"endpoint: {m.cfg.endpoint}  project: {PROJECT}")
@@ -117,7 +117,7 @@ def main() -> int:
 
     # 6. hooks path — the generic AgentHooks used by the OpenClaw adapter
     try:
-        from brethof_mind_client import AgentHooks
+        from brethof_brain_client import AgentHooks
         h = AgentHooks(project=PROJECT, session_id="container-hooks")
         block = h.session_start()
         check("AgentHooks.session_start()", isinstance(block, str), f"{len(block)} chars")

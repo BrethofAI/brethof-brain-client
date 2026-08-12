@@ -1,7 +1,7 @@
 ---
-description: First-run setup — explain brethof-mind, then build your memory (projects, rules, index) with you
+description: First-run setup — explain brethof-brain, then build your memory (projects, rules, index) with you
 ---
-You are onboarding a new user to **brethof-mind cloud** (their shared agent
+You are onboarding a new user to **brethof-brain cloud** (their shared agent
 memory). Their tenant starts empty; your job is to TEACH the system and build
 their PERSONAL layer WITH them, using the memory tools. Be conversational and
 concrete — a guided setup, not a lecture. There is nothing to install and no
@@ -48,7 +48,7 @@ Invite a question, then move on.
 ## 4. Configure the client's project mapping
 So each working directory uses the right project, tell them to map directories to
 project keys — set `default_project` (or a `projects` list of `{path, key}`) in
-`~/.brethof-mind/config.json`, or per-session via `$BRETHOF_MIND_PROJECT`. Without
+`~/.brethof-brain/config.json`, or per-session via `$BRETHOF_BRAIN_PROJECT`. Without
 a mapping everything goes to `global`.
 
 ## 5. Close

@@ -5,7 +5,7 @@ import io
 import json
 import sys
 
-from brethof_mind_client import hook
+from brethof_brain_client import hook
 
 
 def test_unknown_event_is_noop():
@@ -14,7 +14,7 @@ def test_unknown_event_is_noop():
 
 
 def test_unconfigured_emits_nothing(monkeypatch, capsys):
-    monkeypatch.delenv("BRETHOF_MIND_API_KEY", raising=False)
+    monkeypatch.delenv("BRETHOF_BRAIN_API_KEY", raising=False)
     monkeypatch.setattr(sys, "stdin",
                         io.StringIO(json.dumps({"cwd": ".", "session_id": "s"})))
     assert hook.main(["session-start"]) == 0
@@ -22,8 +22,8 @@ def test_unconfigured_emits_nothing(monkeypatch, capsys):
 
 
 def test_unreachable_endpoint_fails_open(monkeypatch, capsys):
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", "bm_test_dummy")
-    monkeypatch.setenv("BRETHOF_MIND_ENDPOINT", "http://127.0.0.1:9")  # refused
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bm_test_dummy")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")  # refused
     monkeypatch.setattr(sys, "stdin", io.StringIO(
         json.dumps({"cwd": ".", "session_id": "s", "prompt": "hi"})))
     assert hook.main(["prompt-submit"]) == 0   # network error → still exit 0
@@ -31,7 +31,7 @@ def test_unreachable_endpoint_fails_open(monkeypatch, capsys):
 
 
 def test_stop_no_transcript_is_noop(monkeypatch):
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", "bm_test_dummy")
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bm_test_dummy")
     monkeypatch.setattr(sys, "stdin",
                         io.StringIO(json.dumps({"cwd": ".", "session_id": "s"})))
     assert hook.main(["stop"]) == 0            # missing transcript_path → no-op

@@ -1,4 +1,4 @@
-"""OpenClaw memory hooks — give an OpenClaw agent brethof-mind cloud memory.
+"""OpenClaw memory hooks — give an OpenClaw agent brethof-brain cloud memory.
 
 OpenClaw has no native memory/hook system (unlike Claude Code's hooks or Hermes's
 memory provider), so we add one: wrap the agent's run loop with ``MemorySession``,
@@ -23,8 +23,8 @@ can never break an OpenClaw run.
 """
 from __future__ import annotations
 
-from brethof_mind_client import AgentHooks
-from brethof_mind_client.client import Client
+from brethof_brain_client import AgentHooks
+from brethof_brain_client.client import Client
 
 
 class MemorySession:
@@ -45,7 +45,7 @@ class MemorySession:
     def system_prompt(self) -> str:
         if self._memory_block:
             return (self.base_system_prompt
-                    + "\n\n# Long-term memory (brethof-mind)\n" + self._memory_block)
+                    + "\n\n# Long-term memory (brethof-brain)\n" + self._memory_block)
         return self.base_system_prompt
 
     def build_context(self, user_prompt: str) -> str:

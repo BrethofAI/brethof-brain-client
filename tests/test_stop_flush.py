@@ -6,8 +6,8 @@ import sys
 
 import pytest
 
-from brethof_mind_client import hook, transcript
-from brethof_mind_client.client import ClientError
+from brethof_brain_client import hook, transcript
+from brethof_brain_client.client import ClientError
 
 
 def _transcript(tmp_path, n):
@@ -43,7 +43,7 @@ def fake_client(monkeypatch):
     FakeClient.fail_after = None
     FakeClient.envelope = {"status": "ok"}
     monkeypatch.setattr(hook, "Client", FakeClient)
-    monkeypatch.setenv("BRETHOF_MIND_API_KEY", "bm_test_dummy")
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bm_test_dummy")
     return FakeClient
 
 
@@ -108,4 +108,4 @@ def test_auth_failure_emits_notice(tmp_path, fake_client, capsys, monkeypatch):
     out = capsys.readouterr().out
     payload = json.loads(out)
     ctx = payload["hookSpecificOutput"]["additionalContext"]
-    assert "key rejected" in ctx and "brethof-mind" in ctx
+    assert "key rejected" in ctx and "brethof-brain" in ctx

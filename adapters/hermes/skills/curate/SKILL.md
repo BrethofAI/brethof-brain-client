@@ -1,17 +1,17 @@
 ---
 name: curate
-description: "Save something to brethof-mind memory explicitly — a decision, convention, or fact that must be remembered exactly as stated. Memory also learns automatically from every exchange; use this when precision or immediacy matters. Trigger on: remember this, save to memory, don't forget, note this down."
+description: "Save something to brethof-brain memory explicitly — a decision, convention, or fact that must be remembered exactly as stated. Memory also learns automatically from every exchange; use this when precision or immediacy matters. Trigger on: remember this, save to memory, don't forget, note this down."
 version: 2.0.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [memory, save, brethof-mind]
+    tags: [memory, save, brethof-brain]
     related_skills: [recall]
 ---
 
 # Save to memory — explicit remembering
 
-brethof-mind learns from your conversations **automatically**: the memory
+brethof-brain learns from your conversations **automatically**: the memory
 service curates every exchange as it happens, keeps what is durable, updates
 what changed, and discards what went stale. You do NOT need to summarize
 sessions, run end-of-session curation, or maintain memory hygiene — that is

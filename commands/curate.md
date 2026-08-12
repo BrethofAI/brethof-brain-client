@@ -1,5 +1,5 @@
 ---
-description: Curate this session into brethof-mind — save decisions, prune what's superseded, update indexes/state/open-loops
+description: Curate this session into brethof-brain — save decisions, prune what's superseded, update indexes/state/open-loops
 ---
 Curate this session into memory. Be THOROUGH, and be DECISIVE about deletion.
 This is what stops you having to remember everything — and what stops memory

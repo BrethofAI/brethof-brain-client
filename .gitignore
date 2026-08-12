@@ -9,13 +9,13 @@ venv/
 .eggs/
 
 # NEVER commit credentials or local state (belt-and-suspenders — these live in
-# ~/.brethof-mind, not the repo, but guard anyway).
+# ~/.brethof-brain, not the repo, but guard anyway).
 config.json
 *.env
 .env
 *.key
 *secret*
-.brethof-mind/
+.brethof-brain/
 
 # Editor / OS
 .idea/

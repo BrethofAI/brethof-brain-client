@@ -1,11 +1,11 @@
-"""``brethof-mind`` command-line tool: set up the client, wire Claude Code, and
+"""``brethof-brain`` command-line tool: set up the client, wire Claude Code, and
 check status. Stdlib only.
 
-    brethof-mind setup --api-key bm_live_xxx [--endpoint URL] [--project KEY]
-    brethof-mind install-hooks     # add the 4 hooks to ~/.claude/settings.json
-    brethof-mind mcp-command       # print the `claude mcp add` line to run
-    brethof-mind status            # show plan + usage
-    brethof-mind doctor            # diagnose config / connectivity / wiring
+    brethof-brain setup --api-key bm_live_xxx [--endpoint URL] [--project KEY]
+    brethof-brain install-hooks     # add the 4 hooks to ~/.claude/settings.json
+    brethof-brain mcp-command       # print the `claude mcp add` line to run
+    brethof-brain status            # show plan + usage
+    brethof-brain doctor            # diagnose config / connectivity / wiring
 
 (The hook dispatcher also understands a 5th event, ``commit``, for programmatic
 wiring — e.g. a git post-commit hook; the installer wires the 4 session events.)
@@ -59,7 +59,7 @@ MCP_PATH = "/v1/mcp"
 # CLAUDE.md. So the Brain claims the same channel — a managed block in
 # the USER-level file (loads in every project); the customer's own
 # project CLAUDE.md is never touched.
-_MD_BEGIN = "<!-- brain:provider (managed by brethof-mind install-hooks) -->"
+_MD_BEGIN = "<!-- brain:provider (managed by brethof-brain install-hooks) -->"
 _MD_END = "<!-- /brain:provider -->"
 PROVIDER_BLOCK = f"""{_MD_BEGIN}
 ## Memory provider: the Brain
@@ -87,6 +87,10 @@ def _install_provider_block() -> str:
         if os.path.exists(CLAUDE_USER_MD):
             with open(CLAUDE_USER_MD, encoding="utf-8") as f:
                 text = f.read()
+        # A block planted by the pre-rename client carries the old marker;
+        # normalize it so the upsert below replaces it instead of doubling.
+        text = text.replace("(managed by brethof-mind install-hooks)",
+                            "(managed by brethof-brain install-hooks)")
         if _MD_BEGIN in text and _MD_END in text:
             head, _, rest = text.partition(_MD_BEGIN)
             _, _, tail = rest.partition(_MD_END)
@@ -124,8 +128,10 @@ def _remove_provider_block() -> bool:
         return False
 
 # Matches our own installed hook command and captures the baked interpreter:
-#   "<python path>" -m brethof_mind_client.hook <event> [part]
-_CMD_RE = re.compile(r'^"([^"]+)" -m brethof_mind_client\.hook (\S+(?: \d+)?)$')
+#   "<python path>" -m brethof_brain_client.hook <event> [part]
+# Accepts the pre-rename module too, so install-hooks MIGRATES an old
+# install's entries in place instead of orphaning them beside new ones.
+_CMD_RE = re.compile(r'^"([^"]+)" -m brethof_(?:brain|mind)_client\.hook (\S+(?: \d+)?)$')
 
 
 def _hook_command(event_arg: str) -> str:
@@ -134,7 +140,7 @@ def _hook_command(event_arg: str) -> str:
     Forward slashes always — Claude Code runs hook commands through bash even on
     Windows, and bash eats backslashes."""
     py = sys.executable.replace("\\", "/")
-    return f'"{py}" -m brethof_mind_client.hook {event_arg}'
+    return f'"{py}" -m brethof_brain_client.hook {event_arg}'
 
 
 def _ours(command: str, event_arg: str):
@@ -202,13 +208,13 @@ def cmd_setup(args) -> int:
         if sys.stdin.isatty():
             # getpass: the key must not echo to the terminal or scrollback.
             api_key = getpass.getpass(
-                "brethof-mind API key (bm_live_... or bm_test_..., hidden): ").strip()
+                "brethof-brain API key (bm_live_... or bm_test_..., hidden): ").strip()
         else:
             print("error: --api-key required (or run in an interactive terminal)",
                   file=sys.stderr)
             return 2
     if not api_key.startswith(("bm_live_", "bm_test_")):
-        print("warning: key doesn't look like a brethof-mind key (bm_live_/bm_test_)",
+        print("warning: key doesn't look like a brethof-brain key (bm_live_/bm_test_)",
               file=sys.stderr)
 
     ensure_dirs()
@@ -246,8 +252,8 @@ def cmd_setup(args) -> int:
         print(f"warning: saved, but could not reach the service yet: {e}", file=sys.stderr)
 
     print("\nNext:")
-    print("  brethof-mind install-hooks   # auto-load & archive memory in Claude Code")
-    print("  brethof-mind mcp-command     # wire the memory tools (remote MCP)")
+    print("  brethof-brain install-hooks   # auto-load & archive memory in Claude Code")
+    print("  brethof-brain mcp-command     # wire the memory tools (remote MCP)")
     return 0
 
 
@@ -343,7 +349,7 @@ def cmd_uninstall_hooks(args) -> int:
             del hooks[event_name]
     if removed:
         _write_settings(settings)
-    print(f"OK: removed {removed} brethof-mind hook(s) from {CLAUDE_SETTINGS}")
+    print(f"OK: removed {removed} brethof-brain hook(s) from {CLAUDE_SETTINGS}")
     if _remove_provider_block():
         print(f"OK: removed the Brain provider block from {CLAUDE_USER_MD}")
     return 0
@@ -370,7 +376,7 @@ def cmd_mcp_command(args) -> int:
 def cmd_status(args) -> int:
     cfg = Config.load()
     if not cfg.configured():
-        print("not configured - run: brethof-mind setup --api-key ...", file=sys.stderr)
+        print("not configured - run: brethof-brain setup --api-key ...", file=sys.stderr)
         return 2
     try:
         snap = Client(cfg).get("/v1/usage")
@@ -400,11 +406,11 @@ def cmd_doctor(args) -> int:
         ok = ok and good
         print(f"  {mark} {label}" + (f" - {detail}" if detail else ""))
 
-    print("brethof-mind client doctor")
+    print("brethof-brain client doctor")
     print(f"client version : {__version__}")
     check("config file", os.path.exists(CONFIG_PATH), CONFIG_PATH)
     check("api key set", bool(cfg.api_key),
-          "run: brethof-mind setup" if not cfg.api_key else cfg.api_key[:12] + "...")
+          "run: brethof-brain setup" if not cfg.api_key else cfg.api_key[:12] + "...")
     try:
         _valid_endpoint(cfg.endpoint)
         check("endpoint", True, cfg.endpoint)
@@ -412,9 +418,9 @@ def cmd_doctor(args) -> int:
         check("endpoint", False, str(e))
 
     # project routing sanity
-    env_proj = os.environ.get("BRETHOF_MIND_PROJECT")
+    env_proj = os.environ.get("BRETHOF_BRAIN_PROJECT")
     if env_proj:
-        check("BRETHOF_MIND_PROJECT", valid_project(env_proj),
+        check("BRETHOF_BRAIN_PROJECT", valid_project(env_proj),
               env_proj if valid_project(env_proj)
               else f"'{env_proj}' invalid (must match [a-z][a-z0-9_]{{0,15}}) - IGNORED")
     if not valid_project(cfg.default_project):
@@ -449,11 +455,11 @@ def cmd_doctor(args) -> int:
         ]
         pys = [p for p in pys if p]
         if not pys:
-            check(f"hook {event_name}", False, "run: brethof-mind install-hooks")
+            check(f"hook {event_name}", False, "run: brethof-brain install-hooks")
         elif not all(os.path.exists(p) for p in pys):
             dead = next(p for p in pys if not os.path.exists(p))
             check(f"hook {event_name}", False,
-                  f"interpreter missing: {dead} - rerun: brethof-mind install-hooks")
+                  f"interpreter missing: {dead} - rerun: brethof-brain install-hooks")
         else:
             check(f"hook {event_name}", True)
 
@@ -462,13 +468,13 @@ def cmd_doctor(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="brethof-mind",
-                                description="brethof-mind cloud client")
+    p = argparse.ArgumentParser(prog="brethof-brain",
+                                description="brethof-brain cloud client")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("setup", help="save credentials and verify connectivity")
-    s.add_argument("--api-key", help="your brethof-mind API key")
+    s.add_argument("--api-key", help="your brethof-brain API key")
     s.add_argument("--endpoint", help=f"data-plane URL (default {DEFAULT_ENDPOINT})")
     s.add_argument("--project", help="default project key for this account")
     s.set_defaults(func=cmd_setup)

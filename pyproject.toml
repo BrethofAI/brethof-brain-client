@@ -3,15 +3,15 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "brethof-mind-client"
-version = "1.0.1"
-description = "Thin client for brethof-mind cloud — shared long-term memory for AI coding agents"
+name = "brethof-brain-client"
+version = "1.1.0"
+description = "Thin client for brethof-brain cloud — shared long-term memory for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "Brethof AI", email = "hello@brethof.ai" }]
 keywords = ["claude", "claude-code", "memory", "mcp", "agents"]
-# Source-available, not OSI open-source — see LICENSE (brethof-mind Client License).
-license = { text = "LicenseRef-brethof-mind-Client-License" }
+# Source-available, not OSI open-source — see LICENSE (brethof-brain Client License).
+license = { text = "LicenseRef-brethof-brain-Client-License" }
 classifiers = [
   "Programming Language :: Python :: 3",
   "Environment :: Console",
@@ -25,11 +25,11 @@ Homepage = "https://brethof.cloud"
 Service = "https://api.brethof.cloud"
 
 [project.scripts]
-brethof-mind = "brethof_mind_client.cli:main"
-brethof-mind-hook = "brethof_mind_client.hook:main"
+brethof-brain = "brethof_brain_client.cli:main"
+brethof-brain-hook = "brethof_brain_client.hook:main"
 
 [tool.setuptools]
-packages = ["brethof_mind_client"]
+packages = ["brethof_brain_client"]
 
 [tool.pytest.ini_options]
 markers = ["slow: live multi-minute conformance runs (deselect with -m 'not slow')"]

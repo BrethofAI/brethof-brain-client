@@ -1,8 +1,8 @@
 """Client configuration + project resolution.
 
-Resolution order for every setting: environment variable (``BRETHOF_MIND_*``
+Resolution order for every setting: environment variable (``BRETHOF_BRAIN_*``
 first, then the ``CLAUDE_PLUGIN_OPTION_*`` variables Claude Code exports from a
-plugin's user config), then ``~/.brethof-mind/config.json``, then a built-in
+plugin's user config), then ``~/.brethof-brain/config.json``, then a built-in
 default. The config file is where the CLI stores your API key on disk (created
 owner-readable-only); the Claude Code plugin path never writes it to this file —
 Claude Code holds it and passes it via the environment.
@@ -20,7 +20,7 @@ config.json shape (all keys optional except api_key)::
     }
 
 Project resolution for a given working directory:
-  1. ``$BRETHOF_MIND_PROJECT`` if set (explicit override),
+  1. ``$BRETHOF_BRAIN_PROJECT`` if set (explicit override),
   2. the ``projects`` entry whose ``path`` is the longest prefix of the cwd,
   3. an EXPLICIT ``default_project`` (set in config or env) — a stated
      instruction always wins,
@@ -43,7 +43,16 @@ from dataclasses import dataclass, field
 
 from . import DEFAULT_ENDPOINT
 
-CONFIG_DIR = os.path.expanduser(os.environ.get("BRETHOF_MIND_HOME", "~/.brethof-mind"))
+_ENV_HOME = (os.environ.get("BRETHOF_BRAIN_HOME")
+             or os.environ.get("BRETHOF_MIND_HOME"))   # pre-rename env, still honored
+CONFIG_DIR = os.path.expanduser(_ENV_HOME or "~/.brethof-brain")
+# A pre-rename install keeps its config in ~/.brethof-mind; until that dir is
+# migrated, fall back to it rather than silently running unconfigured. An
+# EXPLICIT home override is an instruction — never fall back around it.
+if (not _ENV_HOME
+        and not os.path.exists(os.path.join(CONFIG_DIR, "config.json"))
+        and os.path.exists(os.path.expanduser("~/.brethof-mind/config.json"))):
+    CONFIG_DIR = os.path.expanduser("~/.brethof-mind")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 STATE_DIR = os.path.join(CONFIG_DIR, "state")
 SPOOL_DIR = os.path.join(CONFIG_DIR, "spool")
@@ -122,13 +131,16 @@ class Config:
     @classmethod
     def load(cls) -> "Config":
         f = _load_file()
-        endpoint = (_env("BRETHOF_MIND_ENDPOINT", "CLAUDE_PLUGIN_OPTION_ENDPOINT",
+        endpoint = (_env("BRETHOF_BRAIN_ENDPOINT", "BRETHOF_MIND_ENDPOINT",
+                         "CLAUDE_PLUGIN_OPTION_ENDPOINT",
                          "CLAUDE_PLUGIN_OPTION_endpoint")
                     or f.get("endpoint") or DEFAULT_ENDPOINT).rstrip("/")
-        api_key = (_env("BRETHOF_MIND_API_KEY", "CLAUDE_PLUGIN_OPTION_API_KEY",
+        api_key = (_env("BRETHOF_BRAIN_API_KEY", "BRETHOF_MIND_API_KEY",
+                        "CLAUDE_PLUGIN_OPTION_API_KEY",
                         "CLAUDE_PLUGIN_OPTION_api_key")
                    or f.get("api_key") or "")
-        default_project = (_env("BRETHOF_MIND_DEFAULT_PROJECT",
+        default_project = (_env("BRETHOF_BRAIN_DEFAULT_PROJECT",
+                                "BRETHOF_MIND_DEFAULT_PROJECT",
                                 "CLAUDE_PLUGIN_OPTION_PROJECT",
                                 "CLAUDE_PLUGIN_OPTION_project")
                            or f.get("default_project") or "global")
@@ -141,7 +153,8 @@ class Config:
 
     def project_for(self, cwd: str) -> str:
         """Resolve the project for a working directory (see module docstring)."""
-        env = os.environ.get("BRETHOF_MIND_PROJECT")
+        env = (os.environ.get("BRETHOF_BRAIN_PROJECT")
+               or os.environ.get("BRETHOF_MIND_PROJECT"))
         if env:
             if valid_project(env):
                 return env
@@ -150,7 +163,7 @@ class Config:
             # a hook; it only shows in hook debug output).
             try:
                 sys.stderr.write(
-                    f"brethof-mind: ignoring invalid BRETHOF_MIND_PROJECT={env!r} "
+                    f"brethof-brain: ignoring invalid BRETHOF_BRAIN_PROJECT={env!r} "
                     "(must match [a-z][a-z0-9_]{0,15})\n")
             except Exception:
                 pass

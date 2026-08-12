@@ -1,13 +1,13 @@
 ---
 name: onboard
-description: "First-run setup: connect brethof-mind cloud memory and explain how it works. Run once after installing the plugin. Trigger on: onboard, set up memory, first run, initialize memory."
+description: "First-run setup: connect brethof-brain cloud memory and explain how it works. Run once after installing the plugin. Trigger on: onboard, set up memory, first run, initialize memory."
 version: 2.0.0
 platforms: [linux, macos, windows]
 ---
 
-# Onboard — connect brethof-mind memory
+# Onboard — connect brethof-brain memory
 
-Guide a new user through connecting their brethof-mind cloud memory. Be
+Guide a new user through connecting their brethof-brain cloud memory. Be
 conversational and concrete — a guided setup, not a lecture. There is
 nothing to install server-side and no local database: memory lives in the
 cloud and starts working on the first conversation.
@@ -15,7 +15,7 @@ cloud and starts working on the first conversation.
 ## 1. The key
 - The user creates an API key in their account panel:
   **brethof.ai/account → Memory tab → New key** (2FA required once).
-- Put it in the environment: the brethof-mind MCP server entry in your ~/.grok config (see mcp_servers.example.toml).
+- Put it in the environment: the brethof-brain MCP server entry in your ~/.grok config (see mcp_servers.example.toml).
 - Never echo the key back, never store it in memory or logs.
 
 ## 2. Verify the connection
