@@ -83,19 +83,20 @@ def _install_provider_block() -> str:
     """Idempotent upsert of the managed block in ~/.claude/CLAUDE.md.
     Returns what happened: 'added' | 'updated' | 'current' | 'FAILED …'."""
     try:
-        text = ""
+        orig = ""
         if os.path.exists(CLAUDE_USER_MD):
             with open(CLAUDE_USER_MD, encoding="utf-8") as f:
-                text = f.read()
+                orig = f.read()
         # A block planted by the pre-rename client carries the old marker;
         # normalize it so the upsert below replaces it instead of doubling.
-        text = text.replace("(managed by brethof-mind install-hooks)",
+        # Compare against ORIG — a marker-only change must still be written.
+        text = orig.replace("(managed by brethof-mind install-hooks)",
                             "(managed by brethof-brain install-hooks)")
         if _MD_BEGIN in text and _MD_END in text:
             head, _, rest = text.partition(_MD_BEGIN)
             _, _, tail = rest.partition(_MD_END)
             new = head + PROVIDER_BLOCK + tail
-            action = "current" if new == text else "updated"
+            action = "current" if new == orig else "updated"
         else:
             new = ((text.rstrip() + "\n\n") if text.strip() else "") \
                 + PROVIDER_BLOCK + "\n"
