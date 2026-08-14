@@ -316,17 +316,32 @@ class _Facade:
                 if self.kind == "hermes"
                 else self.s.save_fact(content, general=True))
 
-    def save_project_rule(self, content):
+    def _rule_flow(self, content, answer):
+        """The ONE rule door is a two-step conversation (server design
+        2026-08-14): call, receive the question + token, answer. This
+        harness plays the agent's part honestly — first call carries no
+        answer, the second carries the token the service minted. A server
+        that saves on the FIRST call has lost the gate; fail loudly."""
+        import re as _re
+        first = (self._h("brethofmind_save_rule", content=content,
+                         project=self.project) if self.kind == "hermes"
+                 else self.s.save_rule(content, project=self.project))
+        assert "NOT saved yet" in first, (
+            f"rule door answered without asking the question: {first[:200]}")
+        m = _re.search(r"token='([0-9a-f]+)'", first)
+        assert m, f"question came back without a token: {first[:200]}"
+        tok = m.group(1)
         return (self._h("brethofmind_save_rule", content=content,
-                        scope="project", project=self.project)
+                        project=self.project, answer=answer, token=tok)
                 if self.kind == "hermes"
-                else self.s.save_rule(content, scope="project",
-                                      project=self.project))
+                else self.s.save_rule(content, project=self.project,
+                                      answer=answer, token=tok))
+
+    def save_project_rule(self, content):
+        return self._rule_flow(content, answer="2")
 
     def save_general_rule(self, content):
-        return (self._h("brethofmind_save_rule", content=content,
-                        scope="general") if self.kind == "hermes"
-                else self.s.save_rule(content, scope="general"))
+        return self._rule_flow(content, answer="1")
 
     def list_projects(self):
         return (self._h("brethofmind_projects") if self.kind == "hermes"

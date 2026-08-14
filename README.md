@@ -17,7 +17,7 @@ only:
 1. forwards agent **hook events** to the service over HTTPS, and pastes back
    the memory it returns, and
 2. wires the **remote MCP** endpoint so the memory tools
-   (`search_memory`, `search_history`, `save_project`, `save_project_rule`,
+   (`search_memory`, `search_history`, `save_project`, `save_rule`,
    `get_memory`, …) are available on demand.
 
 It has **no third-party dependencies** — pure Python standard library, so it

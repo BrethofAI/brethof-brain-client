@@ -33,7 +33,7 @@ revoked: back to the panel.
 - **Two stores**: saved memory (current truth, curated) and conversation
   history (complete, raw). The /recall skill explains when to use which.
 - **Two kinds of saves**: FACTS (`save_project` / `save_general`) and
-  RULES (`save_project_rule` / `save_general_rule`). A rule is a standing
+  RULES (`save_rule` — it asks ONE question back; answer it honestly and your answer files it as every-project law, this project's law, or knowledge). A rule is a standing
   convention that binds every session; everything else is a fact.
 - **Explicit saves** are for emphasis: "remember this" → /curate skill.
 - Usage and plan live in the account panel; the service emails a heads-up

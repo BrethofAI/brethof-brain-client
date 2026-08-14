@@ -144,16 +144,29 @@ class MindClient:
         """Remember one fact true across all projects."""
         return self.call_tool("save_general", content=content)
 
-    def save_project_rule(self, content: str, project: str) -> str:
-        """LAW for one project: it changes what an agent DOES every session
-        there. A fact or measurement is knowledge — use save_project."""
-        return self.call_tool("save_project_rule", content=content,
-                              project=project)
+    def save_rule(self, content: str, project: str = "",
+                  answer: str = "", token: str = "") -> str:
+        """Save a RULE — ONE door (server design 2026-08-14). The first
+        call returns a QUESTION (must this text load into every session?)
+        with a token; pass the caller's answer ('1' every project /
+        '2' this project / '3' knowledge) and that token in a second call.
+        The answer routes the save — there is no scope parameter to fill."""
+        kw = {"content": content}
+        if project:
+            kw["project"] = project
+        if answer:
+            kw.update(answer=answer, token=token)
+        return self.call_tool("save_rule", **kw)
 
-    def save_general_rule(self, content: str) -> str:
-        """LAW for every project. Costly by design — it loads into every
-        session and teaches every project's curator. Use sparingly."""
-        return self.call_tool("save_general_rule", content=content)
+    def save_project_rule(self, content: str, project: str,
+                          answer: str = "", token: str = "") -> str:
+        """DEPRECATED name — same one-door flow as save_rule."""
+        return self.save_rule(content, project, answer, token)
+
+    def save_general_rule(self, content: str,
+                          answer: str = "", token: str = "") -> str:
+        """DEPRECATED name — same one-door flow as save_rule."""
+        return self.save_rule(content, "", answer, token)
 
     def delete_record(self, record_id: str, project: str = None) -> str:
         """Delete one saved record (works for rules too, project='rules').

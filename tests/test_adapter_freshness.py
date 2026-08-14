@@ -105,6 +105,7 @@ def test_adapters_teach_the_rules_door():
         for path in adapter_files():
             if name in path.parts:
                 refs |= referenced_tools(path)
-        assert refs & {"save_general_rule", "save_project_rule"}, (
-            f"adapter '{name}' never mentions the rules door "
-            "(save_general_rule / save_project_rule)")
+        assert refs & {"save_rule"}, (
+            f"adapter '{name}' never mentions the rules door (save_rule — "
+            "the ONE door since 2026-08-14; the split "
+            "save_general_rule/save_project_rule surface is gone)")

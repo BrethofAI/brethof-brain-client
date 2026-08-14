@@ -192,7 +192,7 @@ def install_hooks():
         "service curates as you work. Save explicitly only what the user "
         "asks to remember or what must be recorded exactly: facts with "
         "`save_project`/`save_general`, standing RULES (conventions that "
-        "bind every session) with `save_project_rule`/`save_general_rule`.\n"
+        "bind every session) with `save_rule` — it asks one question back; answer it and the answer files it.\n"
         "4. Turns are archived automatically by the Stop hook — do not save "
         "chat history manually.\n\n"
         "Do NOT use Grok's built-in markdown memory — brethof-brain is the "

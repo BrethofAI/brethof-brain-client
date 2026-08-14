@@ -24,7 +24,7 @@ Use this skill for the cases automation shouldn't guess at:
   understand it without this conversation; include concrete names, dates,
   numbers. The memory service does the filing — placement, dedupe, and
   superseding of stale records are its job, not yours.
-- `save_project_rule(content, project)` / `save_general_rule(content)` —
+- `save_rule(content, project)` — one door; it replies with a question and a token, and your answer ('1' every project / '2' this project / '3' knowledge) plus that token in a second call files it —
   save a RULE: a standing convention that must bind every future session
   without being looked up. THE TEST: does it change what you DO every
   session? A fact, setting, or measurement is knowledge — save it with the

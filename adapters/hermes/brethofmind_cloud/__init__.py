@@ -297,15 +297,18 @@ class BrethofMindCloudProvider(MemoryProvider):
             {"name": "brethofmind_save_rule",
              "description": ("Save a RULE — a standing convention the agent "
                              "must follow every session without looking it "
-                             "up. THE TEST: does it change behavior every "
-                             "session? A fact, config or measurement is NOT "
-                             "a rule — use brethofmind_save for those."),
+                             "up. The service replies with ONE question — "
+                             "must this text load into every session's "
+                             "context? — and a token. Answer it by calling "
+                             "again with answer ('1' every project / '2' "
+                             "this project / '3' it is knowledge, not a "
+                             "rule) and that token; your answer decides "
+                             "where it is filed."),
              "parameters": {"type": "object", "properties": {
                  "content": {"type": "string", "description": "The rule, one clear statement."},
-                 "scope": {"type": "string", "description":
-                           "'project' (default) = law in this project only; "
-                           "'general' = law in every project (costly — use sparingly)."},
-                 "project": {"type": "string", "description": "Project for scope='project'."}},
+                 "project": {"type": "string", "description": "Project it belongs to (default the session's)."},
+                 "answer": {"type": "string", "description": "'1'|'2'|'3' — your answer to the service's question."},
+                 "token": {"type": "string", "description": "The token from the question reply."}},
                  "required": ["content"]}},
             {"name": "brethofmind_delete",
              "description": ("Delete ONE saved record that is wrong or dead, "
@@ -413,14 +416,17 @@ class BrethofMindCloudProvider(MemoryProvider):
                 content = (args.get("content") or "").strip()
                 if not content:
                     return tool_error("brethofmind_save_rule needs content")
-                if (args.get("scope") or "project").strip() == "general":
-                    return json.dumps({"result": self._mcp(
-                        "save_general_rule", content=content)})
+                # ONE door (server design 2026-08-14): the service asks
+                # where the text must live; the AGENT answers. This adapter
+                # forwards the flow verbatim and decides nothing itself.
                 proj = proj_arg()
                 if not _PROJECT_RE.match(proj):
                     return tool_error(f"invalid project '{proj}'")
-                return json.dumps({"result": self._mcp(
-                    "save_project_rule", content=content, project=proj)})
+                kw = {"content": content, "project": proj}
+                if (args.get("answer") or "").strip():
+                    kw["answer"] = str(args["answer"]).strip()
+                    kw["token"] = str(args.get("token") or "").strip()
+                return json.dumps({"result": self._mcp("save_rule", **kw)})
 
             if tool_name == "brethofmind_delete":
                 proj = proj_arg(default_to_session=False)

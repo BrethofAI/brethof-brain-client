@@ -61,7 +61,7 @@ def main() -> int:
         needed = {"search_brain", "search_history", "get_record",
                   "list_brain", "list_projects", "list_rules", "graph",
                   "session_context", "save_project", "save_general",
-                  "save_project_rule", "save_general_rule", "delete_record",
+                  "save_rule", "delete_record",
                   "add_project", "cleanup_history"}
         missing = sorted(needed - tools)
         check("every tool this client calls exists on the live surface",

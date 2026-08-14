@@ -83,16 +83,19 @@ class MemorySession:
                           project=project or self.hooks.project)
 
     def save_rule(self, content: str, scope: str = "project",
-                  project: str | None = None) -> str:
-        """Save a RULE — a standing convention that binds every future
-        session without being looked up. THE TEST: does it change what the
-        agent DOES every session? Facts, configs and measurements are NOT
-        rules — use :meth:`save_fact`. scope='general' makes it law in
-        every project (costly; use sparingly)."""
-        if scope == "general":
-            return self._tool("save_general_rule", content=content)
-        return self._tool("save_project_rule", content=content,
-                          project=project or self.hooks.project)
+                  project: str | None = None, answer: str = "",
+                  token: str = "") -> str:
+        """Save a RULE — one door, gated by ONE question (server design
+        2026-08-14). The first call returns the question with a token:
+        must this text load into every session's context? Call again with
+        answer= ('1' every project / '2' this project / '3' it is
+        knowledge, not a rule) and that token. `scope` is accepted for
+        backward compatibility and IGNORED — the answer decides."""
+        kw = {"content": content,
+              "project": project or self.hooks.project}
+        if answer:
+            kw.update(answer=answer, token=token)
+        return self._tool("save_rule", **kw)
 
     # -- the rest of the customer surface ----------------------------------
     # Full parity, added 2026-08-08: an OpenClaw agent must be able to do
