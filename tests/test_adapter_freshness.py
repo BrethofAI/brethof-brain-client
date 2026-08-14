@@ -35,9 +35,12 @@ SINGLE_PATTERN = re.compile(
     r"""["'`(](%s)["'`)]""" % "|".join(SINGLE_WORD_TOOLS))
 # Snake_case that matches the verb grammar but is not a tool reference —
 # stdlib-ish helpers plus the adapters' OWN wrapper method names.
+# save_rule LEFT this set 2026-08-14: it was the openclaw wrapper's method
+# name back when the server tools were save_general_rule/save_project_rule;
+# it is now the ONE server-side rule door and must count as a reference.
 NOT_TOOLS = {"load_env", "get_json", "save_file", "load_config", "load_json",
              "get_config", "add_argument", "get_env",
-             "save_fact", "save_rule"}
+             "save_fact"}
 
 
 def live_customer_tools() -> set[str]:

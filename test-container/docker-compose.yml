@@ -7,6 +7,15 @@ services:
     build:
       context: ..                      # repo root — needed to install the client
       dockerfile: test-container/Dockerfile
+    # EXTERNAL DNS, explicit. Rootless podman gives a compose-created network
+    # aardvark-dns as its only resolver, and aardvark forwards to the HOST's
+    # /etc/resolv.conf — on a systemd-resolved host that is the 127.0.0.53
+    # stub, unreachable from the container netns, so every public name fails
+    # ("Temporary failure in name resolution", gate run 2026-08-14). Public
+    # resolvers keep this file portable; harmless under Docker.
+    dns:
+      - 9.9.9.9
+      - 1.1.1.1
     environment:
       BRETHOF_BRAIN_API_KEY: ${BRETHOF_BRAIN_API_KEY:?set BRETHOF_BRAIN_API_KEY}
       BRETHOF_BRAIN_ENDPOINT: ${BRETHOF_BRAIN_ENDPOINT:-https://api.brethof.cloud}
