@@ -74,6 +74,30 @@ _GENERIC_DIRS = {
 }
 
 
+def _repo_root(path: str) -> str:
+    """The nearest enclosing repository root, or "" when there is none.
+
+    Walks up looking for a ``.git`` entry — a directory in a normal clone, a
+    FILE in a worktree or submodule, so both are matched by existence rather
+    than isdir. Bounded to 64 levels and stops at the filesystem root, so a
+    pathological path cannot spin. Never raises: a permission error on a
+    parent must degrade to "not a repo", never break a hook."""
+    cur = path or ""
+    for _ in range(64):
+        if not cur:
+            return ""
+        try:
+            if os.path.exists(os.path.join(cur, ".git")):
+                return cur
+        except OSError:
+            return ""
+        parent = os.path.dirname(cur)
+        if parent == cur:            # reached / or a drive root
+            return ""
+        cur = parent
+    return ""
+
+
 def project_from_path(path: str) -> str:
     """A project key derived from the LAST meaningful folder of a path.
 
@@ -191,7 +215,17 @@ class Config:
         # time. An EXPLICIT default_project is still an instruction and
         # wins: this only replaces the implicit 'global' catch-all.
         if dp == "global":
-            derived = project_from_path(cwd_n)
+            # ANCHOR ON THE REPOSITORY ROOT, not the folder we happen to be
+            # standing in (2026-08-14). A project is a body of work, and a
+            # body of work is a repo — so a session run from a subdirectory
+            # belongs to the SAME project as one run from the top. Deriving
+            # from the raw cwd forked one repo across three names in a single
+            # morning ('brethof-workstation-setup' -> brethof_workstat, and
+            # its ansible/roles subfolder -> 'roles'), and the chat archive is
+            # immutable, so a split can never be re-joined afterwards.
+            # Outside a repo we still derive from the folder: an unmapped
+            # location keeps its own project rather than polluting 'global'.
+            derived = project_from_path(_repo_root(cwd_n) or cwd_n)
             if derived:
                 return derived
         return dp if valid_project(dp) else "global"
