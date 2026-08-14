@@ -11,7 +11,7 @@ Contains no secrets: your API key lives in ``~/.brethof-brain/config.json`` (or
 ``$BRETHOF_BRAIN_API_KEY``), never in this code.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 DEFAULT_ENDPOINT = "https://api.brethof.cloud"
 USER_AGENT = f"brethof-brain-client/{__version__}"
