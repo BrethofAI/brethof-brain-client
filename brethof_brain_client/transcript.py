@@ -45,21 +45,49 @@ def _state_path(session_id: str) -> str:
     return os.path.join(STATE_DIR, f"{safe}.json")
 
 
-def load_state(session_id: str) -> dict:
+def _read_raw(session_id: str) -> dict:
     try:
         with open(_state_path(session_id), encoding="utf-8") as f:
             s = json.load(f)
+        return s if isinstance(s, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_raw(session_id: str, data: dict) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = _state_path(session_id) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    os.replace(tmp, _state_path(session_id))
+
+
+def load_state(session_id: str) -> dict:
+    s = _read_raw(session_id)
+    try:
         return {"offset": int(s.get("offset", 0)), "next_index": int(s.get("next_index", 0))}
     except Exception:
         return {"offset": 0, "next_index": 0}
 
 
 def save_state(session_id: str, offset: int, next_index: int) -> None:
-    os.makedirs(STATE_DIR, exist_ok=True)
-    tmp = _state_path(session_id) + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"offset": offset, "next_index": next_index}, f)
-    os.replace(tmp, _state_path(session_id))
+    # MERGE, never overwrite: this file also carries the session's pinned
+    # project, and a blind rewrite would drop it on the first flush.
+    data = _read_raw(session_id)
+    data["offset"], data["next_index"] = offset, next_index
+    _write_raw(session_id, data)
+
+
+def load_project(session_id: str) -> str:
+    """The project pinned for this session, or "" if none is pinned yet."""
+    p = _read_raw(session_id).get("project")
+    return p if isinstance(p, str) else ""
+
+
+def save_project(session_id: str, project: str) -> None:
+    data = _read_raw(session_id)
+    data["project"] = project
+    _write_raw(session_id, data)
 
 
 def _extract_text(d: dict):

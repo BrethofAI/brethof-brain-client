@@ -177,11 +177,21 @@ class Config:
 
     def project_for(self, cwd: str) -> str:
         """Resolve the project for a working directory (see module docstring)."""
+        return self.resolve(cwd)[0]
+
+    def resolve(self, cwd: str) -> tuple:
+        """(project, confident) for a working directory.
+
+        ``confident`` means the answer came from something that actually
+        states where the work lives — an explicit override, a configured
+        mapping, or a repository root — rather than from the name of whatever
+        folder the process happens to be standing in. Callers that persist a
+        choice across a session should only pin a confident one."""
         env = (os.environ.get("BRETHOF_BRAIN_PROJECT")
                or os.environ.get("BRETHOF_MIND_PROJECT"))
         if env:
             if valid_project(env):
-                return env
+                return env, True
             # An explicit override that silently vanished would misroute a whole
             # session's memory — warn once per invocation (stderr never breaks
             # a hook; it only shows in hook debug output).
@@ -203,7 +213,7 @@ class Config:
             if (cwd_n == path_n or cwd_n.startswith(path_n + os.sep)) and len(path_n) > best_len:
                 best_key, best_len = key, len(path_n)
         if best_key:
-            return best_key
+            return best_key, True
         dp = self.default_project
         # UNMAPPED FOLDER => ITS OWN PROJECT, never a dump into the shared
         # layer (2026-08-07). A project IS a folder; when a new working
@@ -225,10 +235,15 @@ class Config:
             # immutable, so a split can never be re-joined afterwards.
             # Outside a repo we still derive from the folder: an unmapped
             # location keeps its own project rather than polluting 'global'.
-            derived = project_from_path(_repo_root(cwd_n) or cwd_n)
+            root = _repo_root(cwd_n)
+            derived = project_from_path(root or cwd_n)
             if derived:
-                return derived
-        return dp if valid_project(dp) else "global"
+                # CONFIDENT only when a repository said so. A bare folder name
+                # is a guess: the session may simply be passing through (a
+                # shell that started in $HOME, a job that stepped onto a USB
+                # mount), and a guess must never outrank a later real answer.
+                return derived, bool(root)
+        return (dp if valid_project(dp) else "global"), False
 
 
 def ensure_dirs() -> None:

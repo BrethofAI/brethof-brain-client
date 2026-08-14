@@ -27,7 +27,7 @@ import sys
 import traceback
 
 from .client import Client, ClientError
-from .config import Config
+from .config import Config, valid_project
 from . import transcript
 
 # BRETHOF_BRAIN_HOOK_DEBUG=1 turns the fail-open silence into stderr truth.
@@ -98,6 +98,37 @@ def _injection_from_envelope(env: dict) -> str:
     return injection  # server_error → transient, inject nothing extra
 
 
+def _project(cfg: Config, inp: dict) -> str:
+    """The project for this session — PINNED at the first confident answer.
+
+    Claude Code reports the working directory as it stands when the hook
+    fires, and that moves: the shell keeps its directory between commands, so
+    a job that steps into ansible/roles, or a recovery run on a USB mount,
+    silently re-homes every later turn of the session. Re-deriving per call
+    filed one session's turns under three different projects on 2026-08-14,
+    and *_chat is immutable, so the split can never be re-joined.
+
+    A guess (a bare folder name) is used but never pinned, so a session that
+    starts in $HOME and then moves into a real repo still lands correctly.
+    """
+    env = (os.environ.get("BRETHOF_BRAIN_PROJECT")
+           or os.environ.get("BRETHOF_MIND_PROJECT"))
+    if env and valid_project(env):
+        return env                      # an explicit instruction outranks a pin
+    sid = inp.get("session_id") or ""
+    if sid:
+        pinned = transcript.load_project(sid)
+        if pinned:
+            return pinned
+    project, confident = cfg.resolve(inp.get("cwd", ""))
+    if sid and confident:
+        try:
+            transcript.save_project(sid, project)
+        except Exception:
+            pass          # a hook must never fail over bookkeeping
+    return project
+
+
 # ── event handlers ──────────────────────────────────────────────────────────
 
 RESUME_CHECK = (
@@ -117,7 +148,7 @@ def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # delivered as budgeted parts — settings registers this event once per
     # part ("session-start 1", "session-start 2"). No part argument = the
     # whole payload in one piece (legacy registrations keep working).
-    project = cfg.project_for(inp.get("cwd", ""))
+    project = _project(cfg, inp)
     payload: dict = {"project": project}
     if args:
         try:
@@ -142,7 +173,7 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # per-hook cap ("prompt-submit 1" = rule + dead-ends + record #1,
     # "prompt-submit 2" = the second strong match alone). No part argument =
     # the legacy single-blob shape; old registrations keep working.
-    project = cfg.project_for(inp.get("cwd", ""))
+    project = _project(cfg, inp)
     prompt = (inp.get("prompt") or "").strip()
     session_id = inp.get("session_id") or ""
     if not prompt or not session_id:
@@ -165,7 +196,7 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
     transcript_path = inp.get("transcript_path") or ""
     if not session_id or not transcript_path:
         return
-    project = cfg.project_for(inp.get("cwd", ""))
+    project = _project(cfg, inp)
     turns, tail_offset, next_index = transcript.read_new_turns(transcript_path, session_id)
     if not turns:
         # Nothing to send, but advance past any complete non-conversation lines
@@ -201,7 +232,7 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
 
 
 def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
-    project = cfg.project_for(inp.get("cwd", ""))
+    project = _project(cfg, inp)
     payload = {"project": project}
     for k in ("hash", "branch", "repo", "message"):
         if inp.get(k) is not None:
@@ -230,7 +261,7 @@ def _pre_compact(cfg: Config, inp: dict, args: tuple = ()) -> None:
        itself is never blocked — memory is an enhancement, not a gate.
     """
     session_id = inp.get("session_id", "")
-    project = cfg.project_for(inp.get("cwd", ""))
+    project = _project(cfg, inp)
 
     def _flush():
         try:
