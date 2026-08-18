@@ -5,8 +5,12 @@ memory for your AI coding agents. It gives your agents persistent, searchable
 memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
 
-Works with **Claude Code**, **Hermes**, **Grok Build**, and any agent that
-supports hooks and/or MCP.
+Works with **Claude Code**, **Codex**, **Qwen Code**, **Grok Build**,
+**OpenClaw**, **Cline**, **Windsurf**, **Kimi**, **Hermes**, and any agent
+that supports hooks and/or MCP. Every supported platform is re-tested
+weekly against its newest release, in a fresh container, with the results
+judged server-side — a version bump that breaks an integration is caught
+by us, not by you.
 
 ## How it works
 
@@ -25,15 +29,21 @@ runs anywhere Python 3.9+ does.
 
 ## Supported agents
 
-| Agent | Adapter | How it connects |
+| Agent | Adapter | What you get |
 |---|---|---|
-| **Claude Code** | built-in | Plugin install (recommended) or CLI hooks |
-| **Hermes** (Nous Research) | [`adapters/hermes/`](adapters/hermes/) | Memory provider plugin + skills |
-| **Grok Build** (xAI) | [`adapters/grok-build/`](adapters/grok-build/) | `grok mcp add` + Claude Code hooks + skills |
-| **OpenClaw** | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper (test harness) |
+| **Claude Code** | built-in | Full: session memory injected, ambient recall every prompt, every turn archived, memory tools |
+| **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival |
+| **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
+| **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | MCP tools + every turn archived (via `notify`); context injection lights up the moment Codex ships headless hook firing — already wired |
+| **Grok Build** (xAI) | [`adapters/grok-build/`](adapters/grok-build/) | MCP tools + native Stop-hook archival + pull-model recall |
+| **Cline / Windsurf / Kimi** | [`adapters/editors/`](adapters/editors/) | Memory tools via one MCP config block (each editor's exact dialect documented) |
+| **Hermes** (Nous Research) | [`adapters/hermes/`](adapters/hermes/) | Full: memory provider plugin + skills |
+| **GLM coding plan** (Z.ai) | none needed | Their tooling runs Claude Code against api.z.ai — the Claude Code plugin works as-is |
+| **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
 
 Each adapter has its own README with install instructions. The table above
-links to them.
+links to them. Capability wording is exact: it states what our test rig
+proves against the live platform, nothing more.
 
 ### Claude Code (recommended)
 
@@ -54,12 +64,39 @@ Restart Claude Code and memory is live. Commands are namespaced:
 `/brethof-brain:recall`, `/brethof-brain:curate`, `/brethof-brain:heal`,
 `/brethof-brain:onboard`.
 
+### OpenClaw
+
+A native gateway plugin: session memory and ambient recall are appended to
+the system context each turn, every finished turn is archived. One install,
+one config opt-in (`hooks.allowConversationAccess` — OpenClaw gates
+conversation content for non-bundled plugins). See
+[`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
+
+```bash
+openclaw plugins install --link ./adapters/openclaw-gateway
+```
+
+### Qwen Code
+
+Qwen Code ships Claude-style hooks, so it gets the full contract — one
+setup script wires hooks, MCP and `~/.qwen/QWEN.md`. See
+[`adapters/qwen-code/README.md`](adapters/qwen-code/README.md).
+
+### Codex
+
+`python3 adapters/codex/setup.py` registers the MCP server (bearer token
+via env, never in a file), installs the turn archiver on Codex's `notify`
+channel, and pre-wires `hooks.json` so context injection activates the
+moment Codex fires hooks in headless mode. See
+[`adapters/codex/README.md`](adapters/codex/README.md).
+
 ### Grok Build
 
-Grok Build is Claude Code-compatible — it reads `~/.claude/settings.json` for
-hooks and has its own `grok mcp` command for MCP servers. See
-[`adapters/grok-build/README.md`](adapters/grok-build/README.md) for the
-automated setup script, or add manually:
+Grok's native hook system (its Claude-hooks compatibility does **not**
+extend to firing them — verified) plus `grok mcp`. The setup script wires
+the Stop-hook archiver, the pull-model memory rule and the skills. See
+[`adapters/grok-build/README.md`](adapters/grok-build/README.md), or add
+the tools manually:
 
 ```bash
 grok mcp add --transport http --scope user brethof-brain \
@@ -67,17 +104,24 @@ grok mcp add --transport http --scope user brethof-brain \
   --header "Authorization: Bearer bm_live_YOUR_KEY"
 ```
 
+### Editors — Cline, Windsurf, Kimi
+
+One MCP config block each — and the three dialects genuinely differ
+(`"type": "streamableHttp"` vs `serverUrl` vs plain `url`). Exact blocks,
+auth notes and the memory-usage rule per editor:
+[`adapters/editors/README.md`](adapters/editors/README.md).
+
 ### Hermes
 
 Hermes integrates through a **MemoryProvider** plugin that auto-recalls at
 session start, prefetches per turn, archives every turn, and exposes the
 `brethofmind_*` tools. See [`adapters/hermes/README.md`](adapters/hermes/README.md).
 
-### OpenClaw (test harness)
+### OpenClaw (library wrapper)
 
-OpenClaw has no native memory system — this adapter adds one via a
-`MemorySession` wrapper. It's the containerized test agent that proves the hook
-path works. See [`adapters/openclaw/README.md`](adapters/openclaw/README.md).
+For agents with no hook system at all: a `MemorySession` wrapper —
+`start()` / `build_context()` / `record()` around your model loop. See
+[`adapters/openclaw/README.md`](adapters/openclaw/README.md).
 
 ## What leaves your machine (read this)
 
