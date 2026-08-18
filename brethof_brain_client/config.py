@@ -71,6 +71,11 @@ _GENERIC_DIRS = {
     "project", "dev", "temp", "tmp", "test", "tests", "new", "untitled",
     "documents", "downloads", "desktop", "home", "users", "user", "root",
     "programming", "git", "build", "dist", "app", "apps", "main",
+    # macOS system containers: /tmp and /var resolve to /private/* there, so
+    # the walk past a generic "tmp" lands on "private" — which then became a
+    # customer-visible project name. Caught by CI's macOS runner 2026-08-18
+    # (Linux never resolves through these).
+    "private", "var", "folders", "opt", "usr", "etc",
 }
 
 
