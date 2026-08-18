@@ -26,6 +26,11 @@ Configure (optional) in `openclaw.json` — env vars work too
     entries: {
       "brethof-brain": {
         enabled: true,
+        // REQUIRED for archival: agent_end carries conversation content,
+        // which OpenClaw blocks for non-bundled plugins by default. Without
+        // this line memory archival silently never runs (the gateway log
+        // says 'typed hook "agent_end" blocked').
+        hooks: { allowConversationAccess: true },
         config: { project: "my-agent" }
       }
     }

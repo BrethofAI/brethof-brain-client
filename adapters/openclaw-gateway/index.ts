@@ -62,29 +62,12 @@ export default definePluginEntry({
   name: "brethof-brain memory",
   description: "Persistent cross-session memory via brethof-brain cloud.",
   register(api: any) {
-    if ((globalThis as any).process?.env?.BRETHOF_BRAIN_DEBUG) {
-      const dbg = async (line: string) => {
-        try {
-          const fs = await import("node:fs");
-          fs.appendFileSync("/tmp/brethof-dbg.log", line + "\n");
-        } catch { /* debug only */ }
-      };
-      void dbg("register() called");
-      for (const ev of ["agent_end", "message_sent", "llm_output",
-                        "llm_input", "session_end", "after_agent_run",
-                        "agent_turn_end", "after_tool_call",
-                        "agent_turn_complete", "run_end"]) {
-        try {
-          api.on(ev, (e: any, c: any) => {
-            void dbg(`event=${ev} eventKeys=${Object.keys(e ?? {})} `
-                     + `ctxKeys=${Object.keys(c ?? {})}`);
-          });
-          void dbg(`subscribed ${ev}`);
-        } catch (err) {
-          void dbg(`cannot subscribe ${ev}: ${err}`);
-        }
-      }
-    }
+    // NOTE FOR INSTALLERS: agent_end delivers conversation content, and
+    // OpenClaw BLOCKS it for non-bundled plugins unless the user opts in:
+    //   plugins.entries."brethof-brain".hooks.allowConversationAccess: true
+    // Without that line the gateway logs "typed hook agent_end blocked" and
+    // memory archival silently never happens (cost a full debugging arc,
+    // 2026-08-17). setup docs and the rig both set it.
     api.on("before_prompt_build", async (event: any, ctx: any) => {
       try {
         const cfg = cfgFrom(event?.context?.pluginConfig);
@@ -118,19 +101,28 @@ export default definePluginEntry({
         const cfg = cfgFrom(event?.context?.pluginConfig);
         if (!cfg.apiKey) return;
         if ((globalThis as any).process?.env?.BRETHOF_BRAIN_DEBUG) {
-          console.error("[brethof-brain] agent_end event keys:",
-                        Object.keys(event ?? {}),
-                        "ctx keys:", Object.keys(ctx ?? {}));
+          try {
+            const fs = await import("node:fs");
+            fs.appendFileSync("/tmp/brethof-dbg.log",
+              "agent_end " + JSON.stringify(event).slice(0, 1200) + "\n");
+          } catch { /* debug only */ }
         }
         const sid = String(ctx?.sessionId ?? ctx?.sessionKey ?? "openclaw");
+        // Real agent_end shape (captured live, OpenClaw 2026.7.1): the
+        // event is {messages: [full history], success, runId} — the turn's
+        // answer is the LAST role:"assistant" entry (Claude-style content
+        // blocks), the turn's prompt the last role:"user". Joining the
+        // whole history archived prompt-blobs as "assistant" turns.
+        const msgs: any[] = Array.isArray(event?.messages)
+          ? event.messages : [];
+        const lastA = [...msgs].reverse()
+          .find((m) => m?.role === "assistant");
+        const lastU = [...msgs].reverse().find((m) => m?.role === "user");
         const prompt = pendingPrompt.get(String(ctx?.runId ?? "")) ??
-                       pendingPrompt.get(sid) ?? "";
+                       pendingPrompt.get(sid) ?? textOf(lastU?.content);
         pendingPrompt.delete(String(ctx?.runId ?? ""));
         pendingPrompt.delete(sid);
-        const answer = textOf(event?.finalAnswer ?? event?.answer ??
-                              event?.content ?? event?.result ??
-                              event?.output ?? event?.response ??
-                              event?.turn ?? event?.messages);
+        const answer = textOf(lastA?.content);
         let idx = nextIndex.get(sid) ?? 0;
         const turns: object[] = [];
         if (prompt) turns.push({ index: idx++, line_type: "user", text: prompt });
