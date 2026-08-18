@@ -26,6 +26,15 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:  # noqa: BLE001
         pass
 
+# Find openclaw_hooks OURSELVES, portably. The CI used to inject
+# PYTHONPATH="$PWD/adapters/openclaw" from Git Bash — which on Windows hands
+# native Python a POSIX /c/... path it cannot resolve, failing the import on
+# exactly one OS. A script knows where it lives; no env contortions needed.
+_ADAPTER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        os.pardir, "adapters", "openclaw")
+if os.path.isdir(_ADAPTER):
+    sys.path.insert(0, os.path.abspath(_ADAPTER))
+
 PROJECT = os.environ.get("BRETHOF_BRAIN_PROJECT", "global")
 REC_ID = "openclaw_container_probe"          # UPSERT id → test is re-runnable
 SESSION = "openclaw-container-smoke"

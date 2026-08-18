@@ -53,8 +53,9 @@ jobs:
             echo "BRETHOF_BRAIN_API_KEY secret not set — skipping live smoke."
             exit 0
           fi
-          # openclaw_hooks lives under adapters/ (not pip-installed) — put it on the path.
-          PYTHONPATH="$PWD/adapters/openclaw" python test-container/smoke_test.py
+          # smoke_test.py locates adapters/openclaw itself (portably — the old
+          # Git-Bash PYTHONPATH broke native Python on the Windows runner).
+          python test-container/smoke_test.py
 
   # Best-effort: validate the Claude Code plugin structure on each OS. The CLI /
   # command availability can vary, so this never fails the build (informational).
