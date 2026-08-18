@@ -198,6 +198,20 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
         return
     project = _project(cfg, inp)
     turns, tail_offset, next_index = transcript.read_new_turns(transcript_path, session_id)
+    # PRINT-MODE FLUSH RACE (verified 2026-08-17): in `claude -p` the Stop
+    # hook fires before the final assistant line reaches the transcript —
+    # the file provably holds it moments after exit, so one-shot sessions
+    # archived user turns only. When the tail is a user line, give the
+    # writer a short window and re-read; interactive sessions never enter
+    # this branch (their previous reply is always flushed).
+    if turns and turns[-1].get("line_type") == "user":
+        import time as _t
+        for _ in range(4):
+            _t.sleep(0.6)
+            t2, o2, n2 = transcript.read_new_turns(transcript_path, session_id)
+            if t2 and t2[-1].get("line_type") == "assistant":
+                turns, tail_offset, next_index = t2, o2, n2
+                break
     if not turns:
         # Nothing to send, but advance past any complete non-conversation lines
         # we scanned so we don't re-read them forever.

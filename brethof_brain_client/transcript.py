@@ -90,10 +90,25 @@ def save_project(session_id: str, project: str) -> None:
     _write_raw(session_id, data)
 
 
+def _parts_text(msg: dict) -> str:
+    """Gemini-lineage transcripts (Qwen Code 0.21+, verified 2026-08-17)
+    carry `message.parts: [{text: ...}]` instead of Claude's `content`.
+    Same JSONL envelope, same type/role fields — only the text moved."""
+    parts = msg.get("parts")
+    if not isinstance(parts, list):
+        return ""
+    return "\n".join(p.get("text", "") for p in parts
+                     if isinstance(p, dict) and p.get("text"))
+
+
 def _extract_text(d: dict):
     """Return (text, embed_flag). embed_flag True only for genuine dialogue."""
     t = d.get("type")
     msg = d.get("message") if isinstance(d.get("message"), dict) else None
+    if t in ("user", "assistant") and msg and "parts" in msg \
+            and "content" not in msg:
+        text = _parts_text(msg)
+        return text, bool(text)
     if t == "user" and msg:
         c = msg.get("content")
         if isinstance(c, str):
@@ -109,6 +124,12 @@ def _extract_text(d: dict):
             return text, bool(text)
     if t == "assistant" and msg:
         c = msg.get("content")
+        # String-form assistant content is what `claude -p` (SDK query path)
+        # writes — verified 2026-08-17 when the rig's role-aware oracle found
+        # print-mode archives holding user turns ONLY. Interactive sessions
+        # use the list form below and were never affected.
+        if isinstance(c, str):
+            return c, True
         if isinstance(c, list):
             out = []
             for b in c:

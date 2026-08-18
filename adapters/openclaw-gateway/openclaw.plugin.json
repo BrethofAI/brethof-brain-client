@@ -1,0 +1,15 @@
+{
+  "id": "brethof-brain",
+  "name": "brethof-brain memory",
+  "description": "Persistent cross-session memory: context injected at session start, ambient recall every prompt, every turn archived.",
+  "activation": { "onStartup": true, "onCapabilities": ["hook"] },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": { "type": "string", "description": "API endpoint (default https://api.brethof.cloud)" },
+      "apiKey": { "type": "string", "description": "bm_live_... key (or set BRETHOF_BRAIN_API_KEY)" },
+      "project": { "type": "string", "description": "memory project name (or BRETHOF_BRAIN_PROJECT; default 'openclaw')" }
+    }
+  }
+}

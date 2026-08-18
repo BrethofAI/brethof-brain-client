@@ -1,0 +1,12 @@
+{
+  "name": "@brethof/openclaw-brain",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "brethof-brain cloud memory plugin for the OpenClaw gateway",
+  "license": "MIT",
+  "peerDependencies": { "openclaw": ">=2026.3.24" },
+  "openclaw": {
+    "extensions": ["./index.ts"],
+    "compat": { "pluginApi": ">=2026.3.24" }
+  }
+}
