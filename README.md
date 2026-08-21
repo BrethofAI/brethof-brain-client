@@ -150,11 +150,14 @@ one-line notice, because silently stopping archival would mean losing history.
 
 ## Install as a library / CLI (alternative)
 
-For non-plugin use (scripting, other agents), install the package directly:
+For non-plugin use (scripting, other agents), install straight from the repo:
 
 ```bash
-pip install brethof-brain-client
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 ```
+
+(There is no PyPI package — the client is installed from source, so you get
+exactly the code you can read here.)
 
 Get an API key from [brethof.ai/account](https://brethof.ai) (the brethof-brain
 tab), then:
