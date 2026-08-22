@@ -1,0 +1,11 @@
+{
+  "name": "brethof-brain-dsh",
+  "version": "0.1.0",
+  "description": "brethof-brain memory for DeepSeek Harness (dsh) \u2014 native cordis plugin: session-start injection, per-prompt ambient recall, per-turn archiving.",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib/*.js"
+  ],
+  "license": "MIT"
+}
