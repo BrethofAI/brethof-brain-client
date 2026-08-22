@@ -7,5 +7,27 @@
   "files": [
     "lib/*.js"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BrethofAI/brethof-brain-client.git",
+    "directory": "adapters/dsh"
+  },
+  "homepage": "https://brethof.ai/brain/",
+  "bugs": {
+    "url": "https://github.com/BrethofAI/brethof-brain-client/issues"
+  },
+  "author": "Brethof AI <hello@brethof.ai>",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "memory",
+    "ai-agent",
+    "brethof-brain",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

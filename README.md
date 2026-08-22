@@ -5,9 +5,9 @@ memory for your AI coding agents. It gives your agents persistent, searchable
 memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
 
-Works with **Claude Code**, **Codex**, **Qwen Code**, **Grok Build**,
-**OpenClaw**, **Cline**, **Windsurf**, **Kimi**, **Hermes**, and any agent
-that supports hooks and/or MCP. Every supported platform is re-tested
+Works with **Claude Code**, **DeepSeek Harness (dsh)**, **Codex**,
+**Qwen Code**, **Grok Build**, **OpenClaw**, **Cursor**, **Cline**,
+**Windsurf**, **Kimi**, and any agent that supports hooks and/or MCP. Every supported platform is re-tested
 weekly against its newest release, in a fresh container, with the results
 judged server-side — a version bump that breaks an integration is caught
 by us, not by you.
@@ -32,12 +32,12 @@ runs anywhere Python 3.9+ does.
 | Agent | Adapter | What you get |
 |---|---|---|
 | **Claude Code** | built-in | Full: session memory injected, ambient recall every prompt, every turn archived, memory tools |
-| **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival |
+| **DeepSeek Harness (dsh)** | [`adapters/dsh/`](adapters/dsh/) | Full: native cordis plugin on dsh's typed extension points — injection, ambient recall, archival (npm: `brethof-brain-dsh`) |
 | **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
-| **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | MCP tools + every turn archived (via `notify`); context injection lights up the moment Codex ships headless hook firing — already wired |
-| **Grok Build** (xAI) | [`adapters/grok-build/`](adapters/grok-build/) | MCP tools + native Stop-hook archival + pull-model recall |
-| **Cline / Windsurf / Kimi** | [`adapters/editors/`](adapters/editors/) | Memory tools via one MCP config block (each editor's exact dialect documented) |
-| **Hermes** (Nous Research) | [`adapters/hermes/`](adapters/hermes/) | Full: memory provider plugin + skills |
+| **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | Full: hooks (inject + recall) + archival via `notify` + MCP tools. One manual step: codex requires you to trust new hooks once — run `/hooks` and trust the brethof-brain entries |
+| **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival |
+| **Grok Build** (xAI) | [`adapters/grok-build/`](adapters/grok-build/) | MCP tools + native Stop-hook archival + pull-model recall (grok has no injection channel) |
+| **Cursor / Cline / Windsurf / Kimi** | [`adapters/editors/`](adapters/editors/) | Memory tools via one MCP config block, plus a paste-ready memory rule for the editor's rules file |
 | **GLM coding plan** (Z.ai) | none needed | Their tooling runs Claude Code against api.z.ai — the Claude Code plugin works as-is |
 | **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
 
@@ -104,18 +104,22 @@ grok mcp add --transport http --scope user brethof-brain \
   --header "Authorization: Bearer bm_live_YOUR_KEY"
 ```
 
-### Editors — Cline, Windsurf, Kimi
+### Editors — Cursor, Cline, Windsurf, Kimi
 
-One MCP config block each — and the three dialects genuinely differ
+One MCP config block each — and the dialects genuinely differ
 (`"type": "streamableHttp"` vs `serverUrl` vs plain `url`). Exact blocks,
-auth notes and the memory-usage rule per editor:
+auth notes and the paste-ready memory rule per editor:
 [`adapters/editors/README.md`](adapters/editors/README.md).
 
-### Hermes
+### DeepSeek Harness (dsh)
 
-Hermes integrates through a **MemoryProvider** plugin that auto-recalls at
-session start, prefetches per turn, archives every turn, and exposes the
-`brethofmind_*` tools. See [`adapters/hermes/README.md`](adapters/hermes/README.md).
+A **native cordis plugin** on dsh's own typed extension points — session
+injection, per-prompt ambient recall, per-turn archival, all fail-open.
+Install with `dsh plugin --profile <name> add brethof-brain-dsh` (or from
+this repo's checkout) and note the one dsh-specific rule: your API key goes
+in `~/.brethof-brain/config.json`, because dsh scrubs `*_API_KEY` from hook
+environments by design. Full details:
+[`adapters/dsh/README.md`](adapters/dsh/README.md).
 
 ### OpenClaw (library wrapper)
 
