@@ -29,7 +29,7 @@ Streaming may split one message across MANY chunk lines — consecutive
 same-role chunks are coalesced into one turn.
 
 Reuses brethof_brain_client (Config / Client / per-session offset state), so
-install the client package first (``pip install brethof-brain-client`` or run
+install the client package first (``pip install git+https://github.com/BrethofAI/brethof-brain-client.git`` or run
 from a checkout — sys.path bootstrap below handles the checkout case).
 
 FAIL-OPEN: like every brethof-brain hook, any error exits 0 and never breaks

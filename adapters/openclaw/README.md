@@ -17,7 +17,7 @@ handles memory. Every hook is fail-open, so memory can never break a run.
 ## Use it
 
 ```python
-from openclaw_hooks import MemorySession   # needs: pip install brethof-brain-client
+from openclaw_hooks import MemorySession   # needs: pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 
 sess = MemorySession(project="marketing", session_id=job_id,
                      base_system_prompt="You are OpenClaw, a marketing agent.")
