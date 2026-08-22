@@ -1,7 +1,7 @@
 """ADAPTER FRESHNESS — the adapters teach a tool vocabulary they do not own.
 
 The customer tool surface lives on the server and moves with the product; every
-adapter (openclaw, hermes, grok-build) hand-writes tool names into code, MCP
+adapter (openclaw, grok-build) hand-writes tool names into code, MCP
 configs and SKILL files. History shows they rot silently: by 2026-08-08 the
 adapters referenced `save_state` (never existed on v2), `recall`/`save_memory`
 (owner-tier only) and `search_chat` (pre-rename) — all dead words for a
@@ -103,7 +103,7 @@ def test_adapters_teach_the_rules_door():
     """Every adapter's taught surface must include the rules door — an agent
     that cannot save law is running a pre-2026-08-07 model of the product."""
     live_customer_tools()                       # same skip-without-key gate
-    for name in ("openclaw", "hermes", "grok-build"):
+    for name in ("openclaw", "grok-build"):
         refs = set()
         for path in adapter_files():
             if name in path.parts:

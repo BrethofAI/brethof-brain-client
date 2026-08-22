@@ -63,26 +63,6 @@ def _load(path: pathlib.Path, name: str):
     return mod
 
 
-# ── the hermes provider needs its host platform's ABC; stub it ──────────────
-def _hermes_provider_class():
-    """Load the hermes plugin with a stand-in for Hermes' own imports. We are
-    testing OUR file's behaviour, not Hermes — the real-loader path is proven
-    separately by driving `hermes -z`."""
-    if "agent" not in sys.modules:
-        agent = types.ModuleType("agent")
-        mp = types.ModuleType("agent.memory_provider")
-
-        class MemoryProvider:            # minimal stand-in for the ABC
-            pass
-
-        mp.MemoryProvider = MemoryProvider
-        agent.memory_provider = mp
-        sys.modules["agent"] = agent
-        sys.modules["agent.memory_provider"] = mp
-    mod = _load(ADAPTERS / "hermes" / "brethofmind_cloud" / "__init__.py",
-                "conformance_hermes_plugin")
-    return mod.BrethofMindCloudProvider
-
 
 def _openclaw_session_class():
     sys.path.insert(0, str(REPO))
@@ -103,35 +83,6 @@ def live_customer_tools() -> set[str]:
 
 
 # ════════════════════════ A. FAIL-OPEN ══════════════════════════════════════
-@pytest.mark.parametrize("key,endpoint,label", [
-    ("", "https://api.brethof.cloud", "no key at all"),
-    ("bm_live_deadbeefdeadbeefdeadbeefdeadbeef", "https://api.brethof.cloud",
-     "key that does not exist"),
-    ("bm_live_deadbeefdeadbeefdeadbeefdeadbeef", "http://127.0.0.1:9",
-     "endpoint refusing connections"),
-])
-def test_hermes_provider_fails_open(monkeypatch, tmp_path, key, endpoint, label):
-    """Every hermes memory hook degrades to nothing — never raises.
-
-    HERMES_HOME is redirected at an empty dir on purpose: the provider resolves
-    config env-first then from $HERMES_HOME/.env (by design, because not every
-    Hermes entrypoint loads the user .env before plugins import). Without this
-    redirect a developer's real key leaks in and the no-key case never runs."""
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
-    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", endpoint)
-    monkeypatch.setenv("HERMES_MEMORY_PROJECT", PROJECT)
-    cls = _hermes_provider_class()
-    p = cls()
-    p.initialize("conformance-session")            # must not raise
-    assert p.system_prompt_block() == "", f"{label}: injected something anyway"
-    p.queue_prefetch("anything")
-    assert p.prefetch("anything") == ""
-    p.sync_turn("user said this", "assistant said that")   # must not raise
-    # The deliberate tools answer with an error STRING, never an exception.
-    out = p.handle_tool_call("brethofmind_search", {"query": "x"})
-    assert isinstance(out, str) and out, f"{label}: tool call returned nothing"
-
 
 def test_openclaw_session_refuses_to_start_without_a_key(monkeypatch):
     """OpenClaw's wrapper is constructed explicitly by the integrator, so an
@@ -175,49 +126,13 @@ def test_grok_stop_hook_fails_open_on_garbage(tmp_path, monkeypatch):
 
 
 # ════════════════════ B. CUSTOMER SURFACE ONLY ══════════════════════════════
-def test_hermes_tool_schemas_are_customer_shaped():
-    """The tools hermes OFFERS its model must cover the whole customer
-    surface, must all actually dispatch, and must not teach owner-tier
-    vocabulary. Full parity is the point: an agent on Hermes must be able to
-    do what an agent on any other platform can (before 2026-08-08 only 5 of
-    these existed — no project lifecycle, no reading a record back)."""
-    cls = _hermes_provider_class()
-    schemas = cls().get_tool_schemas()
-    names = {s["name"] for s in schemas}
-    expected = {"brethofmind_search", "brethofmind_recall", "brethofmind_save",
-                "brethofmind_save_rule", "brethofmind_delete",
-                "brethofmind_list", "brethofmind_get", "brethofmind_rules",
-                "brethofmind_projects", "brethofmind_new_project",
-                "brethofmind_graph",
-                "brethofmind_context", "brethofmind_cleanup_history"}
-    assert names == expected, f"missing {expected - names}, extra {names - expected}"
-    # delete_project left every agent surface 2026-08-12 (founder): full
-    # project deletion is a HUMAN act, panel-only.
-    assert "brethofmind_delete_project" not in names
-
-    blob = json.dumps(schemas).lower()
-    for owner_only in ("query_raw", "search_chat_text", "semantic_search",
-                       "save_record", "supersede_memory"):
-        assert owner_only not in blob, f"owner tool '{owner_only}' in schemas"
-
-    # DISPATCH PARITY: a declared tool that no branch handles would return
-    # None and read as success to the host. Called with empty args every tool
-    # must produce a STRING — a validation complaint is fine, silence is not.
-    p = cls()
-    for n in sorted(names):
-        out = p.handle_tool_call(n, {})
-        assert isinstance(out, str) and out, f"{n} returned {out!r}"
-        assert "unknown tool" not in out.lower(), f"{n} is declared but not handled"
-
 
 def test_every_adapter_call_targets_a_live_customer_tool():
     """The tool names adapters actually SEND must all exist for a customer
     key — the freshness test covers text, this covers the live wire."""
     live = live_customer_tools()
     sent: set[str] = set()
-    for path, kinds in ((ADAPTERS / "hermes" / "brethofmind_cloud" / "__init__.py",
-                         "hermes"),
-                        (ADAPTERS / "openclaw" / "openclaw_hooks.py", "openclaw")):
+    for path, kinds in ((ADAPTERS / "openclaw" / "openclaw_hooks.py", "openclaw"),):
         text = path.read_text(encoding="utf-8")
         import re
         # calls look like _mcp("tool", ...) / _tool("tool", ...)
@@ -228,42 +143,27 @@ def test_every_adapter_call_targets_a_live_customer_tool():
 
 
 # ════════════════════ C. THE REAL WORK (live) ═══════════════════════════════
-@pytest.mark.parametrize("adapter", ["hermes", "openclaw"])
+@pytest.mark.parametrize("adapter", ["openclaw"])
 def test_live_roundtrip(monkeypatch, adapter):
     """Session-start injects, a turn archives, a fact saves, a rule saves —
     through the adapter's own code, against the live service."""
     key = _key()
     monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
     monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", ENDPOINT)
-    monkeypatch.setenv("HERMES_MEMORY_PROJECT", PROJECT)
     stamp = str(int(time.time()))
     fact = (f"Conformance canary {stamp}: the {adapter} adapter completed a "
             f"live save through its own code path.")
 
-    if adapter == "hermes":
-        p = _hermes_provider_class()()
-        p.initialize(f"conformance-{stamp}")
-        block = p.system_prompt_block()
-        p.sync_turn(f"probe {stamp}", "reply")
-        saved = p.handle_tool_call("brethofmind_save",
-                                   {"content": fact, "project": PROJECT})
-        ruled = p.handle_tool_call("brethofmind_save_rule",
-                                   {"content": "plugin_conformance is a "
-                                               "disposable test project.",
-                                    "scope": "project", "project": PROJECT})
-        found = p.handle_tool_call("brethofmind_search",
-                                   {"query": "conformance canary"})
-    else:
-        s = _openclaw_session_class()(project=PROJECT,
-                                      session_id=f"conformance-{stamp}",
-                                      base_system_prompt="P")
-        block = s.start()
-        env = s.record(f"probe {stamp}", "reply")
-        assert env.get("status") == "ok", f"archive failed: {env}"
-        saved = s.save_fact(fact, project=PROJECT)
-        ruled = s.save_rule("plugin_conformance is a disposable test project.",
-                            project=PROJECT)
-        found = ""
+    s = _openclaw_session_class()(project=PROJECT,
+                                  session_id=f"conformance-{stamp}",
+                                  base_system_prompt="P")
+    block = s.start()
+    env = s.record(f"probe {stamp}", "reply")
+    assert env.get("status") == "ok", f"archive failed: {env}"
+    saved = s.save_fact(fact, project=PROJECT)
+    ruled = s.save_rule("plugin_conformance is a disposable test project.",
+                        project=PROJECT)
+    found = ""
 
     assert isinstance(block, str) and block, "session-start injected nothing"
     for label, out in (("save", saved), ("rule", ruled)):
@@ -286,12 +186,8 @@ class _Facade:
     def __init__(self, kind, project):
         self.kind = kind
         self.project = project
-        if kind == "hermes":
-            self.p = _hermes_provider_class()()
-            self.p.initialize(f"lifecycle-{project}")
-        else:
-            self.s = _openclaw_session_class()(project=project,
-                                               session_id=f"lc-{project}")
+        self.s = _openclaw_session_class()(project=project,
+                                           session_id=f"lc-{project}")
 
     def _h(self, tool, **args):
         out = self.p.handle_tool_call(tool, args)
@@ -302,19 +198,13 @@ class _Facade:
 
     # each capability, mapped onto whatever the adapter calls it
     def new_project(self, purpose):
-        return (self._h("brethofmind_new_project", project=self.project,
-                        purpose=purpose) if self.kind == "hermes"
-                else self.s.add_project(self.project, purpose))
+        return self.s.add_project(self.project, purpose)
 
     def save_fact(self, content):
-        return (self._h("brethofmind_save", content=content,
-                        project=self.project) if self.kind == "hermes"
-                else self.s.save_fact(content, project=self.project))
+        return self.s.save_fact(content, project=self.project)
 
     def save_general_fact(self, content):
-        return (self._h("brethofmind_save", content=content, general=True)
-                if self.kind == "hermes"
-                else self.s.save_fact(content, general=True))
+        return self.s.save_fact(content, general=True)
 
     def _rule_flow(self, content, answer):
         """The ONE rule door is a two-step conversation (server design
@@ -323,19 +213,14 @@ class _Facade:
         answer, the second carries the token the service minted. A server
         that saves on the FIRST call has lost the gate; fail loudly."""
         import re as _re
-        first = (self._h("brethofmind_save_rule", content=content,
-                         project=self.project) if self.kind == "hermes"
-                 else self.s.save_rule(content, project=self.project))
+        first = self.s.save_rule(content, project=self.project)
         assert "NOT saved yet" in first, (
             f"rule door answered without asking the question: {first[:200]}")
         m = _re.search(r"token='([0-9a-f]+)'", first)
         assert m, f"question came back without a token: {first[:200]}"
         tok = m.group(1)
-        return (self._h("brethofmind_save_rule", content=content,
-                        project=self.project, answer=answer, token=tok)
-                if self.kind == "hermes"
-                else self.s.save_rule(content, project=self.project,
-                                      answer=answer, token=tok))
+        return self.s.save_rule(content, project=self.project,
+                                answer=answer, token=tok)
 
     def save_project_rule(self, content):
         return self._rule_flow(content, answer="2")
@@ -344,60 +229,39 @@ class _Facade:
         return self._rule_flow(content, answer="1")
 
     def list_projects(self):
-        return (self._h("brethofmind_projects") if self.kind == "hermes"
-                else self.s.list_projects())
+        return self.s.list_projects()
 
     def list_memory(self):
-        return (self._h("brethofmind_list", project=self.project)
-                if self.kind == "hermes"
-                else self.s.list_memory(project=self.project))
+        return self.s.list_memory(project=self.project)
 
     def get(self, rid):
-        return (self._h("brethofmind_get", record_id=rid,
-                        project=self.project) if self.kind == "hermes"
-                else self.s.get(rid, project=self.project))
+        return self.s.get(rid, project=self.project)
 
     def list_rules(self):
-        return (self._h("brethofmind_rules", project=self.project)
-                if self.kind == "hermes"
-                else self.s.list_rules(project=self.project))
+        return self.s.list_rules(project=self.project)
 
     def search(self, q):
-        return (self._h("brethofmind_search", query=q, project=self.project)
-                if self.kind == "hermes"
-                else self.s.search(q, project=self.project))
+        return self.s.search(q, project=self.project)
 
     def search_history(self, q):
-        return (self._h("brethofmind_recall", query=q, project=self.project)
-                if self.kind == "hermes"
-                else self.s.search_history(q, project=self.project))
+        return self.s.search_history(q, project=self.project)
 
     def graph(self, name):
-        return (self._h("brethofmind_graph", name=name, project=self.project)
-                if self.kind == "hermes"
-                else self.s.graph(name, project=self.project))
+        return self.s.graph(name, project=self.project)
 
     def context(self):
-        return (self._h("brethofmind_context", project=self.project)
-                if self.kind == "hermes"
-                else self.s.session_context(project=self.project))
+        return self.s.session_context(project=self.project)
 
     def delete(self, project, rid):
-        return (self._h("brethofmind_delete", project=project, record_id=rid)
-                if self.kind == "hermes" else self.s.delete(project, rid))
+        return self.s.delete(project, rid)
 
     def cleanup_preview(self):
-        return (self._h("brethofmind_cleanup_history", project=self.project)
-                if self.kind == "hermes"
-                else self.s.cleanup_history(self.project))
+        return self.s.cleanup_history(self.project)
 
     def delete_project_attempt(self):
         """The verb is GONE from every agent surface (2026-08-12) — this
-        helper exists only to prove that. Hermes: unknown tool. SDK/OpenClaw:
+        helper exists only to prove that. OpenClaw:
         no such method, and the raw wire call is refused by the server."""
-        if self.kind == "hermes":
-            return self._h("brethofmind_delete_project", project=self.project,
-                           confirm=self.project)
         return "ABSENT" if not hasattr(self.s, "delete_project") else "PRESENT"
 
 
@@ -424,14 +288,13 @@ def _wait_for(fn, needle, what, budget=360):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("adapter", ["hermes", "openclaw"])
+@pytest.mark.parametrize("adapter", ["openclaw"])
 def test_full_lifecycle_every_capability(monkeypatch, adapter):
     key = _key()
     stamp = str(int(time.time()))[-6:]
     project = f"lc_{adapter[:4]}_{stamp}"
     monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
     monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", ENDPOINT)
-    monkeypatch.setenv("HERMES_MEMORY_PROJECT", project)
     a = _Facade(adapter, project)
 
     # 1. CREATE a project, with the purpose that teaches its curator.
@@ -556,14 +419,13 @@ def test_live_output_carries_no_secrets_or_infrastructure(monkeypatch):
     key = _key()
     monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", key)
     monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", ENDPOINT)
-    monkeypatch.setenv("HERMES_MEMORY_PROJECT", PROJECT)
-    p = _hermes_provider_class()()
-    p.initialize("conformance-secrets")
+    s_ = _openclaw_session_class()(project=PROJECT,
+                                   session_id="conformance-secrets",
+                                   base_system_prompt="P")
     seen = "\n".join([
-        p.system_prompt_block(),
-        p.handle_tool_call("brethofmind_search", {"query": "conformance"}),
-        p.handle_tool_call("brethofmind_delete",
-                           {"project": PROJECT, "record_id": "nope_missing"}),
+        s_.start(),
+        s_.build_context("conformance"),
+        s_.delete(PROJECT, "nope_missing"),
     ])
     assert key not in seen, "THE API KEY appeared in adapter output"
     hits = [n for n in FORBIDDEN_IN_OUTPUT if n.lower() in seen.lower()]
