@@ -36,8 +36,8 @@ cat > ~/.brethof-brain/config.json <<EOF
 {"api_key": "bm_live_YOUR_KEY", "default_project": "myproject"}
 EOF
 
-# 2. Install the plugin into your profile (from this repo checkout):
-dsh plugin --profile <name> add /path/to/brethof-brain-client/adapters/dsh
+# 2. Install the plugin into your profile (from npm):
+dsh plugin --profile <name> add brethof-brain-dsh
 
 # 3. Register it — add to $DSH_HOME/profiles/<name>/cordis.patch.yml:
 #    (new rows use the patch layer's `insert` form)
