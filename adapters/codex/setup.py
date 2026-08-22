@@ -87,10 +87,22 @@ def install_mcp() -> None:
     else:
         print("  ! a notify program is already configured — archival notify "
               "NOT installed (chain it manually if you want both)")
+    # Hooks are default-on but the canonical key makes intent visible, and
+    # guards against a future default flip.
+    if "hooks = true" not in text and "codex_hooks" not in text:
+        if "[features]" in text:
+            text = text.replace("[features]", "[features]\nhooks = true", 1)
+        else:
+            text += "\n[features]\nhooks = true\n"
+        changed = True
     if changed:
         CODEX.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
-    print(f"  mcp + notify -> {path}")
+    print(f"  mcp + notify + hooks feature -> {path}")
+    print("  ! ONE MANUAL STEP LEFT: codex requires you to TRUST new hooks")
+    print("    once — open codex, run /hooks, and trust the brethof-brain")
+    print("    entries. Until then codex SILENTLY SKIPS them (their hash is")
+    print("    recorded, so an adapter update needs re-trusting).")
 
 
 def install_agents_md() -> None:
