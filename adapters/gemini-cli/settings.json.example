@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "name": "brethof-brain", "type": "command",
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/gemini-cli/gemini_hook.py",
+        "timeout": 15000 }] }
+    ],
+    "BeforeAgent": [
+      { "hooks": [{ "name": "brethof-brain", "type": "command",
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/gemini-cli/gemini_hook.py",
+        "timeout": 15000 }] }
+    ],
+    "AfterAgent": [
+      { "hooks": [{ "name": "brethof-brain", "type": "command",
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/gemini-cli/gemini_hook.py",
+        "timeout": 30000 }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "name": "brethof-brain", "type": "command",
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/gemini-cli/gemini_hook.py",
+        "timeout": 30000 }] }
+    ]
+  }
+}

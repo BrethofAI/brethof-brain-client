@@ -174,6 +174,49 @@ def test_cascade_transcript_parser(tmp_path):
     assert [t["index"] for t in turns] == [0, 1, 2]
 
 
+def test_gemini_hook_fails_open_on_garbage(monkeypatch):
+    """One script, every Gemini CLI event; whatever arrives on stdin, exit 0."""
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", "/nonexistent")
+    import subprocess
+    hook = ADAPTERS / "gemini-cli" / "gemini_hook.py"
+    for payload in ('not even json',
+                    '{"hook_event_name": "SessionStart", "session_id": "x", '
+                    '"cwd": "/tmp"}',
+                    '{"hook_event_name": "AfterAgent", "session_id": "x", '
+                    '"transcript_path": "/nonexistent/t.jsonl"}'):
+        r = subprocess.run([sys.executable, str(hook)],
+                           input=payload, text=True, capture_output=True,
+                           timeout=60)
+        assert r.returncode == 0, (
+            f"gemini hook exited {r.returncode} on {payload[:40]!r} — "
+            f"a hook must always exit 0. stderr: {r.stderr[:300]}")
+
+
+def test_gemini_transcript_parser(tmp_path):
+    """MessageRecord JSONL parses id-aware: a later line with the same id
+    SUPERSEDES the earlier one (the recording service updates in place),
+    info/error records never become turns, and content handles the genai
+    PartListUnion shapes (string, part, list)."""
+    mod = _load(ADAPTERS / "gemini-cli" / "gemini_hook.py", "conf_gemini_hook")
+    parse = mod.parse_gemini_transcript
+    lines = [
+        {"id": "m1", "timestamp": "t1", "type": "user", "content": "add a toggle"},
+        {"id": "m2", "timestamp": "t2", "type": "gemini",
+         "content": [{"text": "Working on"}, {"text": "it."}]},
+        {"id": "m2", "timestamp": "t3", "type": "gemini",
+         "content": [{"text": "Done — toggle added."}]},   # supersedes m2
+        {"id": "m3", "timestamp": "t4", "type": "info", "content": "noise"},
+    ]
+    p = tmp_path / "session-x.jsonl"
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    turns = parse(str(p))
+    assert [t["line_type"] for t in turns] == ["user", "assistant"]
+    assert turns[1]["text"] == "Done — toggle added."
+    assert "Working on" not in turns[1]["text"]
+
+
 def test_cursor_hook_fails_open_on_garbage(monkeypatch):
     """Cursor runs ONE script for every wired event (dispatch rides the
     payload's hook_event_name) — whatever arrives on stdin, exit 0."""
