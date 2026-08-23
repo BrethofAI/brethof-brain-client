@@ -1,0 +1,18 @@
+{
+  "SessionStart": [
+    { "hooks": [{ "type": "command", "timeout": 15,
+      "command": "python3 -m brethof_brain_client.hook session-start" }] }
+  ],
+  "UserPromptSubmit": [
+    { "hooks": [{ "type": "command", "timeout": 15,
+      "command": "python3 -m brethof_brain_client.hook prompt-submit" }] }
+  ],
+  "Stop": [
+    { "hooks": [{ "type": "command", "timeout": 30,
+      "command": "python3 -m brethof_brain_client.hook stop" }] }
+  ],
+  "PreCompact": [
+    { "hooks": [{ "type": "command", "timeout": 30,
+      "command": "python3 -m brethof_brain_client.hook pre-compact" }] }
+  ]
+}
