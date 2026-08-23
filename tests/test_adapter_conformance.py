@@ -125,6 +125,77 @@ def test_grok_stop_hook_fails_open_on_garbage(tmp_path, monkeypatch):
             f"a hook must always exit 0. stderr: {r.stderr[:300]}")
 
 
+def test_cascade_hook_fails_open_on_garbage(monkeypatch):
+    """Cascade fires the hook after every response; whatever arrives, exit 0."""
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", "/nonexistent")
+    import subprocess
+    hook = ADAPTERS / "cascade" / "cascade_hook.py"
+    for payload in ('not even json',
+                    '{"agent_action_name": "post_cascade_response_with_'
+                    'transcript", "trajectory_id": "t1", "tool_info": '
+                    '{"transcript_path": "/nonexistent/t.jsonl"}}',
+                    '{"agent_action_name": "pre_user_prompt", '
+                    '"tool_info": {"user_prompt": "hi"}}'):
+        r = subprocess.run([sys.executable, str(hook)],
+                           input=payload, text=True, capture_output=True,
+                           timeout=60)
+        assert r.returncode == 0, (
+            f"cascade hook exited {r.returncode} on {payload[:40]!r} — "
+            f"a hook must always exit 0. stderr: {r.stderr[:300]}")
+
+
+def test_cascade_transcript_parser(tmp_path):
+    """The documented JSONL shape parses into coalesced conversation turns;
+    tool traffic (code_action, ...) never becomes a turn."""
+    from adapters.cascade.cascade_hook import parse_cascade_transcript
+    lines = [
+        {"status": "done", "type": "user_input",
+         "user_input": {"rules_applied": {}, "user_response": "add a toggle"}},
+        {"status": "done", "type": "planner_response",
+         "planner_response": {"response": "Working on it."}},
+        {"status": "done", "type": "code_action",
+         "code_action": {"path": "/f.py", "new_content": "x = 1"}},
+        {"status": "done", "type": "planner_response",
+         "planner_response": {"response": "Done — toggle added."}},
+        {"status": "done", "type": "user_input",
+         "user_input": {"user_response": "thanks"}},
+    ]
+    p = tmp_path / "t.jsonl"
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    turns = parse_cascade_transcript(str(p))
+    assert [t["line_type"] for t in turns] == ["user", "assistant", "user"]
+    assert turns[0]["text"] == "add a toggle"
+    # the two planner responses around the code_action coalesce into one turn
+    assert "Working on it." in turns[1]["text"]
+    assert "toggle added" in turns[1]["text"]
+    assert "x = 1" not in "".join(t["text"] for t in turns)
+    assert [t["index"] for t in turns] == [0, 1, 2]
+
+
+def test_cursor_hook_fails_open_on_garbage(monkeypatch):
+    """Cursor runs ONE script for every wired event (dispatch rides the
+    payload's hook_event_name) — whatever arrives on stdin, exit 0."""
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", "/nonexistent")
+    import subprocess
+    hook = ADAPTERS / "cursor" / "cursor_hook.py"
+    for payload in ('not even json',
+                    '{"not": "a known shape"}',
+                    '{"hook_event_name": "sessionStart", '
+                    '"conversation_id": "x", "workspace_roots": ["/tmp"]}',
+                    '{"hook_event_name": "stop", "conversation_id": "x", '
+                    '"transcript_path": "/nonexistent/t.jsonl"}'):
+        r = subprocess.run([sys.executable, str(hook)],
+                           input=payload, text=True, capture_output=True,
+                           timeout=60)
+        assert r.returncode == 0, (
+            f"cursor hook exited {r.returncode} on {payload[:40]!r} — "
+            f"a hook must always exit 0. stderr: {r.stderr[:300]}")
+
+
 # ════════════════════ B. CUSTOMER SURFACE ONLY ══════════════════════════════
 
 def test_every_adapter_call_targets_a_live_customer_tool():

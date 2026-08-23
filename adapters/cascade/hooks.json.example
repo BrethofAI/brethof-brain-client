@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "post_cascade_response_with_transcript": [
+      {
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/cascade/cascade_hook.py",
+        "show_output": false
+      }
+    ]
+  }
+}

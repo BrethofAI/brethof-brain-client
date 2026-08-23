@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      { "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/cursor/cursor_hook.py", "timeout": 15 }
+    ],
+    "stop": [
+      { "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/cursor/cursor_hook.py", "timeout": 30 }
+    ],
+    "sessionEnd": [
+      { "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/cursor/cursor_hook.py", "timeout": 30 }
+    ]
+  }
+}
