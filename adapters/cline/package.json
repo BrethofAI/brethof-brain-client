@@ -1,0 +1,25 @@
+{
+  "name": "brethof-brain-cline",
+  "version": "0.1.0",
+  "description": "brethof-brain cloud memory for Cline — session brief, ambient recall and full-session archive as a native Cline SDK plugin.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": ["cline", "memory", "brethof-brain", "ai", "agent"],
+  "homepage": "https://brethof.ai/brain/",
+  "cline": {
+    "plugins": [
+      {
+        "paths": ["./lib/index.js"],
+        "capabilities": ["hooks"]
+      }
+    ]
+  },
+  "peerDependencies": {
+    "@cline/sdk": "*"
+  },
+  "peerDependenciesMeta": {
+    "@cline/sdk": {
+      "optional": true
+    }
+  }
+}

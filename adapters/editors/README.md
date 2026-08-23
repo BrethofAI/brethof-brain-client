@@ -5,9 +5,22 @@ tools (`search_brain`, `search_history`, the save tools, `list_brain`, …).
 Three editors, three dialects of the same block; copy yours exactly —
 the field names differ on purpose.
 
-## Cline (VS Code)
+## Cline (VS Code + CLI) — full ambient contract available
 
-Cline panel → MCP Servers → Configure (`cline_mcp_settings.json`):
+Cline is more than MCP now: our **native Cline SDK plugin**
+(`adapters/cline`) delivers the full ambient loop — session brief, ambient
+recall on every prompt, complete archive — with no tool call and no rule
+file. Install it first, then add the MCP block below for the explicit tool
+doors:
+
+```bash
+cline plugin install brethof-brain-cline
+```
+
+See [`adapters/cline/README.md`](../cline/README.md) for configuration.
+
+For the MCP tool surface: Cline panel → MCP Servers → Configure
+(`cline_mcp_settings.json`):
 
 ```json
 {
@@ -65,9 +78,10 @@ kimi mcp add --transport http brethof-brain https://api.brethof.cloud/v1/mcp \
 
 ## Notes
 
-- Editors have no lifecycle hooks, so there is no ambient injection here —
-  memory is pull-model: the agent searches when the rule tells it to.
-  For the full ambient contract use Claude Code, Codex, Qwen Code, Grok
-  Build or OpenClaw with our plugins.
+- Cline has the full ambient contract via our native plugin (above).
+  Windsurf/Cascade and Kimi have no injection surface yet, so memory there
+  is pull-model: the agent searches when the rule tells it to. For the full
+  ambient contract use Claude Code, Cline, Codex, Qwen Code, Grok Build,
+  dsh or OpenClaw with our plugins.
 - One `project` per repo keeps memories separated; the tools take a
   `project` argument.
