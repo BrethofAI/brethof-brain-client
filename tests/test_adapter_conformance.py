@@ -217,6 +217,31 @@ def test_gemini_transcript_parser(tmp_path):
     assert "Working on" not in turns[1]["text"]
 
 
+def test_antigravity_hook_fails_open_on_garbage(monkeypatch, tmp_path):
+    """Argv-dispatched (Antigravity sends no event name in the payload);
+    whatever arrives on stdin, exit 0 — for known and unknown events."""
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", str(tmp_path))
+    import subprocess
+    hook = ADAPTERS / "antigravity" / "antigravity_hook.py"
+    for argv, payload in (
+            (["pre-invocation"], 'not even json'),
+            (["pre-invocation"],
+             '{"conversationId": "c1", "workspacePaths": ["/tmp"], '
+             '"transcriptPath": "/nonexistent/t.jsonl", "invocationNum": 1}'),
+            (["stop"],
+             '{"conversationId": "c1", '
+             '"transcriptPath": "/nonexistent/t.jsonl"}'),
+            ([], '{}'), (["unknown-event"], '{}')):
+        r = subprocess.run([sys.executable, str(hook), *argv],
+                           input=payload, text=True, capture_output=True,
+                           timeout=60)
+        assert r.returncode == 0, (
+            f"antigravity hook exited {r.returncode} on {argv}/{payload[:30]!r}"
+            f" — a hook must always exit 0. stderr: {r.stderr[:300]}")
+
+
 def test_cursor_hook_fails_open_on_garbage(monkeypatch):
     """Cursor runs ONE script for every wired event (dispatch rides the
     payload's hook_event_name) — whatever arrives on stdin, exit 0."""

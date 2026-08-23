@@ -1,0 +1,13 @@
+{
+  "brethof-brain": {
+    "enabled": true,
+    "PreInvocation": [
+      { "hooks": [{ "type": "command", "timeout": 15,
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/antigravity/antigravity_hook.py pre-invocation" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "timeout": 30,
+        "command": "python3 /ABSOLUTE/PATH/TO/brethof-brain-client/adapters/antigravity/antigravity_hook.py stop" }] }
+    ]
+  }
+}
