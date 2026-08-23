@@ -242,6 +242,36 @@ def test_antigravity_hook_fails_open_on_garbage(monkeypatch, tmp_path):
             f" — a hook must always exit 0. stderr: {r.stderr[:300]}")
 
 
+def test_junie_and_kiro_hooks_fail_open_on_garbage(monkeypatch, tmp_path):
+    """The plain-stdout family: whatever arrives, exit 0 — and on the
+    injecting events, garbage must produce EMPTY stdout (a traceback on
+    stdout would be injected into the model's context as 'memory')."""
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", str(tmp_path))
+    import subprocess
+    cases = [
+        (ADAPTERS / "junie" / "junie_hook.py", [], 'not even json'),
+        (ADAPTERS / "junie" / "junie_hook.py", [],
+         '{"hook_event_name": "SessionStart", "session_id": "s", '
+         '"cwd": "/tmp"}'),
+        (ADAPTERS / "kiro" / "kiro_hook.py", ["session-start"], 'not json'),
+        (ADAPTERS / "kiro" / "kiro_hook.py", ["prompt-submit"],
+         '{"prompt": "hi", "session_id": "s"}'),
+        (ADAPTERS / "kiro" / "kiro_hook.py", ["unknown"], '{}'),
+    ]
+    for hook, argv, payload in cases:
+        r = subprocess.run([sys.executable, str(hook), *argv],
+                           input=payload, text=True, capture_output=True,
+                           timeout=60)
+        assert r.returncode == 0, (
+            f"{hook.name} exited {r.returncode} on {argv}/{payload[:30]!r} — "
+            f"a hook must always exit 0. stderr: {r.stderr[:300]}")
+        assert r.stdout.strip() == "", (
+            f"{hook.name} wrote to stdout with a dead endpoint — on this "
+            f"platform stdout IS injected context: {r.stdout[:200]}")
+
+
 def test_cursor_hook_fails_open_on_garbage(monkeypatch):
     """Cursor runs ONE script for every wired event (dispatch rides the
     payload's hook_event_name) — whatever arrives on stdin, exit 0."""
