@@ -73,11 +73,10 @@ Restart Claude Code and memory is live. Commands are namespaced:
 A native gateway plugin: session memory and ambient recall are appended to
 the system context each turn, every finished turn is archived. One install,
 one config opt-in (`hooks.allowConversationAccess` — OpenClaw gates
-conversation content for non-bundled plugins). Published as
-`brethof-brain-openclaw` on npm; from a checkout:
+conversation content for non-bundled plugins).
 
 ```bash
-openclaw plugins install ./adapters/openclaw-gateway
+openclaw plugins install brethof-brain-openclaw
 ```
 
 See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
