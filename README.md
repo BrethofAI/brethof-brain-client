@@ -5,12 +5,15 @@ memory for your AI coding agents. It gives your agents persistent, searchable
 memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
 
-Works with **Claude Code**, **DeepSeek Harness (dsh)**, **Codex**,
-**Qwen Code**, **Grok Build**, **OpenClaw**, **Cursor**, **Cline**,
-**Windsurf**, **Kimi**, and any agent that supports hooks and/or MCP. Every supported platform is re-tested
-weekly against its newest release, in a fresh container, with the results
-judged server-side — a version bump that breaks an integration is caught
-by us, not by you.
+Fully supported: **Claude Code**, **Codex**, **Qwen Code**, **OpenClaw**,
+**DeepSeek Harness (dsh)**, **Cline**, **OpenCode**, and **Kilo Code** —
+supported means the complete ambient loop (session brief, per-prompt
+recall, automatic archiving), proven by our test rig against the real
+platform. Any MCP-compatible client can additionally use the memory tools
+on demand — that is a toolbox, not the ambient loop. Every supported
+platform is re-verified against its newest release in a fresh container,
+with the results judged server-side — a version bump that breaks an
+integration is caught by us, not by you.
 
 ## How it works
 
@@ -36,8 +39,9 @@ runs anywhere Python 3.9+ does.
 | **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
 | **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | Full: hooks (inject + recall) + archival via `notify` + MCP tools. One manual step: codex requires you to trust new hooks once — run `/hooks` and trust the brethof-brain entries |
 | **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival |
-| **Grok Build** (xAI) | [`adapters/grok-build/`](adapters/grok-build/) | MCP tools + native Stop-hook archival + pull-model recall (grok has no injection channel) |
-| **Cursor / Cline / Windsurf / Kimi** | [`adapters/editors/`](adapters/editors/) | Memory tools via one MCP config block, plus a paste-ready memory rule for the editor's rules file |
+| **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`, publishing) |
+| **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`, publishing) |
+| **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
 | **GLM coding plan** (Z.ai) | none needed | Their tooling runs Claude Code against api.z.ai — the Claude Code plugin works as-is |
 | **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
 
@@ -90,25 +94,30 @@ channel, and pre-wires `hooks.json` so context injection activates the
 moment Codex fires hooks in headless mode. See
 [`adapters/codex/README.md`](adapters/codex/README.md).
 
-### Grok Build
+### Cline
 
-Grok's native hook system (its Claude-hooks compatibility does **not**
-extend to firing them — verified) plus `grok mcp`. The setup script wires
-the Stop-hook archiver, the pull-model memory rule and the skills. See
-[`adapters/grok-build/README.md`](adapters/grok-build/README.md), or add
-the tools manually:
+A request-only overlay on Cline's `beforeModel` / `afterRun` extension
+points — session brief and ambient recall ride into each request without
+touching your stored conversation, and every finished run is archived.
+Install: `cline plugin install brethof-brain-cline` (npm publish pending —
+until then, install from this repo's checkout). See
+[`adapters/cline/README.md`](adapters/cline/README.md).
 
-```bash
-grok mcp add --transport http --scope user brethof-brain \
-  https://api.brethof.cloud/v1/mcp \
-  --header "Authorization: Bearer bm_live_YOUR_KEY"
-```
+### OpenCode & Kilo Code
 
-### Editors — Cursor, Cline, Windsurf, Kimi
+One native plugin covers both: the session brief and per-prompt recall are
+appended as persisted synthetic message parts, and `session.idle` archives
+the turns. Drop `adapters/opencode/lib/index.js` into
+`~/.config/opencode/plugins/` (OpenCode) or `~/.config/kilo/plugin/`
+(Kilo — CLI, VS Code and JetBrains alike); npm `brethof-brain-opencode`
+publish pending. See
+[`adapters/opencode/README.md`](adapters/opencode/README.md).
 
-One MCP config block each — and the dialects genuinely differ
-(`"type": "streamableHttp"` vs `serverUrl` vs plain `url`). Exact blocks,
-auth notes and the paste-ready memory rule per editor:
+### Other editors and MCP clients
+
+Any MCP-compatible client can use the memory **tools** on demand (search,
+save, rules, projects) with one config block — that is a toolbox, not the
+ambient memory loop above. Exact blocks and auth notes per editor:
 [`adapters/editors/README.md`](adapters/editors/README.md).
 
 ### DeepSeek Harness (dsh)
@@ -225,7 +234,6 @@ Code holds the key instead and the config file isn't needed.
 ```bash
 brethof-brain uninstall-hooks
 claude mcp remove brethof-brain
-grok mcp remove brethof-brain    # if using Grok Build adapter
 pip uninstall brethof-brain-client
 ```
 
