@@ -38,9 +38,9 @@ runs anywhere Python 3.9+ does.
 | **DeepSeek Harness (dsh)** | [`adapters/dsh/`](adapters/dsh/) | Full: native cordis plugin on dsh's typed extension points — injection, ambient recall, archival (npm: `brethof-brain-dsh`) |
 | **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
 | **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | Full: hooks (inject + recall) + archival via `notify` + MCP tools. One manual step: codex requires you to trust new hooks once — run `/hooks` and trust the brethof-brain entries |
-| **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival |
-| **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`, publishing) |
-| **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`, publishing) |
+| **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival (npm: `brethof-brain-openclaw`) |
+| **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`) |
+| **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`) |
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
 | **GLM coding plan** (Z.ai) | none needed | Their tooling runs Claude Code against api.z.ai — the Claude Code plugin works as-is |
 | **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
@@ -73,12 +73,14 @@ Restart Claude Code and memory is live. Commands are namespaced:
 A native gateway plugin: session memory and ambient recall are appended to
 the system context each turn, every finished turn is archived. One install,
 one config opt-in (`hooks.allowConversationAccess` — OpenClaw gates
-conversation content for non-bundled plugins). See
-[`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
+conversation content for non-bundled plugins). Published as
+`brethof-brain-openclaw` on npm; from a checkout:
 
 ```bash
-openclaw plugins install --link ./adapters/openclaw-gateway
+openclaw plugins install ./adapters/openclaw-gateway
 ```
+
+See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
 
 ### Qwen Code
 
@@ -99,19 +101,18 @@ moment Codex fires hooks in headless mode. See
 A request-only overlay on Cline's `beforeModel` / `afterRun` extension
 points — session brief and ambient recall ride into each request without
 touching your stored conversation, and every finished run is archived.
-Install: `cline plugin install brethof-brain-cline` (npm publish pending —
-until then, install from this repo's checkout). See
+Install: `cline plugin install brethof-brain-cline`. See
 [`adapters/cline/README.md`](adapters/cline/README.md).
 
 ### OpenCode & Kilo Code
 
 One native plugin covers both: the session brief and per-prompt recall are
 appended as persisted synthetic message parts, and `session.idle` archives
-the turns. Drop `adapters/opencode/lib/index.js` into
-`~/.config/opencode/plugins/` (OpenCode) or `~/.config/kilo/plugin/`
-(Kilo — CLI, VS Code and JetBrains alike); npm `brethof-brain-opencode`
-publish pending. See
-[`adapters/opencode/README.md`](adapters/opencode/README.md).
+the turns. Add the npm package to `opencode.json` —
+`{ "plugin": ["brethof-brain-opencode"] }` — or drop
+`adapters/opencode/lib/index.js` into `~/.config/opencode/plugins/`
+(OpenCode) or `~/.config/kilo/plugin/` (Kilo — CLI, VS Code and JetBrains
+alike). See [`adapters/opencode/README.md`](adapters/opencode/README.md).
 
 ### Other editors and MCP clients
 
