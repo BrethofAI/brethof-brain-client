@@ -243,6 +243,43 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
         transcript.save_state(session_id, last["_offset"], last["index"] + 1)
     # Whole backlog confirmed — also advance past trailing non-conversation lines.
     transcript.save_state(session_id, tail_offset, next_index)
+    _hub_parallel(cfg, project, session_id, turns)
+
+
+def _hub_parallel(cfg: Config, project: str, session_id: str,
+                  turns: list) -> None:
+    """PARALLEL RUN (2026-08-30): mirror this exchange to the NEW system's
+    hub while the proven system above keeps the memory. Inert unless BOTH
+    settings exist (env BRETHOF_HUB_PARALLEL_URL / _KEY, or the same names
+    minus prefix in config.json as parallel_hub_url / parallel_hub_key).
+    Fire-and-forget with a short timeout: the mirror must never slow or fail
+    the archive it rides behind, and a missed mirror is just an exchange the
+    new system never curated — the old one still has everything."""
+    url = (os.environ.get("BRETHOF_HUB_PARALLEL_URL")
+           or cfg.raw.get("parallel_hub_url") or "").rstrip("/")
+    key = (os.environ.get("BRETHOF_HUB_PARALLEL_KEY")
+           or cfg.raw.get("parallel_hub_key") or "")
+    if not url or not key:
+        return
+    piece = "\n\n".join(
+        f"[{'user' if t.get('line_type') == 'user' else 'assistant'}] "
+        f"{t.get('text', '')}" for t in turns if t.get("text"))
+    if not piece.strip():
+        return
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            f"{url}/v1/exchange/{project}",
+            data=json.dumps({"session_id": session_id,
+                             "piece": piece}).encode(),
+            headers={"Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json",
+                     "User-Agent": "brethof-brain-client-parallel/1.0"})
+        with urllib.request.urlopen(req, timeout=8.0) as r:
+            r.read()
+    except Exception as e:                                   # noqa: BLE001
+        sys.stderr.write(f"brethof-brain: parallel mirror skipped "
+                         f"({type(e).__name__})\n")
 
 
 def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
