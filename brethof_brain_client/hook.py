@@ -285,14 +285,25 @@ def _parallel_post(cfg: Config, which: str, path: str,
 
 def _hub_parallel(cfg: Config, project: str, session_id: str,
                   turns: list) -> None:
-    """Mirror this exchange to the new hub's write loop (see
-    _parallel_post). Fires only after the real archive flush is confirmed."""
-    piece = "\n\n".join(
-        f"[{'user' if t.get('line_type') == 'user' else 'assistant'}] "
-        f"{t.get('text', '')}" for t in turns if t.get("text"))
-    if piece.strip():
-        _parallel_post(cfg, "parallel_hub", f"/v1/exchange/{project}",
-                       {"session_id": session_id, "piece": piece})
+    """Mirror to the new hub's write loop, ONE EXCHANGE PER CALL — the
+    curator's contract is one current exchange, and a backlog flush must
+    not glue several together into a blob. Fires only after the real
+    archive flush is confirmed."""
+    exchanges: list[list] = []
+    for t in turns:
+        if not t.get("text"):
+            continue
+        if t.get("line_type") == "user" or not exchanges:
+            exchanges.append([t])
+        else:
+            exchanges[-1].append(t)
+    for ex in exchanges:
+        piece = "\n\n".join(
+            f"[{'user' if t.get('line_type') == 'user' else 'assistant'}] "
+            f"{t.get('text', '')}" for t in ex)
+        if piece.strip():
+            _parallel_post(cfg, "parallel_hub", f"/v1/exchange/{project}",
+                           {"session_id": session_id, "piece": piece})
 
 
 def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
