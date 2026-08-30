@@ -62,9 +62,12 @@ class Client:
         if not self.cfg.unlock_passphrase:
             return False
         try:
+            body = {"passphrase": self.cfg.unlock_passphrase}
+            if self.cfg.lock_after_minutes:
+                body["idle_seconds"] = self.cfg.lock_after_minutes * 60
             req = urllib.request.Request(
                 self.cfg.endpoint + "/unlock",
-                data=json.dumps({"passphrase": self.cfg.unlock_passphrase}).encode(),
+                data=json.dumps(body).encode(),
                 headers={"Content-Type": "application/json",
                          "User-Agent": USER_AGENT}, method="POST")
             with urllib.request.urlopen(req, timeout=90) as r:

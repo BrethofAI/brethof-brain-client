@@ -159,6 +159,10 @@ class Config:
     # client presents it automatically when the container answers 423
     # (locked); with it unset a locked memory is reported, never opened.
     unlock_passphrase: str = ""
+    # How many idle minutes before the hosted container locks itself again.
+    # Travels with the passphrase on every unlock — lock policy belongs to
+    # whoever holds the key, not to a panel. 0 = keep the host's stored value.
+    lock_after_minutes: int = 0
     default_project: str = "global"
     projects: list = field(default_factory=list)
     raw: dict = field(default_factory=dict)
@@ -178,6 +182,13 @@ class Config:
                        "CLAUDE_PLUGIN_OPTION_UNLOCK_PASSPHRASE",
                        "CLAUDE_PLUGIN_OPTION_unlock_passphrase")
                   or f.get("unlock_passphrase") or "")
+        try:
+            lock_after = int(_env("BRETHOF_BRAIN_LOCK_AFTER_MINUTES",
+                                  "CLAUDE_PLUGIN_OPTION_LOCK_AFTER_MINUTES",
+                                  "CLAUDE_PLUGIN_OPTION_lock_after_minutes")
+                             or f.get("lock_after_minutes") or 0)
+        except (TypeError, ValueError):
+            lock_after = 0
         default_project = (_env("BRETHOF_BRAIN_DEFAULT_PROJECT",
                                 "BRETHOF_MIND_DEFAULT_PROJECT",
                                 "CLAUDE_PLUGIN_OPTION_PROJECT",
@@ -186,6 +197,7 @@ class Config:
         projects = f.get("projects") if isinstance(f.get("projects"), list) else []
         return cls(endpoint=endpoint, api_key=api_key.strip(),
                    unlock_passphrase=str(unlock),
+                   lock_after_minutes=lock_after,
                    default_project=default_project, projects=projects, raw=f)
 
     def configured(self) -> bool:
