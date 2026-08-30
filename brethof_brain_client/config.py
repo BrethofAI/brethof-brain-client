@@ -153,6 +153,12 @@ def _real(path: str) -> str:
 class Config:
     endpoint: str = DEFAULT_ENDPOINT
     api_key: str = ""
+    # Hosted-container installs only: the passphrase that unlocks the
+    # customer's encrypted memory. Held HERE, on the customer's machine —
+    # the host keeps it in tmpfs while unlocked and never on disk. The
+    # client presents it automatically when the container answers 423
+    # (locked); with it unset a locked memory is reported, never opened.
+    unlock_passphrase: str = ""
     default_project: str = "global"
     projects: list = field(default_factory=list)
     raw: dict = field(default_factory=dict)
@@ -168,6 +174,10 @@ class Config:
                         "CLAUDE_PLUGIN_OPTION_API_KEY",
                         "CLAUDE_PLUGIN_OPTION_api_key")
                    or f.get("api_key") or "")
+        unlock = (_env("BRETHOF_BRAIN_UNLOCK_PASSPHRASE",
+                       "CLAUDE_PLUGIN_OPTION_UNLOCK_PASSPHRASE",
+                       "CLAUDE_PLUGIN_OPTION_unlock_passphrase")
+                  or f.get("unlock_passphrase") or "")
         default_project = (_env("BRETHOF_BRAIN_DEFAULT_PROJECT",
                                 "BRETHOF_MIND_DEFAULT_PROJECT",
                                 "CLAUDE_PLUGIN_OPTION_PROJECT",
@@ -175,6 +185,7 @@ class Config:
                            or f.get("default_project") or "global")
         projects = f.get("projects") if isinstance(f.get("projects"), list) else []
         return cls(endpoint=endpoint, api_key=api_key.strip(),
+                   unlock_passphrase=str(unlock),
                    default_project=default_project, projects=projects, raw=f)
 
     def configured(self) -> bool:

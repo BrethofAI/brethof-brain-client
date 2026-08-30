@@ -53,8 +53,27 @@ class Client:
             "X-BM-Client": __version__,
         }
 
+    def _unlock(self) -> bool:
+        """Present the customer's passphrase to a locked hosted container.
+        423 is the container-host saying the encrypted memory is not mounted;
+        the passphrase is the whole authentication — a wrong one is refused
+        by gocryptfs itself. Generous timeout: an unlock is a filesystem
+        mount plus Postgres crash recovery plus the API's own start."""
+        if not self.cfg.unlock_passphrase:
+            return False
+        try:
+            req = urllib.request.Request(
+                self.cfg.endpoint + "/unlock",
+                data=json.dumps({"passphrase": self.cfg.unlock_passphrase}).encode(),
+                headers={"Content-Type": "application/json",
+                         "User-Agent": USER_AGENT}, method="POST")
+            with urllib.request.urlopen(req, timeout=90) as r:
+                return 200 <= r.status < 300
+        except Exception:
+            return False
+
     def _request(self, path: str, data: bytes | None, method: str,
-                 timeout: float | None) -> dict:
+                 timeout: float | None, _retried: bool = False) -> dict:
         if not self.cfg.api_key:
             raise ClientError("no API key configured (run: brethof-brain setup)")
         try:
@@ -63,6 +82,13 @@ class Client:
             with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
                 body = r.read()
         except urllib.error.HTTPError as e:
+            # 423 = the hosted container's memory is locked. Session start,
+            # a prompt after an idle timeout — this is the auto-unlock: the
+            # passphrase from the customer's own config opens it and the
+            # original request is retried ONCE. Unset passphrase or a failed
+            # unlock falls through to the normal error.
+            if e.code == 423 and not _retried and self._unlock():
+                return self._request(path, data, method, timeout, _retried=True)
             raise ClientError(f"HTTP {e.code} on {path}: {_http_error_detail(e)}",
                               status_code=e.code)
         except urllib.error.URLError as e:
