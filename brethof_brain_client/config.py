@@ -161,7 +161,9 @@ class Config:
     unlock_passphrase: str = ""
     # How many idle minutes before the hosted container locks itself again.
     # Travels with the passphrase on every unlock — lock policy belongs to
-    # whoever holds the key, not to a panel. 0 = keep the host's stored value.
+    # whoever holds the key, not to a panel. 0 = keep the host's stored
+    # value. The host clamps to 5-60 minutes: under five the memory
+    # flip-flops and can lock before its own curated save arrives.
     lock_after_minutes: int = 0
     default_project: str = "global"
     projects: list = field(default_factory=list)
