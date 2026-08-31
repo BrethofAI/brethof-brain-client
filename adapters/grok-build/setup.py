@@ -13,8 +13,8 @@ Run from this directory:
     python setup.py
 
 Environment:
-    BRETHOF_BRAIN_API_KEY  — your brethof-brain API key (bm_live_... or bm_test_...)
-    BRETHOF_BRAIN_ENDPOINT — optional, defaults to https://api.brethof.cloud
+    BRETHOF_BRAIN_API_KEY  — your brethof-brain API key (bmv2_... or bm_test_...)
+    BRETHOF_BRAIN_ENDPOINT — optional, defaults to http://127.0.0.1:8610
 
 Stdlib only — no pip install needed. Requires Python 3.9+.
 """
@@ -32,7 +32,7 @@ for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
         _s.reconfigure(encoding="utf-8", errors="replace")
 
-DEFAULT_ENDPOINT = "https://api.brethof.cloud"
+DEFAULT_ENDPOINT = "http://127.0.0.1:8610"
 
 
 def get_env():
@@ -41,7 +41,7 @@ def get_env():
     if not api_key:
         print("ERROR: BRETHOF_BRAIN_API_KEY not set in environment.")
         print("Get your key from https://brethof.ai/account -> brethof-brain tab.")
-        print("Then: export BRETHOF_BRAIN_API_KEY=bm_live_your_key")
+        print("Then: export BRETHOF_BRAIN_API_KEY=bmv2_your_key")
         sys.exit(1)
     return api_key, endpoint
 

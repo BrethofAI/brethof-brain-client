@@ -50,7 +50,7 @@ function textOf(blocks) {
 export function apply(ctx, config = {}) {
   const f = fileConfig()
   const endpoint = (config.endpoint || process.env.BRETHOF_BRAIN_ENDPOINT
-    || f.endpoint || 'https://api.brethof.cloud').replace(/\/+$/, '')
+    || f.endpoint || 'http://127.0.0.1:8610').replace(/\/+$/, '')
   const apiKey = config.apiKey || process.env.BRETHOF_BRAIN_API_KEY || f.api_key || ''
   const project = config.project || process.env.BRETHOF_BRAIN_PROJECT
     || f.default_project || 'global'

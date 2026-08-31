@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent   # plugin repo root
 CODEX = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-ENDPOINT = os.environ.get("BRETHOF_BRAIN_ENDPOINT", "https://api.brethof.cloud")
+ENDPOINT = os.environ.get("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:8610")
 MARK_A, MARK_B = "<!-- brethof-brain:start -->", "<!-- brethof-brain:end -->"
 
 AGENTS_SECTION = f"""{MARK_A}

@@ -27,8 +27,8 @@ For the MCP tool surface: Cline panel → MCP Servers → Configure
   "mcpServers": {
     "brethof-brain": {
       "type": "streamableHttp",
-      "url": "https://api.brethof.cloud/v1/mcp",
-      "headers": { "Authorization": "Bearer bm_live_..." },
+      "url": "http://127.0.0.1:8610/v1/mcp",
+      "headers": { "Authorization": "Bearer bmv2_..." },
       "disabled": false,
       "autoApprove": []
     }
@@ -54,7 +54,7 @@ in your workspace (or globally under `Documents/Cline/Rules`):
 {
   "mcpServers": {
     "brethof-brain": {
-      "serverUrl": "https://api.brethof.cloud/v1/mcp",
+      "serverUrl": "http://127.0.0.1:8610/v1/mcp",
       "headers": { "Authorization": "Bearer ${env:BRETHOF_BRAIN_API_KEY}" }
     }
   }
@@ -69,8 +69,8 @@ above.
 ## Kimi (kimi-cli)
 
 ```bash
-kimi mcp add --transport http brethof-brain https://api.brethof.cloud/v1/mcp \
-  --header "Authorization: Bearer bm_live_..."
+kimi mcp add --transport http brethof-brain http://127.0.0.1:8610/v1/mcp \
+  --header "Authorization: Bearer bmv2_..."
 ```
 
 (or `~/.kimi/mcp.json` with plain `url` + `headers`). Teach it in

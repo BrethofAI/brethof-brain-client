@@ -152,14 +152,45 @@ The client is source-available precisely so you can verify this yourself — rea
   commands it runs never leave your machine. A local offset file
   (`~/.brethof-brain/state/`) ensures each line is sent once.
 - Every request is authenticated with **your API key** and goes only to **your
-  endpoint** (`api.brethof.cloud` by default). Your data lands in your own
-  isolated tenant database, encrypted at rest.
+  endpoint** — your own memory container. Where that is depends on the shape
+  you chose in the account panel:
+  - **Local** (the default endpoint, `http://127.0.0.1:8610`): the memory
+    container runs on your machine; conversations are archived there and
+    never stored by us.
+  - **Hosted**: your container runs in our cloud at
+    `https://memory.brethof.cloud/t/<your-tenant>`, encrypted under a
+    passphrase only you hold — add `unlock_passphrase` to your config and
+    the client unlocks it at session start and lets it lock itself when you
+    step away (`lock_after_minutes`, 5–60).
 
 Nothing else is collected. The client never sends files, environment variables,
 or anything outside the transcript text described above. If a hook can't reach
-the service it fails silent — your session is never blocked. The one exception
-to silence: if your **API key is rejected**, the next session start shows a
-one-line notice, because silently stopping archival would mean losing history.
+the service it fails silent — your session is never blocked. Two exceptions to
+silence, both persistent conditions where staying quiet would lose history: a
+**rejected API key** shows a one-line notice at the next session start, and a
+**TLS trust failure** prints one line to stderr (seen on brand-new Windows
+machines, which load root certificates lazily — open the endpoint once in a
+browser and it is fixed for good).
+
+## Getting your memory (two shapes)
+
+Your memory lives in a container. Where that container runs is the one choice
+you make, once, in the [account panel](https://brethof.ai/account/):
+
+**On your machine (local).** The panel mints your **hub key** (shown once) —
+it goes into the container's configuration and is how your memory reaches the
+thinking service. You run the container yourself (install guide:
+[brethof.ai/guides](https://brethof.ai/guides/)), mint your **memory key**
+during its setup, and you're done — the client's default endpoint
+(`http://127.0.0.1:8610`) already points at it. Your conversations never
+leave your hardware; only the pieces being curated transit the hub.
+
+**On our cloud (hosted).** The panel creates your container, encrypted under
+a **passphrase only you hold**, and shows your endpoint
+(`https://memory.brethof.cloud/t/<tenant>`) and **memory key** once. Put all
+three in your config — endpoint, `api_key`, `unlock_passphrase` — and the
+client unlocks your memory at session start; it locks itself after
+`lock_after_minutes` (5–60) of quiet.
 
 ## Install as a library / CLI (alternative)
 
@@ -176,7 +207,7 @@ Get an API key from [brethof.ai/account](https://brethof.ai) (the brethof-brain
 tab), then:
 
 ```bash
-brethof-brain setup --api-key bm_live_xxxxxxxx
+brethof-brain setup --api-key bmv2_xxxxxxxx
 brethof-brain install-hooks      # auto-load & archive memory in Claude Code
 brethof-brain mcp-command        # prints the `claude mcp add …` line to run
 ```
@@ -199,8 +230,10 @@ Code holds the key instead and the config file isn't needed.
 
 ```json
 {
-  "endpoint": "https://api.brethof.cloud",
-  "api_key": "bm_live_…",
+  "endpoint": "http://127.0.0.1:8610",
+  "api_key": "bmv2_…",
+  "unlock_passphrase": "only for the hosted shape — unlocks your memory",
+  "lock_after_minutes": 15,
   "default_project": "global",
   "projects": [
     { "path": "/home/me/work/acme", "key": "acme" },

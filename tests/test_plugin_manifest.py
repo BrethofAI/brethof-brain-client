@@ -108,7 +108,7 @@ def test_the_mcp_server_is_wired_to_user_config_not_a_baked_in_key():
     assert "${user_config.api_key}" in json.dumps(mcp), (
         "the MCP server does not read the key from user config — a key baked "
         "into a published bundle would be OUR key, shipped to every customer")
-    assert "bm_live_" not in json.dumps(mcp), "a real key is in the bundle"
+    assert "bmv2_" not in json.dumps(mcp), "a real key is in the bundle"
     assert mcp["url"].endswith("/v1/mcp"), (
         f"the MCP url is {mcp['url']} — the customer surface is /v1/mcp")
 

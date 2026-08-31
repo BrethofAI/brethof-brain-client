@@ -47,7 +47,7 @@ function config(options = {}) {
   const f = fileConfig()
   _cfg = {
     endpoint: (options.endpoint || process.env.BRETHOF_BRAIN_ENDPOINT
-      || f.endpoint || 'https://api.brethof.cloud').replace(/\/+$/, ''),
+      || f.endpoint || 'http://127.0.0.1:8610').replace(/\/+$/, ''),
     apiKey: options.apiKey || process.env.BRETHOF_BRAIN_API_KEY || f.api_key || '',
     project: options.project || process.env.BRETHOF_BRAIN_PROJECT
       || f.default_project || 'global',

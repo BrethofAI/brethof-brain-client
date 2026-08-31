@@ -15,7 +15,7 @@ a short memory section in `~/.qwen/QWEN.md`.
 ## Install
 
 ```bash
-export BRETHOF_BRAIN_API_KEY=bm_live_...   # your key
+export BRETHOF_BRAIN_API_KEY=bmv2_...   # your key
 python3 setup.py                            # from this directory
 ```
 

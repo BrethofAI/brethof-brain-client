@@ -99,7 +99,7 @@ def test_openclaw_session_refuses_to_start_without_a_key(monkeypatch):
 
 
 def test_openclaw_session_fails_open_on_dead_endpoint(monkeypatch):
-    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bm_live_deadbeefdeadbeef")
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bmv2_deadbeefdeadbeef")
     monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:9")
     cls = _openclaw_session_class()
     s = cls(project=PROJECT, session_id="conformance", base_system_prompt="P")

@@ -33,7 +33,7 @@ extension points. This plugin is that.
 # 1. Your key lives in the config FILE (the env var would be scrubbed):
 mkdir -p ~/.brethof-brain
 cat > ~/.brethof-brain/config.json <<EOF
-{"api_key": "bm_live_YOUR_KEY", "default_project": "myproject"}
+{"api_key": "bmv2_YOUR_KEY", "default_project": "myproject"}
 EOF
 
 # 2. Install the plugin into your profile (from npm):
@@ -56,7 +56,7 @@ Optional row config (all default from `~/.brethof-brain/config.json`):
     - id: brethof-brain
       name: brethof-brain-dsh
       config:
-        endpoint: https://api.brethof.cloud
+        endpoint: http://127.0.0.1:8610
         project: myproject
 ```
 

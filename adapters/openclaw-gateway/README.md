@@ -12,7 +12,7 @@ agent:
 ## Install
 
 ```bash
-export BRETHOF_BRAIN_API_KEY=bm_live_...
+export BRETHOF_BRAIN_API_KEY=bmv2_...
 openclaw plugins install ./adapters/openclaw-gateway
 openclaw gateway restart
 ```
@@ -49,9 +49,9 @@ one block, full customer toolset:
   mcp: {
     servers: {
       "brethof-brain": {
-        url: "https://api.brethof.cloud/v1/mcp",
+        url: "http://127.0.0.1:8610/v1/mcp",
         transport: "streamable-http",
-        headers: { Authorization: "Bearer bm_live_..." }
+        headers: { Authorization: "Bearer bmv2_..." }
       }
     }
   }

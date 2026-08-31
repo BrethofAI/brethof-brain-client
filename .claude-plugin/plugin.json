@@ -18,7 +18,7 @@
     "api_key": {
       "type": "string",
       "title": "brethof-brain API key",
-      "description": "From brethof.ai/account -> brethof-brain tab (bm_live_... or bm_test_...).",
+      "description": "From brethof.ai/account -> brethof-brain tab (bmv2_...).",
       "sensitive": true,
       "required": true
     },
@@ -26,7 +26,7 @@
       "type": "string",
       "title": "Data-plane endpoint",
       "description": "Leave as default unless self-hosting.",
-      "default": "https://api.brethof.cloud"
+      "default": "http://127.0.0.1:8610"
     },
     "project": {
       "type": "string",

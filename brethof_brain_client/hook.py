@@ -407,15 +407,29 @@ def main(argv=None) -> int:
         if DEBUG:
             sys.stderr.write(f"[hook-debug] {event} handler returned clean\n")
     except ClientError as e:
-        # Persistent auth problems are the ONE condition worth a signal: a dead
-        # key silently halts archiving until the transcripts age out. Inject a
-        # notice on the injecting events; stderr elsewhere.
+        # PERSISTENT problems are the ones worth a signal — a transient
+        # network blip self-heals, but a dead key or broken TLS trust kills
+        # every future call identically and silently. Two such classes:
         if e.status_code in (401, 403):
+            # a dead key silently halts archiving until transcripts age out
             if event in _EVENT_NAMES:
                 _emit_context(_EVENT_NAMES[event], AUTH_NOTICE)
             else:
                 sys.stderr.write("brethof-brain: API key rejected — archiving off; "
                                  "run `brethof-brain doctor`\n")
+        elif "CERTIFICATE_VERIFY" in str(e) or "SSL:" in str(e):
+            # TLS trust failure — measured 2026-08-31: a fresh Windows
+            # machine populates root CAs lazily, Python cannot trigger the
+            # download, and every hook died silently. One https contact
+            # from a browser (or anything SChannel-based) fixes it forever.
+            sys.stderr.write(
+                "brethof-brain: TLS trust failure reaching the memory "
+                "endpoint — hooks are failing. On a fresh Windows machine, "
+                "open the endpoint once in a browser to load root "
+                "certificates, then retry.\n")
+        elif DEBUG:
+            # never let a failure be silent when someone is LOOKING for it
+            sys.stderr.write(f"[hook-debug] {event}: {e}\n")
         # Anything else: data plane unreachable → memory just doesn't load.
     except Exception:  # noqa: BLE001 — absolute last resort; never break the turn
         if DEBUG:

@@ -10,8 +10,8 @@ Claude Code holds it and passes it via the environment.
 config.json shape (all keys optional except api_key)::
 
     {
-      "endpoint": "https://api.brethof.cloud",
-      "api_key": "bm_live_...",
+      "endpoint": "http://127.0.0.1:8610",
+      "api_key": "bmv2_...",
       "default_project": "global",
       "projects": [
         {"path": "/home/me/work/acme", "key": "acme"},

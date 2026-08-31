@@ -42,8 +42,8 @@ You'll need your **API key** from [brethof.ai/account](https://brethof.ai) →
 brethof-brain tab. Set it in the environment:
 
 ```
-BRETHOF_BRAIN_API_KEY=bm_live_your_key
-BRETHOF_BRAIN_ENDPOINT=https://api.brethof.cloud   # optional, this is the default
+BRETHOF_BRAIN_API_KEY=bmv2_your_key
+BRETHOF_BRAIN_ENDPOINT=http://127.0.0.1:8610   # optional, this is the default
 ```
 
 ### Option B: Manual
@@ -51,8 +51,8 @@ BRETHOF_BRAIN_ENDPOINT=https://api.brethof.cloud   # optional, this is the defau
 **1. Add the MCP server** (gives Grok the memory tools):
 
 ```bash
-grok mcp add --transport http brethof-brain https://api.brethof.cloud/v1/mcp \
-  --header "Authorization: Bearer bm_live_YOUR_KEY"
+grok mcp add --transport http brethof-brain http://127.0.0.1:8610/v1/mcp \
+  --header "Authorization: Bearer bmv2_YOUR_KEY"
 ```
 
 **2. Install the native hooks + rule** (do NOT rely on `~/.claude/settings.json`

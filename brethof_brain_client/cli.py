@@ -1,7 +1,7 @@
 """``brethof-brain`` command-line tool: set up the client, wire Claude Code, and
 check status. Stdlib only.
 
-    brethof-brain setup --api-key bm_live_xxx [--endpoint URL] [--project KEY]
+    brethof-brain setup --api-key bmv2_xxx [--endpoint URL] [--project KEY]
     brethof-brain install-hooks     # add the 4 hooks to ~/.claude/settings.json
     brethof-brain mcp-command       # print the `claude mcp add` line to run
     brethof-brain status            # show plan + usage
@@ -209,13 +209,13 @@ def cmd_setup(args) -> int:
         if sys.stdin.isatty():
             # getpass: the key must not echo to the terminal or scrollback.
             api_key = getpass.getpass(
-                "brethof-brain API key (bm_live_... or bm_test_..., hidden): ").strip()
+                "brethof-brain API key (bmv2_... or bm_test_..., hidden): ").strip()
         else:
             print("error: --api-key required (or run in an interactive terminal)",
                   file=sys.stderr)
             return 2
-    if not api_key.startswith(("bm_live_", "bm_test_")):
-        print("warning: key doesn't look like a brethof-brain key (bm_live_/bm_test_)",
+    if not api_key.startswith(("bmv2_", "bm_test_")):
+        print("warning: key doesn't look like a brethof-brain key (bmv2_/bm_test_)",
               file=sys.stderr)
 
     ensure_dirs()
@@ -358,7 +358,7 @@ def cmd_uninstall_hooks(args) -> int:
 
 def cmd_mcp_command(args) -> int:
     cfg = Config.load()
-    key = cfg.api_key or "bm_live_YOUR_KEY"
+    key = cfg.api_key or "bmv2_YOUR_KEY"
     url = cfg.endpoint + MCP_PATH
     print("Run this once to add the Brain to Claude Code:\n")
     # ONE line, no continuation characters — POSIX `\` breaks in PowerShell/cmd.

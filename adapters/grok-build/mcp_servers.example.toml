@@ -5,7 +5,7 @@
 #
 # To add manually:
 #   grok mcp add --transport http brethof-brain https://api.brethof.cloud/v1/mcp \
-#     --header "Authorization: Bearer bm_live_REPLACE_ME"
+#     --header "Authorization: Bearer bmv2_REPLACE_ME"
 #
 # Or in ~/.grok/config.toml under [[mcp.servers]]:
 #
@@ -14,7 +14,7 @@
 # url = "https://api.brethof.cloud/v1/mcp"
 # 
 # [mcp.servers.brethof-brain.headers]
-# Authorization = "Bearer bm_live_REPLACE_ME"
+# Authorization = "Bearer bmv2_REPLACE_ME"
 #
 # Verify: grok mcp doctor
 #

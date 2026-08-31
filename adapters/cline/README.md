@@ -35,8 +35,8 @@ adapter reads):
 
 ```json
 {
-  "api_key": "bm_live_...",
-  "endpoint": "https://api.brethof.cloud",
+  "api_key": "bmv2_...",
+  "endpoint": "http://127.0.0.1:8610",
   "default_project": "my-project"
 }
 ```
