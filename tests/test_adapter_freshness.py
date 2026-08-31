@@ -45,16 +45,18 @@ NOT_TOOLS = {"load_env", "get_json", "save_file", "load_config", "load_json",
 
 def live_customer_tools() -> set[str]:
     key = os.environ.get("BRETHOF_BRAIN_FRESHNESS_KEY", "")
-    endpoint = os.environ.get("BRETHOF_BRAIN_FRESHNESS_ENDPOINT",
-                              "https://api.brethof.cloud").rstrip("/")
+    endpoint = (os.environ.get("BRETHOF_BRAIN_FRESHNESS_ENDPOINT")
+                              or os.environ.get("BRETHOF_BRAIN_ENDPOINT")
+                              or "https://api.brethof.cloud").rstrip("/")
     if not key:
         pytest.skip("BRETHOF_BRAIN_FRESHNESS_KEY not set — needs the live API")
     body = json.dumps({"jsonrpc": "2.0", "id": 1,
                        "method": "tools/list"}).encode()
     req = urllib.request.Request(
-        endpoint + "/mcp", data=body,
+        endpoint + "/v1/mcp", data=body,
         headers={"Authorization": "Bearer " + key,
                  "Content-Type": "application/json",
+                 "Accept": "application/json, text/event-stream",
                  "User-Agent": "brethof-brain-client-tests/1.0"})
     with urllib.request.urlopen(req, timeout=20) as r:
         payload = json.load(r)

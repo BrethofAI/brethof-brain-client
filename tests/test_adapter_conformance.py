@@ -36,8 +36,9 @@ import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 ADAPTERS = REPO / "adapters"
-ENDPOINT = os.environ.get("BRETHOF_BRAIN_CONFORMANCE_ENDPOINT",
-                          "https://api.brethof.cloud").rstrip("/")
+ENDPOINT = (os.environ.get("BRETHOF_BRAIN_CONFORMANCE_ENDPOINT")
+                          or os.environ.get("BRETHOF_BRAIN_ENDPOINT")
+                          or "https://api.brethof.cloud").rstrip("/")
 # A disposable project the live section writes into.
 PROJECT = "plugin_conformance"
 
@@ -74,7 +75,7 @@ def live_customer_tools() -> set[str]:
     body = json.dumps({"jsonrpc": "2.0", "id": 1,
                        "method": "tools/list"}).encode()
     req = urllib.request.Request(
-        ENDPOINT + "/mcp", data=body,
+        ENDPOINT + "/v1/mcp", data=body,
         headers={"Authorization": "Bearer " + _key(),
                  "Content-Type": "application/json",
                  "User-Agent": "brethof-brain-conformance/1.0"})
