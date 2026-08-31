@@ -533,11 +533,14 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     # 7. DELETE a record, and DELETE A RULE (dead law must be removable).
     # The general rule goes first when this run created one — a test must not
     # leave law behind in a pool that every session pays for.
+    # Real rule rows print as "rules:<id> — ..."; anything else (the section
+    # headers, the cleaning footer) carries no id. The old fallback regex
+    # here once ate the word "project" out of the "PROJECT RULES — ..."
+    # header and asked the hub to delete a rule that never existed.
     gen_id = ""
     for line in rules.splitlines():
         if f"conformance run {stamp}".lower() in line.lower():
-            m = _re.search(r"rules:([a-z0-9_]+)", line.lower()) or \
-                _re.search(r"^\s*-?\s*([a-z0-9_]{6,})", line.lower())
+            m = _re.search(r"rules:([a-z0-9_]+)", line.lower())
             gen_id = m.group(1) if m else ""
             break
     assert gen_id, (
@@ -553,10 +556,18 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     # reading a test tenant's rules table: three dead runs' law still
     # resident days later. (The empty project shell is dropped with the
     # gate's throwaway tenant.)
-    own = [m.group(1) for line in rules.splitlines() if project in line.lower()
-           for m in [_re.search(r"rules:([a-z0-9_]+)", line.lower()) or
-                     _re.search(r"^\s*-?\s*([a-z0-9_]{6,})", line.lower())]
-           if m and m.group(1) != gen_id]
+    own, in_sec = [], False
+    for line in rules.splitlines():
+        low = line.strip().lower()
+        if low.startswith("project rules"):
+            in_sec = f"'{project}'" in low
+            continue
+        if low.startswith("general rules"):
+            in_sec = False
+            continue
+        if in_sec and (m := _re.search(r"rules:([a-z0-9_]+)", low)) \
+                and m.group(1) != gen_id:
+            own.append(m.group(1))
     assert own, f"this project's own law is not listed by id: {rules[:400]}"
     for rid2 in dict.fromkeys(own):
         assert "deleted" in a.delete("rules", rid2).lower(), \
