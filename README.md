@@ -76,8 +76,12 @@ one config opt-in (`hooks.allowConversationAccess` — OpenClaw gates
 conversation content for non-bundled plugins).
 
 ```bash
-openclaw plugins install brethof-brain-openclaw
+openclaw plugins install --accept-capabilities brethof-brain-openclaw
 ```
+
+(OpenClaw 2026.8.2+ asks you to accept the plugin's declared
+`allowConversationAccess` capability at install — archival reads the
+conversation; that is the product.)
 
 See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
 

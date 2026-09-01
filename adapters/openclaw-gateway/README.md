@@ -13,9 +13,16 @@ agent:
 
 ```bash
 export BRETHOF_BRAIN_API_KEY=bmv2_...
-openclaw plugins install ./adapters/openclaw-gateway
+openclaw plugins install --force --accept-capabilities ./adapters/openclaw-gateway
 openclaw gateway restart
 ```
+
+OpenClaw 2026.8.2+ requires both flags for a plugin installed from a
+local path: `--force` because the source is outside ClawHub review (you
+are the review — you have the source in front of you), and
+`--accept-capabilities` because this plugin declares
+`allowConversationAccess` (archival reads the conversation; that is the
+product). On older OpenClaw the flags are accepted and ignored.
 
 Configure (optional) in `openclaw.json` — env vars work too
 (`BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`):
