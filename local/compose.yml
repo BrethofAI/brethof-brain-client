@@ -1,0 +1,179 @@
+# BRETHOF BRAIN — the self-hosted memory stack you run on your own machine.
+# Images and the embedding model come from downloads.brethof.ai — run
+# ./install.sh (or install.ps1 on Windows) once; it downloads, verifies and
+# loads everything, then this file just runs it. THREE containers on one
+# private network:
+#
+#   brain-db        Postgres + pgvector, whole data directory encrypted by
+#                   gocryptfs with a passphrase ONLY the customer holds.
+#   brain-embedder  our fp32 ONNX EmbeddingGemma sidecar, so text never leaves
+#                   the machine to be embedded — search and recall are local.
+#   brain-api       the SAME application we run in the cloud, in self-hosted
+#                   mode: it serves /v1/mcp on loopback, so the agent connects
+#                   exactly as a cloud customer does — same tools, same
+#                   contract, different URL. There is no second MCP server and
+#                   no client-side "local or cloud" flag to get wrong. In this
+#                   mode it DELETES its control-plane routes (/v1/internal,
+#                   /v1/admin, /v1/fleet) rather than guarding them, and starts
+#                   only the mechanical workers.
+#
+# WHAT IS NOT HERE, ON PURPOSE: the curator, the teacher and every prompt.
+# Those stay on our hub. This stack is data and mechanics; the intelligence is
+# licensed, not shipped. That is also why non-payment stops the product without
+# any lock, key or phone-home check in this file.
+#
+# THE CAPABILITIES ON brain-db ARE REQUIRED, NOT CONVENIENCE. Mounting a FUSE
+# filesystem inside a rootless container needs /dev/fuse plus SYS_ADMIN, and
+# SYS_ADMIN here is NAMESPACED — container uid 0 maps to an unprivileged uid on
+# the host, not to host root. Verified 2026-08-27: without it, fusermount3
+# fails with "Operation not permitted" even though it is setuid.
+services:
+  brain-db:
+    image: downloads.brethof.ai/brain-db:${BRAIN_VERSION:?run install.sh first — it writes BRAIN_VERSION into .env}
+    # never a registry: install.sh loaded these from the verified bundle
+    pull_policy: never
+    container_name: brain-db
+    # unless-stopped, unlike our own dev stacks: this is somebody's memory on
+    # their own machine. It should be there after a reboot without them
+    # running anything. Stopping it stays their explicit choice.
+    restart: unless-stopped
+    # POSTGRES NEEDS MORE THAN 64 MB OF SHARED MEMORY. Docker and podman both
+    # default /dev/shm to 64 MB, and Postgres puts parallel-query and index
+    # build workspace there — so on a real store it fails with "could not
+    # resize shared memory segment ... No space left on device", which reads
+    # like a disk problem and is not one. Measured 2026-08-29: a HNSW build
+    # over 345,927 rows died on it, and so did the API's own readiness probe.
+    shm_size: 1g
+    devices:
+      - /dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor=unconfined
+    environment:
+      POSTGRES_USER: ${BRAIN_DB_USER:-brain}
+      # Authenticates brain-api over the private network. NOT the passphrase:
+      # this one guards the connection, that one decrypts the disk.
+      POSTGRES_PASSWORD: ${BRAIN_DB_PASSWORD:?set BRAIN_DB_PASSWORD in .env}
+      # Supply ONE of these. Neither is ever written to disk.
+      BRAIN_PASSPHRASE: ${BRAIN_PASSPHRASE:-}
+      BRAIN_PASSPHRASE_FILE: ${BRAIN_PASSPHRASE_FILE:-}
+    volumes:
+      # THE CIPHERTEXT IS THE ONLY THING THAT TOUCHES THE HOST DISK.
+      # Back this directory up, copy it to move machines, hand it over to
+      # leave — it is unreadable without the passphrase, including by us.
+      - ${BRAIN_DATA_DIR:-./data}:/cipher
+    ports:
+      - "127.0.0.1:${BRAIN_DB_PORT:-15440}:5432"
+    # STARTED IS NOT READY. After any restart Postgres runs crash recovery and
+    # refuses connections while it does ("the database system is not yet
+    # accepting connections"). depends_on alone only waits for the container
+    # to exist, so the API used to connect into that window and exit for good
+    # — memory that never came back from a reboot. Measured 2026-08-28.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BRAIN_DB_USER:-brain} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    networks: [brain]
+
+  brain-api:
+    # Built by us with BRAIN_SHIP_PROMPTS=0: the prompts are NOT in this
+    # image — they are fetched from the hub against your licence. This is
+    # what makes the sentence at the top of this file true rather than
+    # aspirational.
+    image: downloads.brethof.ai/brain-api:${BRAIN_VERSION:?run install.sh first — it writes BRAIN_VERSION into .env}
+    pull_policy: never
+    container_name: brain-api
+    restart: unless-stopped
+    depends_on:
+      brain-db:
+        condition: service_healthy
+      brain-embedder:
+        condition: service_started
+    environment:
+      BRAIN_MODE: selfhosted
+      # The static key file mint-key.sh wrote. Self-hosted authenticates
+      # against this and nothing else — there is no control plane to ask, and
+      # setting BRAIN_CONTROL_URL here makes the container refuse to start.
+      BRAIN_V2_KEYS_FILE: /keys/v2keys
+      BRAIN_PG_HOST: brain-db
+      BRAIN_PG_PORT: "5432"
+      BRAIN_PG_USER: ${BRAIN_DB_USER:-brain}
+      BRAIN_PG_PASS: ${BRAIN_DB_PASSWORD:?set BRAIN_DB_PASSWORD in .env}
+      BRAIN_EMBEDDER_URL: http://brain-embedder:8202
+      BRAIN_EMBED_DIM: "768"
+      # The licence. The box does the mechanics on its own; the JUDGMENT
+      # prompts (merge, heal) are fetched from the hub with this key. Losing
+      # it costs judgment, never memory: recall and archiving never call home.
+      BRAIN_HUB_URL: ${BRAIN_HUB_URL:-https://hub.brethof.ai}
+      BRAIN_HUB_KEY: ${BRAIN_HUB_KEY:-}
+      # Curated records changed since the last heal before we OFFER one.
+      BRAIN_HEAL_THRESHOLD: ${BRAIN_HEAL_THRESHOLD:-40}
+      # WHO DOES THE THINKING. Empty (the default): curation, merges and
+      # drift are offered to the agent in YOUR harness, paid for with its
+      # tokens. Set url+model and this container does that work itself
+      # against any OpenAI-compatible endpoint — a local runner keeps
+      # everything on this machine, a remote one sends the piece to whoever
+      # you point at. See env.example. Either way it never comes to us.
+      BRAIN_INFERENCE_URL: ${BRAIN_INFERENCE_URL:-}
+      BRAIN_INFERENCE_MODEL: ${BRAIN_INFERENCE_MODEL:-}
+      BRAIN_INFERENCE_KEY: ${BRAIN_INFERENCE_KEY:-}
+      # Who heals your memory — YOUR dial, see env.example. `brethof` mode
+      # requires the consent sentence copied exactly; it is the one option
+      # where curated records reach our hub (never chat history).
+      BRAIN_HEAL_MODE: ${BRAIN_HEAL_MODE:-agent}
+      BRAIN_HEAL_CONSENT: ${BRAIN_HEAL_CONSENT:-}
+    volumes:
+      - ${BRAIN_KEY_DIR:-./keys}:/keys:ro
+    # PODMAN + systemd-resolved ONLY. On a custom network podman resolves
+    # container names through aardvark-dns but inherits no usable upstream,
+    # so hub.brethof.ai does not resolve and the licence looks broken when
+    # the real fault is DNS. Set BRAIN_DNS to your resolver(s) if you see
+    # that. Docker users leave this empty.
+    dns: ${BRAIN_DNS:-}
+    ports:
+      # LOOPBACK ONLY. This is your memory; it has no business on a LAN
+      # address, and the key is not a substitute for not being reachable.
+      - "127.0.0.1:${BRAIN_API_PORT:-8610}:8610"
+    networks: [brain]
+
+  brain-embedder:
+    image: downloads.brethof.ai/brain-embedder:${BRAIN_VERSION:?run install.sh first — it writes BRAIN_VERSION into .env}
+    pull_policy: never
+    container_name: brain-embedder
+    restart: unless-stopped
+    # The one process that touches every plaintext piece does not get to be
+    # root, even namespaced root. It reads a ro model mount and writes
+    # nothing, so an anonymous uid costs nothing. (Flagged 2026-08-25,
+    # closed 2026-08-30 — verified vectors identical under uid 10001.)
+    user: "10001:10001"
+    environment:
+      EMBED_MODEL_DIR: /model
+      # THE DEFAULTS IN server.py ARE TUNED FOR OUR VPS, NOT FOR YOUR MACHINE.
+      # There the embedder is capped at three cores and shared across every
+      # tenant, so EMBED_MAX_SLOTS=3 rations a contended resource. Here it
+      # serves one person on their own hardware: rationing them to three
+      # concurrent embeds on a sixteen-core workstation would be throttling
+      # them for our reasons, not theirs.
+      #
+      # A limit still earns its place — several agents at once would otherwise
+      # thrash the same cores with parallel ONNX inference — so set it to your
+      # core count rather than removing it. One interactive slot stays
+      # reserved so a recall answers while a background batch is running.
+      EMBED_MAX_SLOTS: ${BRAIN_EMBED_SLOTS:-4}
+      EMBED_RESERVED_INTERACTIVE: "1"
+      EMBED_THREADS: "0"   # 0 = let onnxruntime use the machine it is on
+    volumes:
+      # ~1.2 GB fp32 ONNX export, mounted read-only and never baked into the
+      # image. int8 and third-party conversions are BANNED — measured recall
+      # collapse (r@1 .870 -> .609) and cosine -0.05 garbage respectively.
+      - ${BRAIN_MODEL_DIR:-./model/embeddinggemma-300m-onnx}:/model:ro
+    expose:
+      - "8202"
+    networks: [brain]
+
+networks:
+  brain:
+    driver: bridge
