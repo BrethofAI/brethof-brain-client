@@ -191,13 +191,6 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
             pass
     env = Client(cfg).post("/v1/hooks/prompt-submit", payload)
     _emit_context("UserPromptSubmit", _injection_from_envelope(env))
-    # PARALLEL RUN: exercise the hub's retrieval socket on real prompts
-    # (part 1 only — the parts all carry the same prompt). The answer is
-    # not used yet; the socket exists so the retrieval brain has somewhere
-    # to grow without being forgotten.
-    if payload.get("part", 1) == 1:
-        _parallel_post(cfg, "parallel_hub", f"/v1/retrieve/{project}",
-                       {"prompt": prompt, "session_id": session_id})
 
 
 def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
@@ -255,60 +248,6 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
         transcript.save_state(session_id, last["_offset"], last["index"] + 1)
     # Whole backlog confirmed — also advance past trailing non-conversation lines.
     transcript.save_state(session_id, tail_offset, next_index)
-    _hub_parallel(cfg, project, session_id, turns)
-
-
-def _parallel_post(cfg: Config, which: str, path: str,
-                   payload: dict) -> None:
-    """PARALLEL RUN (2026-08-30): fire-and-forget POST to the NEW system —
-    `which` is 'parallel_hub' (hub.brethof.ai) or 'parallel_box' (the test
-    container). Inert unless BOTH settings exist (env BRETHOF_<WHICH>_URL /
-    _KEY, or config.json keys <which>_url / <which>_key). A short timeout
-    and a swallowed error: a mirror must never slow or fail the proven path
-    it rides behind — a missed mirror is just something the new system
-    never saw, while the old one has everything."""
-    up = which.upper()
-    url = (os.environ.get(f"BRETHOF_{up}_URL")
-           or cfg.raw.get(f"{which}_url") or "").rstrip("/")
-    key = (os.environ.get(f"BRETHOF_{up}_KEY")
-           or cfg.raw.get(f"{which}_key") or "")
-    if not url or not key:
-        return
-    import urllib.request
-    try:
-        req = urllib.request.Request(
-            f"{url}{path}", data=json.dumps(payload).encode(),
-            headers={"Authorization": f"Bearer {key}",
-                     "Content-Type": "application/json",
-                     "User-Agent": "brethof-brain-client-parallel/1.0"})
-        with urllib.request.urlopen(req, timeout=8.0) as r:
-            r.read()
-    except Exception as e:                                   # noqa: BLE001
-        sys.stderr.write(f"brethof-brain: {which} mirror skipped "
-                         f"({type(e).__name__})\n")
-
-
-def _hub_parallel(cfg: Config, project: str, session_id: str,
-                  turns: list) -> None:
-    """Mirror to the new hub's write loop, ONE EXCHANGE PER CALL — the
-    curator's contract is one current exchange, and a backlog flush must
-    not glue several together into a blob. Fires only after the real
-    archive flush is confirmed."""
-    exchanges: list[list] = []
-    for t in turns:
-        if not t.get("text"):
-            continue
-        if t.get("line_type") == "user" or not exchanges:
-            exchanges.append([t])
-        else:
-            exchanges[-1].append(t)
-    for ex in exchanges:
-        piece = "\n\n".join(
-            f"[{'user' if t.get('line_type') == 'user' else 'assistant'}] "
-            f"{t.get('text', '')}" for t in ex)
-        if piece.strip():
-            _parallel_post(cfg, "parallel_hub", f"/v1/exchange/{project}",
-                           {"session_id": session_id, "piece": piece})
 
 
 def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
@@ -377,11 +316,6 @@ def _pre_compact(cfg: Config, inp: dict, args: tuple = ()) -> None:
     except ClientError:
         if DEBUG:
             traceback.print_exc()
-    # PARALLEL RUN: the compact is fast heal's trigger on the NEW system —
-    # tell the test box a compact happened so its heal-mode dial fires on
-    # the records the hub loop has been writing there.
-    _parallel_post(cfg, "parallel_box", "/v1/hooks/pre-compact",
-                   {"session_id": session_id, "project": project})
 
 
 _HANDLERS = {
