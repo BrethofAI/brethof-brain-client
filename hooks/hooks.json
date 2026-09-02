@@ -30,6 +30,21 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit 3",
             "timeout": 12
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit 4",
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit 5",
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit 6",
+            "timeout": 12
           }
         ]
       }
