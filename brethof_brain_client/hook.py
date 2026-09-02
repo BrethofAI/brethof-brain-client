@@ -149,7 +149,12 @@ def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # part ("session-start 1", "session-start 2"). No part argument = the
     # whole payload in one piece (legacy registrations keep working).
     project = _project(cfg, inp)
-    payload: dict = {"project": project}
+    # `source` is why the session is starting (startup / resume / compact).
+    # After a compact the agent holds the whole session in its summary, and
+    # the Brain asks it — then, not on a cold start — whether the project's
+    # description still fits.
+    payload: dict = {"project": project,
+                     "source": str(inp.get("source") or "")}
     if args:
         try:
             payload["part"] = int(args[0])
