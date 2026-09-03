@@ -28,7 +28,7 @@ jobs:
       - name: Run unit tests
         run: pytest -q
 
-  # Full end-to-end against api.brethof.cloud on all 3 OSes — the real macOS
+  # Full end-to-end against the customer's box (127.0.0.1:8610) on all 3 OSes — the real macOS
   # proof. Runs only when the BRETHOF_BRAIN_API_KEY secret is present (a bm_test_
   # key), so forks/PRs without it don't fail.
   live-smoke:

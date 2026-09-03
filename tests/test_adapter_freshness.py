@@ -47,7 +47,7 @@ def live_customer_tools() -> set[str]:
     key = os.environ.get("BRETHOF_BRAIN_FRESHNESS_KEY", "")
     endpoint = (os.environ.get("BRETHOF_BRAIN_FRESHNESS_ENDPOINT")
                               or os.environ.get("BRETHOF_BRAIN_ENDPOINT")
-                              or "https://api.brethof.cloud").rstrip("/")
+                              or "http://127.0.0.1:8610").rstrip("/")
     if not key:
         pytest.skip("BRETHOF_BRAIN_FRESHNESS_KEY not set — needs the live API")
     body = json.dumps({"jsonrpc": "2.0", "id": 1,

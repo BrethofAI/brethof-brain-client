@@ -38,7 +38,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 ADAPTERS = REPO / "adapters"
 ENDPOINT = (os.environ.get("BRETHOF_BRAIN_CONFORMANCE_ENDPOINT")
                           or os.environ.get("BRETHOF_BRAIN_ENDPOINT")
-                          or "https://api.brethof.cloud").rstrip("/")
+                          or "http://127.0.0.1:8610").rstrip("/")
 # A disposable project the live section writes into.
 PROJECT = "plugin_conformance"
 
@@ -90,7 +90,7 @@ def test_openclaw_session_refuses_to_start_without_a_key(monkeypatch):
     unconfigured key must raise a NAMED, actionable error at construction —
     not fail silently halfway through a run."""
     monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "")
-    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "https://api.brethof.cloud")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:8610")
     from brethof_brain_client.client import ClientError
     cls = _openclaw_session_class()
     with pytest.raises(ClientError) as e:

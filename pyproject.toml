@@ -22,7 +22,7 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://brethof.cloud"
-Service = "https://api.brethof.cloud"
+Service = "https://brethof.ai/brain"
 
 [project.scripts]
 brethof-brain = "brethof_brain_client.cli:main"

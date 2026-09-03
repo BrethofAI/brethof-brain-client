@@ -19,7 +19,7 @@ function cfgFrom(pluginConfig: any): Cfg {
   const env = (globalThis as any).process?.env ?? {};
   return {
     endpoint: (pluginConfig?.endpoint || env.BRETHOF_BRAIN_ENDPOINT ||
-               "https://api.brethof.cloud").replace(/\/+$/, ""),
+               "http://127.0.0.1:8610").replace(/\/+$/, ""),
     apiKey: pluginConfig?.apiKey || env.BRETHOF_BRAIN_API_KEY || "",
     project: pluginConfig?.project || env.BRETHOF_BRAIN_PROJECT || "openclaw",
   };
