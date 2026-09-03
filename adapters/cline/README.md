@@ -15,7 +15,7 @@ is unreachable, Cline just runs without memory.
 ## Install
 
 ```bash
-cline plugin install brethof-brain-cline
+cline plugin install npm:brethof-brain-cline
 ```
 
 Or from a local checkout / git URL:
