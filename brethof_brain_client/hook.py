@@ -153,8 +153,11 @@ def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # After a compact the agent holds the whole session in its summary, and
     # the Brain asks it — then, not on a cold start — whether the project's
     # description still fits.
+    # `session_id` rides along (2026-09-03): the BRAIN header hands it back
+    # so the agent can leave its handover NOTE for this session.
     payload: dict = {"project": project,
-                     "source": str(inp.get("source") or "")}
+                     "source": str(inp.get("source") or ""),
+                     "session_id": str(inp.get("session_id") or "")}
     if args:
         try:
             payload["part"] = int(args[0])
