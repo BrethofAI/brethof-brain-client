@@ -508,6 +508,7 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     # kept — a test canary is judged noise, by design. So the proof is the
     # history door: the stamp comes back from search_history once the
     # archive row is embedded (within a minute).
+    import re as _re
     listed = _wait_for(lambda: a.search_history(f"lifecycle canary {stamp}"),
                        stamp, "saved fact is findable in history", budget=150)
     assert stamp in listed, f"search_history did not return the save: {listed[:300]}"
