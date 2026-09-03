@@ -114,7 +114,9 @@ def test_the_mcp_server_is_wired_to_user_config_not_a_baked_in_key():
 
 
 def test_every_advertised_command_exists():
-    for name in ("recall", "curate", "heal", "onboard"):
+    # /heal left the bundle 2026-09-04: curation, consolidation and heal are
+    # the service's; the plugin ships the three commands the README names.
+    for name in ("recall", "curate", "onboard"):
         assert (REPO / "commands" / f"{name}.md").is_file(), (
             f"/{name} is advertised in the README but commands/{name}.md is "
             f"not in the bundle")
