@@ -502,14 +502,15 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     assert "not saved" not in gen.lower(), (
         f"save_general_rule was refused: {gen[:300]}")
 
-    # 4. CHECK the curated data landed and is READABLE
-    listed = _wait_for(a.list_memory, "canary", "saved record is browsable")
-    import re as _re
-    ids = _re.findall(r"([a-z0-9_]*canary[a-z0-9_]*)", listed.lower())
-    assert ids, f"no record id found in list_memory output: {listed[:300]}"
-    rid = ids[0]
-    full = a.get(rid)
-    assert stamp in full, f"get_memory did not return the record body: {full[:300]}"
+    # 4. CHECK the save LANDED and is FINDABLE. A save is history, not a
+    # record (2026-09-03): save_project puts the text into the project's
+    # archive at once and the Brain's curator decides whether a record is
+    # kept — a test canary is judged noise, by design. So the proof is the
+    # history door: the stamp comes back from search_history once the
+    # archive row is embedded (within a minute).
+    listed = _wait_for(lambda: a.search_history(f"lifecycle canary {stamp}"),
+                       stamp, "saved fact is findable in history", budget=150)
+    assert stamp in listed, f"search_history did not return the save: {listed[:300]}"
 
     # 5. CHECK the project's own law is listed and reaches this project
     rules = _wait_for(a.list_rules, "disposable", "project rule is listed")
@@ -521,9 +522,9 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
     rules = _wait_for(a.list_rules, f"conformance run {stamp}",
                       "general rule reaches the project")
 
-    # 6. SEARCH finds it; history search and graph and context all answer
-    assert "canary" in _wait_for(lambda: a.search("lifecycle canary"),
-                                 "canary", "search finds the record").lower()
+    # 6. SEARCH answers (records may be empty — the curator decides those);
+    # history search, graph and context all answer
+    assert "error" not in a.search("lifecycle canary").lower()
     for label, out in (("search_history", a.search_history("lifecycle")),
                        ("graph", a.graph("conformance")),
                        ("session_context", a.context())):
