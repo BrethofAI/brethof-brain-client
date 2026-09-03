@@ -54,7 +54,7 @@ def install_hooks() -> None:
     hooks = data.setdefault("hooks", {})
     ours = {
         "SessionStart": _hook("SessionStart", "session-start"),
-        "UserPromptSubmit": _hook("UserPromptSubmit", "prompt-submit", "1"),
+        "UserPromptSubmit": _hook("UserPromptSubmit", "prompt-submit"),
         "Stop": _hook("Stop", "stop"),
     }
     for event, entry in ours.items():

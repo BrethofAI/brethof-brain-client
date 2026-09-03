@@ -55,7 +55,7 @@ def main() -> int:
 
     hooks = settings.setdefault("hooks", {})
     ours = {"SessionStart": _hook("session-start"),
-            "UserPromptSubmit": _hook("prompt-submit", "1"),
+            "UserPromptSubmit": _hook("prompt-submit"),
             "Stop": _hook("stop", timeout_ms=30000)}
     for event, entry in ours.items():
         existing = hooks.setdefault(event, [])
