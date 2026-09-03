@@ -550,7 +550,12 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
         f"cannot delete its own law poisons every later run: {rules[:400]}")
     assert "deleted" in a.delete("rules", gen_id).lower(), \
         f"general rule {gen_id} could not be deleted"
-    assert "deleted" in a.delete(project, rid).lower(), "record delete failed"
+    # No record was written by hand (a save is history now), so the record
+    # delete door is proven on its refusal path: a missing id answers "no
+    # record", plainly, not an error and not a false "deleted".
+    gone = a.delete(project, "no_such_record_ever").lower()
+    assert "no record" in gone or "nothing deleted" in gone, \
+        f"delete_record did not answer plainly for a missing id: {gone[:200]}"
     # This project's own law goes too — including the PURPOSE rule add_project
     # seeded. Since 2026-08-12 no agent verb deletes the project itself, so
     # per-record cleanup here is the WHOLE cleanup: anything left is permanent
