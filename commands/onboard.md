@@ -1,58 +1,54 @@
 ---
-description: First-run setup — explain brethof-brain, then build your memory (projects, rules, index) with you
+description: First-run setup — explain brethof-brain in a few lines, then build your memory (projects, purposes, rules, folder mapping) with you
 ---
-You are onboarding a new user to **brethof-brain cloud** (their shared agent
-memory). Their tenant starts empty; your job is to TEACH the system and build
-their PERSONAL layer WITH them, using the memory tools. Be conversational and
-concrete — a guided setup, not a lecture. There is nothing to install and no
-local database — the tenant lives on the server; you write to it with the tools.
+You are onboarding a new user to **brethof-brain**, their persistent memory.
+Their memory starts empty; your job is to explain the little that matters and
+build their first projects WITH them, using the memory tools. Conversational
+and concrete — a guided setup, not a lecture. Wait for answers.
 
 ## 0. Sense the state
-Try `get_record global:memory_index` and `list_brain global`. If empty, this is
-a fresh tenant — proceed. If they already have projects/records, treat this as a
-re-tune: confirm before overwriting anything.
+`list_projects` and `session_context`. Empty → a fresh memory, proceed. Projects
+already there → treat this as a re-tune: confirm before changing anything.
 
 ## 1. Explain what this is (a few lines, not a wall)
-- A memory that survives across sessions and is SHARED across your agents: a
-  curated brain you look things up in, plus an immutable archive of every
-  conversation (`*_chat`).
-- **Tiered indexes**: one GENERAL index (the router) + one index PER PROJECT.
-  You never load everything — you follow the indexes to what you need.
-- **Tables**: one curated table per project; `*_chat` (immutable transcript
-  archive); `rules` (conventions loaded every session); `state` (one status row
-  per area).
-- **The discipline**: delete what's superseded (no "obsolete" flag), `*_chat` is
-  sacred, update-don't-fork. `/curate` at the end of a session saves + prunes.
+- Memory that survives across sessions and machines. At every session start you
+  are handed the standing rules, each project's purpose, the last sessions'
+  handover notes; on every prompt, the records that bear on it arrive before
+  you answer. You do not have to search — but you can (`/recall`).
+- Everything said is archived and searchable. What is worth keeping becomes a
+  **record** — the service's curator decides that from what is said; you never
+  write records by hand.
+- **Four doors**, nothing else writes: `save_project` / `save_general` (a fact,
+  a decision, a measurement — into history at once; the curator keeps a record
+  if a future session must be handed it); `save_note` (where your work stands,
+  for whoever picks the project up); `save_playbook` (how a thing is done);
+  `save_rule` (a standing convention every session must follow).
+- Memory is organised by **project** — one per codebase, product or long-running
+  topic — and each project's one-line **purpose** teaches its curator what
+  matters there.
 Invite a question, then move on.
 
-## 2. Interview (one topic at a time — keep it short; WAIT for answers)
-1. **Projects** — which codebases/areas do you work in, and where do they live
-   (absolute path or a distinctive substring)? Each becomes a project key (its
-   own memory table).
-2. **What to remember** — for each project, what should the agent reliably
-   recall next time (decisions, conventions, gotchas, where things live)?
-3. **Hard rules** — any conventions to enforce every time (cross-cutting →
-   `area='all'`; project-specific → that project's area)? Imperative and short.
+## 2. Interview (one topic at a time; keep it short)
+1. **Projects** — which codebases or areas do they work in, and where do they
+   live (an absolute path, or a distinctive substring)?
+2. **Purpose** — for each: one or two sentences, what it IS and what should be
+   remembered there.
+3. **Rules** — conventions to enforce every time. Cross-cutting → a general
+   rule; one project's own → that project's rule. Imperative and short.
 
-## 3. Write their memory (confirm the plan first, then do it — all via tools)
-- **Per-project index** — for each project, `save_memory` a `<key>:memory_index`
-  record (memory_type `reference`) with a short "what's here / where to look"
-  stub they can grow. The first write auto-creates the project's table.
-- **General index** — `save_memory` `global:memory_index`: a lean router listing
-  their projects + a one-line pointer to each project index.
-- **Their rules** — `save_memory` each into the `rules` table (project = `rules`,
-  correct `area`). Imperative, no hedge.
-- **state** — optionally seed a `state:<area>` row per active project with a
-  one-line status.
+## 3. Write it (confirm the plan first, then do it — all through the tools)
+- `add_project(project, purpose, rules)` for each project — the purpose is what
+  teaches the Brain from day one. Project keys match `[a-z][a-z0-9_]{0,15}`.
+- `save_rule` for each convention; it asks where the rule must live — answer
+  honestly (every project, this project, or knowledge).
 
-## 4. Configure the client's project mapping
-So each working directory uses the right project, tell them to map directories to
-project keys — set `default_project` (or a `projects` list of `{path, key}`) in
-`~/.brethof-brain/config.json`, or per-session via `$BRETHOF_BRAIN_PROJECT`. Without
-a mapping everything goes to `global`.
+## 4. Map folders to projects
+So each working directory uses the right project: set `default_project`, or a
+`projects` list of `{path, key}`, in `~/.brethof-brain/config.json` — or
+`$BRETHOF_BRAIN_PROJECT` for one session. Without a mapping, work files under
+`global`.
 
 ## 5. Close
-Summarise what you wrote (projects, index, rules, mapping). From now on, end
-sessions with `/curate` and run `/heal` about weekly. Rules while onboarding:
-don't invent projects or rules they didn't ask for; confirm before overwriting an
-existing index; never touch `*_chat`.
+Summarise what you created. From now on: say what you learn and decide — the
+memory listens; before a session ends, `save_note` where things stand. Never
+invent projects or rules they did not ask for.

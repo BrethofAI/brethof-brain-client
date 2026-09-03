@@ -17,7 +17,7 @@ Every hook is fail-open: if the Brain is unreachable, Droid just runs.
 ## Install
 
 1. ```bash
-   pip install brethof-brain-client
+   pip install git+https://github.com/BrethofAI/brethof-brain-client.git
    ```
 
 2. Copy `hooks.json.example` into `~/.factory/hooks.json` (all projects)

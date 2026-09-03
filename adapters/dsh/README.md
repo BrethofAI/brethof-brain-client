@@ -62,9 +62,9 @@ Optional row config (all default from `~/.brethof-brain/config.json`):
 
 ## Notes
 
-- Proven by the harness rig on dsh 0.1.1-rc.2 (fresh container, newest
+- Proven by the harness rig on dsh 0.1.1-rc.2 (fresh virtual machine, newest
   release, judged server-side by the Brain itself).
-- dsh is a developer preview and its APIs move; the weekly rig run is what
+- dsh is a developer preview and its APIs move; the rig run is what
   catches drift.
 - The archive index is per-session and the server UPSERTs on
   `(session_id, index, text)` — replays are idempotent; transient outages

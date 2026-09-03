@@ -11,7 +11,7 @@ Contains no secrets: your API key lives in ``~/.brethof-brain/config.json`` (or
 ``$BRETHOF_BRAIN_API_KEY``), never in this code.
 """
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:8610"
 USER_AGENT = f"brethof-brain-client/{__version__}"

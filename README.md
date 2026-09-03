@@ -1,7 +1,7 @@
 # brethof-brain client
 
-Thin client for **[brethof-brain](https://brethof.cloud)** — shared long-term
-memory for your AI coding agents. It gives your agents persistent, searchable
+Thin client for **[brethof-brain](https://brethof.ai/brain/)** — persistent
+memory for your AI agents. It gives your agents persistent, searchable
 memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
 
@@ -11,7 +11,7 @@ supported means the complete ambient loop (session brief, per-prompt
 recall, automatic archiving), proven by our test rig against the real
 platform. Any MCP-compatible client can additionally use the memory tools
 on demand — that is a toolbox, not the ambient loop. Every supported
-platform is re-verified against its newest release in a fresh container,
+platform is re-verified against its newest release on a fresh virtual machine,
 with the results judged server-side — a version bump that breaks an
 integration is caught by us, not by you.
 
@@ -23,9 +23,13 @@ only:
 
 1. forwards agent **hook events** to the service over HTTPS, and pastes back
    the memory it returns, and
-2. wires the **remote MCP** endpoint so the memory tools
-   (`search_memory`, `search_history`, `save_project`, `save_rule`,
-   `get_memory`, …) are available on demand.
+2. wires the **MCP** endpoint so the memory tools are available on demand —
+   search (`search_brain`, `search_history`, `get_record`, `graph`) and the
+   four doors that write: `save_project` / `save_general` (a fact into the
+   project's history; the service's curator decides whether it becomes a
+   record — nothing writes records by hand), `save_note` (your session's
+   handover), `save_playbook` (a procedure), `save_rule` (a standing
+   convention), plus `add_project` with a one-line purpose.
 
 It has **no third-party dependencies** — pure Python standard library, so it
 runs anywhere Python 3.9+ does.
@@ -42,7 +46,6 @@ runs anywhere Python 3.9+ does.
 | **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`) |
 | **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`) |
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
-| **GLM coding plan** (Z.ai) | none needed | Their tooling runs Claude Code against api.z.ai — the Claude Code plugin works as-is |
 | **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
 
 Each adapter has its own README with install instructions. The table above
@@ -52,7 +55,7 @@ proves against the live platform, nothing more.
 ### Claude Code (recommended)
 
 The plugin bundles this client, wires the hooks + the memory tools, and adds
-the `/recall` `/curate` `/heal` `/onboard` commands — no `pip install` needed,
+the `/recall` `/curate` `/onboard` commands — no `pip install` needed,
 only Python 3.9+ on your PATH.
 
 ```
@@ -65,8 +68,10 @@ You'll be prompted for your **API key** (from
 it as plugin config (sensitive values go to your OS keychain where available)
 and passes it to the hooks via the environment — never on a command line.
 Restart Claude Code and memory is live. Commands are namespaced:
-`/brethof-brain:recall`, `/brethof-brain:curate`, `/brethof-brain:heal`,
-`/brethof-brain:onboard`.
+`/brethof-brain:recall`, `/brethof-brain:curate`, `/brethof-brain:onboard`.
+`/curate` closes a session: it files what was found and leaves the handover
+note. Curation, consolidation and healing of the memory itself are the
+service's work — there is nothing weekly for you to run.
 
 ### OpenClaw
 
@@ -76,12 +81,13 @@ one config opt-in (`hooks.allowConversationAccess` — OpenClaw gates
 conversation content for non-bundled plugins).
 
 ```bash
-openclaw plugins install --accept-capabilities brethof-brain-openclaw
+openclaw plugins install --force --accept-capabilities brethof-brain-openclaw
 ```
 
 (OpenClaw 2026.8.2+ asks you to accept the plugin's declared
 `allowConversationAccess` capability at install — archival reads the
-conversation; that is the product.)
+conversation; that is the product — and `--force` because the package is
+outside ClawHub review: you are the review.)
 
 See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
 
@@ -104,18 +110,18 @@ moment Codex fires hooks in headless mode. See
 A request-only overlay on Cline's `beforeModel` / `afterRun` extension
 points — session brief and ambient recall ride into each request without
 touching your stored conversation, and every finished run is archived.
-Install: `cline plugin install brethof-brain-cline`. See
+Install: `cline plugin install npm:brethof-brain-cline` (a bare name would
+look in Cline's official registry, not npm). See
 [`adapters/cline/README.md`](adapters/cline/README.md).
 
 ### OpenCode & Kilo Code
 
 One native plugin covers both: the session brief and per-prompt recall are
 appended as persisted synthetic message parts, and `session.idle` archives
-the turns. Add the npm package to `opencode.json` —
-`{ "plugin": ["brethof-brain-opencode"] }` — or drop
-`adapters/opencode/lib/index.js` into `~/.config/opencode/plugins/`
+the turns. Drop the plugin file into `~/.config/opencode/plugins/`
 (OpenCode) or `~/.config/kilo/plugin/` (Kilo — CLI, VS Code and JetBrains
-alike). See [`adapters/opencode/README.md`](adapters/opencode/README.md).
+alike): from this repo, `adapters/opencode/lib/index.js`, or from npm —
+`npm pack brethof-brain-opencode` and take `package/lib/index.js`. See [`adapters/opencode/README.md`](adapters/opencode/README.md).
 
 ### Other editors and MCP clients
 

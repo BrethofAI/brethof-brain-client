@@ -16,7 +16,7 @@ they extend it.
 
 ## Install
 
-1. `pip install brethof-brain-client` (or run from a checkout — the hook
+1. `pip install git+https://github.com/BrethofAI/brethof-brain-client.git` (or run from a checkout — the hook
    bootstraps its own `sys.path`).
 
 2. Merge into `~/.junie/config.json` (timeouts in seconds; Junie defaults

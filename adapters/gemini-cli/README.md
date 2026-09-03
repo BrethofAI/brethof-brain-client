@@ -17,7 +17,7 @@ runs without memory.
 
 1. Get the client next to the hook (either works):
    ```bash
-   pip install brethof-brain-client
+   pip install git+https://github.com/BrethofAI/brethof-brain-client.git
    ```
    or run straight from a checkout of this repo — the hook bootstraps its
    own `sys.path`.

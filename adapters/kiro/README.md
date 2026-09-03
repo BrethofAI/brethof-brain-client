@@ -17,7 +17,7 @@ Every hook is fail-open.
 
 ## Install (Kiro CLI — agent config format)
 
-1. `pip install brethof-brain-client` (or run from a checkout).
+1. `pip install git+https://github.com/BrethofAI/brethof-brain-client.git` (or run from a checkout).
 
 2. Add to your Kiro agent config's `hooks` object:
 
