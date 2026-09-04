@@ -1,0 +1,9 @@
+name: brethof-brain
+version: 1.0.0
+description: "brethof-brain memory for Hermes Agent — a MemoryProvider: your brain's briefing in the system prompt at session start, ambient recall on every turn, every turn archived. Activate with `memory.provider: brethof-brain`; the explicit memory tools come from Hermes's own MCP client pointed at the same endpoint."
+author: "Brethof AI <hello@brethof.ai>"
+kind: standalone
+platforms:
+  - linux
+  - macos
+  - windows
