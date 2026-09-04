@@ -22,7 +22,9 @@ local path: `--force` because the source is outside ClawHub review (you
 are the review — you have the source in front of you), and
 `--accept-capabilities` because this plugin declares
 `allowConversationAccess` (archival reads the conversation; that is the
-product). On older OpenClaw the flags are accepted and ignored.
+product). OpenClaw before 2026.8 (e.g. 2026.7.1) does not know
+`--accept-capabilities` and refuses the command — drop that flag there and
+keep `--force`.
 
 Configure (optional) in `openclaw.json` — env vars work too
 (`BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`; for a
