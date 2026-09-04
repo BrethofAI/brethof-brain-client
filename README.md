@@ -5,7 +5,7 @@ memory for your AI agents. It gives your agents persistent, searchable
 memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
 
-Fully supported: **Claude Code**, **Codex**, **Qwen Code**, **OpenClaw**,
+Fully supported: **Claude Code**, **Codex**, **Qwen Code**, **OpenClaw**, **Hermes Agent**,
 **DeepSeek Harness (dsh)**, **Cline**, **OpenCode**, and **Kilo Code** —
 supported means the complete ambient loop (session brief, per-prompt
 recall, automatic archiving), proven by our test rig against the real
@@ -43,6 +43,7 @@ runs anywhere Python 3.9+ does.
 | **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
 | **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | Full: hooks (inject + recall) + archival via `notify` + MCP tools. One manual step: codex requires you to trust new hooks once — run `/hooks` and trust the brethof-brain entries |
 | **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival (npm: `brethof-brain-openclaw`) |
+| **Hermes Agent** (Nous Research) | [`adapters/hermes/`](adapters/hermes/) | Full: a Hermes MemoryProvider — brief in the system prompt, ambient recall every turn, every turn archived; memory tools via Hermes's native MCP client (`hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes`) |
 | **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`) |
 | **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`) |
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
@@ -90,6 +91,26 @@ conversation; that is the product — and `--force` because the package is
 outside ClawHub review: you are the review.)
 
 See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md).
+
+### Hermes Agent
+
+brethof-brain is a Hermes **memory provider** — the one plugin type Hermes
+selects for memory. Two commands, then your key:
+
+```bash
+hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes --no-enable
+hermes config set memory.provider brethof-brain
+```
+
+```
+# ~/.hermes/.env
+BRETHOF_BRAIN_API_KEY=bmv2_...
+BRETHOF_BRAIN_PROJECT=my-agent
+```
+
+Restart Hermes; `hermes memory status` shows `brethof-brain` active. For the
+memory tools on demand, add the Brain's MCP server to `mcp_servers` in
+`~/.hermes/config.yaml`. See [`adapters/hermes/README.md`](adapters/hermes/README.md).
 
 ### Qwen Code
 
