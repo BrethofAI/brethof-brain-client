@@ -43,7 +43,7 @@ runs anywhere Python 3.9+ does.
 | **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
 | **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | Full: hooks (inject + recall) + archival via `notify` + MCP tools. One manual step: codex requires you to trust new hooks once — run `/hooks` and trust the brethof-brain entries |
 | **OpenClaw** (gateway) | [`adapters/openclaw-gateway/`](adapters/openclaw-gateway/) | Full: native plugin — injection, ambient recall, archival (npm: `brethof-brain-openclaw`) |
-| **Hermes Agent** (Nous Research) | [`adapters/hermes/`](adapters/hermes/) | Full: a Hermes MemoryProvider — brief in the system prompt, ambient recall every turn, every turn archived; memory tools via Hermes's native MCP client (`hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes`) |
+| **Hermes Agent** (Nous Research) | [`adapters/hermes/`](adapters/hermes/) | Full: a Hermes MemoryProvider — brief in the system prompt, ambient recall every turn, every turn archived; memory tools via Hermes's native MCP client (`hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes`). Proven on Linux and on Windows through Hermes's native installer |
 | **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`) |
 | **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`) |
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
@@ -95,7 +95,9 @@ See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md)
 ### Hermes Agent
 
 brethof-brain is a Hermes **memory provider** — the one plugin type Hermes
-selects for memory. Two commands, then your key:
+selects for memory. Works wherever Hermes runs: Linux, macOS, and Windows on
+either of Hermes's two paths (the native PowerShell installer, or WSL2). Two
+commands, then your key:
 
 ```bash
 hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes --no-enable
