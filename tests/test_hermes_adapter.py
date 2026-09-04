@@ -156,7 +156,7 @@ def test_register_hands_the_provider_to_hermes(provider_module):
 
 
 def test_manifest_and_skills_ship_together():
-    import yaml  # the client's test env carries pyyaml? fall back to a text check
+    # a text check, never a YAML parse: CI installs only pytest and the client (no pyyaml)
     d = ROOT / "adapters" / "hermes"
     text = (d / "plugin.yaml").read_text()
     assert "name: brethof-brain" in text
