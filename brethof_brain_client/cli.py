@@ -66,12 +66,19 @@ PROVIDER_BLOCK = f"""{_MD_BEGIN}
 
 Long-term memory on this machine is the BRAIN (the `brain` MCP server).
 It is shared across sessions, projects and agents, curated automatically,
-and survives every restart, reboot and compact.
+and survives every restart, reboot and compact. The session-start and
+prompt hooks put the rules, each project's purpose, the last sessions'
+notes and the matching records in front of you — if that block is
+missing, the memory stack is broken; fix it first.
 
-- To remember something: save it to the Brain (`save_project` /
-  `save_general`) — it files within a minute.
-- To recall: search the Brain (`search_brain`, `list_brain`) BEFORE
-  saying you don't remember something.
+- Four doors, nothing else writes: `save_project` / `save_general` (a
+  fact, a decision, a measurement — the Brain decides what becomes a
+  record), `save_note` (where your work stands, before you stop),
+  `save_playbook` (how a thing is done), `save_rule` (a standing
+  convention). Unsure: save it.
+- To recall: `search_brain` first (the current truth), then
+  `search_history` (everything said, raw), `get_record`, `graph` — BEFORE
+  saying you don't remember something, and before diagnosing anything.
 - Do NOT keep long-term memory in local files (CLAUDE.md, MEMORY.md,
   notes): files are per-machine and unsearchable — a fact filed there is
   invisible to every other session and agent. Files are for code and

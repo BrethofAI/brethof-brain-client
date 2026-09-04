@@ -1,7 +1,7 @@
 {
   "name": "brethof-brain",
   "displayName": "brethof-brain",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and the full memory toolset on demand — on your own memory container, local or hosted.",
   "author": {
     "name": "Brethof AI",
