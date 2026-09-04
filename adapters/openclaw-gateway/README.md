@@ -25,7 +25,10 @@ are the review — you have the source in front of you), and
 product). On older OpenClaw the flags are accepted and ignored.
 
 Configure (optional) in `openclaw.json` — env vars work too
-(`BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`):
+(`BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`; for a
+hosted memory also `BRETHOF_BRAIN_UNLOCK_PASSPHRASE` — the plugin unlocks the
+memory itself after it has locked on idle — and `BRETHOF_BRAIN_LOCK_AFTER_MINUTES`,
+5-60; the plugin config accepts `unlockPassphrase` / `lockAfterMinutes` too):
 
 ```json5
 {

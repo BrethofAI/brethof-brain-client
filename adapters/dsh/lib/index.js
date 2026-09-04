@@ -54,6 +54,10 @@ export function apply(ctx, config = {}) {
   const apiKey = config.apiKey || process.env.BRETHOF_BRAIN_API_KEY || f.api_key || ''
   const project = config.project || process.env.BRETHOF_BRAIN_PROJECT
     || f.default_project || 'global'
+  const unlockPassphrase = config.unlockPassphrase
+    || process.env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE || f.unlock_passphrase || ''
+  const lockAfterMinutes = parseInt(config.lockAfterMinutes
+    || process.env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES || f.lock_after_minutes || 0, 10) || 0
   if (!apiKey) {
     ctx.logger?.warn?.('brethof-brain: no API key (config, env, or '
       + '~/.brethof-brain/config.json) — memory disabled for this run')
@@ -71,7 +75,26 @@ export function apply(ctx, config = {}) {
     return s
   }
 
-  async function call(path, body, timeoutMs) {
+  // A HOSTED memory locks itself after idle minutes and answers 423 until
+  // the passphrase opens it again (the Python client has done this since
+  // 08-30; the JS adapters did not — found 2026-09-04). Unauthenticated —
+  // the passphrase IS the authentication — then the call retried ONCE.
+  async function unlock() {
+    if (!unlockPassphrase) return false
+    const body = { passphrase: unlockPassphrase }
+    if (lockAfterMinutes) body.idle_seconds = lockAfterMinutes * 60
+    try {
+      const res = await fetch(endpoint + '/unlock', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), signal: AbortSignal.timeout(90_000),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
+  async function call(path, body, timeoutMs, retried = false) {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
@@ -82,6 +105,9 @@ export function apply(ctx, config = {}) {
         body: JSON.stringify(body),
         signal: ctrl.signal,
       })
+      if (res.status === 423 && !retried && await unlock()) {
+        return call(path, body, timeoutMs, true)
+      }
       if (!res.ok) return null
       return await res.json()
     } catch {

@@ -13,7 +13,8 @@
  */
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
-type Cfg = { endpoint: string; apiKey: string; project: string };
+type Cfg = { endpoint: string; apiKey: string; project: string;
+             unlockPassphrase: string; lockAfterMinutes: number };
 
 function cfgFrom(pluginConfig: any): Cfg {
   const env = (globalThis as any).process?.env ?? {};
@@ -22,10 +23,35 @@ function cfgFrom(pluginConfig: any): Cfg {
                "http://127.0.0.1:8610").replace(/\/+$/, ""),
     apiKey: pluginConfig?.apiKey || env.BRETHOF_BRAIN_API_KEY || "",
     project: pluginConfig?.project || env.BRETHOF_BRAIN_PROJECT || "openclaw",
+    unlockPassphrase: pluginConfig?.unlockPassphrase ||
+                      env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE || "",
+    lockAfterMinutes: parseInt(pluginConfig?.lockAfterMinutes ||
+                               env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES || "0", 10) || 0,
   };
 }
 
-async function hookPost(cfg: Cfg, path: string, body: object): Promise<any> {
+// A HOSTED memory locks itself after idle minutes and answers 423 until the
+// passphrase opens it again (the Python client has done this since 08-30;
+// the JS adapters did not — found 2026-09-04 provisioning the marketing
+// agent). Unauthenticated: the passphrase IS the authentication. Then the
+// original call is retried ONCE. Unset passphrase: reported, never opened.
+async function unlock(cfg: Cfg): Promise<boolean> {
+  if (!cfg.unlockPassphrase) return false;
+  const body: any = { passphrase: cfg.unlockPassphrase };
+  if (cfg.lockAfterMinutes) body.idle_seconds = cfg.lockAfterMinutes * 60;
+  try {
+    const r = await fetch(cfg.endpoint + "/unlock", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(90000),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function hookPost(cfg: Cfg, path: string, body: object,
+                        retried = false): Promise<any> {
   const r = await fetch(cfg.endpoint + path, {
     method: "POST",
     headers: {
@@ -35,6 +61,9 @@ async function hookPost(cfg: Cfg, path: string, body: object): Promise<any> {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(9000),
   });
+  if (r.status === 423 && !retried && (await unlock(cfg))) {
+    return hookPost(cfg, path, body, true);
+  }
   if (!r.ok) throw new Error(`${path} -> ${r.status}`);
   return r.json();
 }

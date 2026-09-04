@@ -1,6 +1,6 @@
 {
   "name": "brethof-brain-openclaw",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
   "description": "brethof-brain cloud memory plugin for the OpenClaw gateway",
   "license": "MIT",

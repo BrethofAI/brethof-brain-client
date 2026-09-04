@@ -54,6 +54,10 @@ function config() {
       || 'http://127.0.0.1:8610').replace(/\/+$/, ''),
     apiKey: process.env.BRETHOF_BRAIN_API_KEY || f.api_key || '',
     project: process.env.BRETHOF_BRAIN_PROJECT || f.default_project || 'global',
+    unlockPassphrase: process.env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE
+      || f.unlock_passphrase || '',
+    lockAfterMinutes: parseInt(process.env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES
+      || f.lock_after_minutes || 0, 10) || 0,
   }
   if (!_cfg.apiKey) {
     console.warn('brethof-brain: no API key (env or ~/.brethof-brain/'
@@ -62,7 +66,32 @@ function config() {
   return _cfg
 }
 
-async function call(path, body, timeoutMs) {
+
+// A HOSTED memory locks itself after idle minutes (the customer's own
+// policy) and answers 423 until the passphrase opens it again. The Python
+// client has presented it automatically since 08-30; the JS adapters did
+// not, so a hosted customer on this harness lost memory after the first
+// idle stretch (found 2026-09-04 provisioning OpenClaw). Same contract:
+// POST <endpoint>/unlock {passphrase, idle_seconds?}, unauthenticated —
+// the passphrase IS the authentication — then the original call retried
+// ONCE. Unset passphrase: a locked memory is reported, never opened.
+async function unlock() {
+  const { endpoint, unlockPassphrase, lockAfterMinutes } = config()
+  if (!unlockPassphrase) return false
+  const body = { passphrase: unlockPassphrase }
+  if (lockAfterMinutes) body.idle_seconds = lockAfterMinutes * 60
+  try {
+    const res = await fetch(endpoint + '/unlock', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(90_000),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function call(path, body, timeoutMs, retried = false) {
   const { endpoint, apiKey } = config()
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -74,6 +103,9 @@ async function call(path, body, timeoutMs) {
       body: JSON.stringify(body),
       signal: ctrl.signal,
     })
+    if (res.status === 423 && !retried && await unlock()) {
+      return call(path, body, timeoutMs, true)
+    }
     if (!res.ok) return null
     return await res.json()
   } catch {

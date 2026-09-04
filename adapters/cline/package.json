@@ -1,6 +1,6 @@
 {
   "name": "brethof-brain-cline",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "brethof-brain cloud memory for Cline \u2014 session brief, ambient recall and full-session archive as a native Cline SDK plugin.",
   "license": "MIT",
   "type": "module",

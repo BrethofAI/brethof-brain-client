@@ -1,6 +1,6 @@
 {
   "name": "brethof-brain-opencode",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "brethof-brain cloud memory for OpenCode and Kilo Code \u2014 session brief, ambient recall and full-session archive as a native plugin.",
   "license": "MIT",
   "type": "module",

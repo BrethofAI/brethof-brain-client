@@ -4,10 +4,28 @@ function cfgFrom(pluginConfig) {
   return {
     endpoint: (pluginConfig?.endpoint || env.BRETHOF_BRAIN_ENDPOINT || "http://127.0.0.1:8610").replace(/\/+$/, ""),
     apiKey: pluginConfig?.apiKey || env.BRETHOF_BRAIN_API_KEY || "",
-    project: pluginConfig?.project || env.BRETHOF_BRAIN_PROJECT || "openclaw"
+    project: pluginConfig?.project || env.BRETHOF_BRAIN_PROJECT || "openclaw",
+    unlockPassphrase: pluginConfig?.unlockPassphrase || env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE || "",
+    lockAfterMinutes: parseInt(pluginConfig?.lockAfterMinutes || env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES || "0", 10) || 0
   };
 }
-async function hookPost(cfg, path, body) {
+async function unlock(cfg) {
+  if (!cfg.unlockPassphrase) return false;
+  const body = { passphrase: cfg.unlockPassphrase };
+  if (cfg.lockAfterMinutes) body.idle_seconds = cfg.lockAfterMinutes * 60;
+  try {
+    const r = await fetch(cfg.endpoint + "/unlock", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(9e4)
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+async function hookPost(cfg, path, body, retried = false) {
   const r = await fetch(cfg.endpoint + path, {
     method: "POST",
     headers: {
@@ -17,6 +35,9 @@ async function hookPost(cfg, path, body) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(9e3)
   });
+  if (r.status === 423 && !retried && await unlock(cfg)) {
+    return hookPost(cfg, path, body, true);
+  }
   if (!r.ok) throw new Error(`${path} -> ${r.status}`);
   return r.json();
 }

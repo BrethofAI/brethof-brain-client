@@ -50,6 +50,9 @@ and TUI — they are all clients of the same core.
 ```
 
 Environment variables override the file: `BRETHOF_BRAIN_API_KEY`,
-`BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`.
+`BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`. Hosted memory: add
+`BRETHOF_BRAIN_UNLOCK_PASSPHRASE` (or `unlock_passphrase` in the config file)
+and the plugin unlocks your memory itself when it has locked after idle;
+`BRETHOF_BRAIN_LOCK_AFTER_MINUTES` sets that idle time (5-60).
 
 Get a key at [brethof.ai/account](https://brethof.ai/account/).
