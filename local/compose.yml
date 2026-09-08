@@ -125,6 +125,7 @@ services:
       # where curated records reach our hub (never chat history).
       BRAIN_HEAL_MODE: ${BRAIN_HEAL_MODE:-agent}
       BRAIN_HEAL_CONSENT: ${BRAIN_HEAL_CONSENT:-}
+      BRAIN_GRAPH_MODE: ${BRAIN_GRAPH_MODE:-off}
     volumes:
       - ${BRAIN_KEY_DIR:-./keys}:/keys:ro
     # PODMAN + systemd-resolved ONLY. On a custom network podman resolves
