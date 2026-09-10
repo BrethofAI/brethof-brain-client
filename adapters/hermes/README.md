@@ -58,7 +58,7 @@ mcp_servers:
 
 ## Skills (optional)
 
-`skills/` carries `recall`, `onboard` and `curate` — the same three the Claude
+`skills/` carries the three skills /recall, /onboard and /curate — the same three the Claude
 Code plugin ships as commands. Copy them into your skills tree to make them
 visible to the agent:
 
