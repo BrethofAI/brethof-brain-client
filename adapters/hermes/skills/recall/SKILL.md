@@ -15,13 +15,13 @@ Find what is already known before assuming or asking. Recall is unlimited.
 The tools come from the brethof-brain MCP server configured in Hermes.
 
 1. **Start with `search_brain`** — hybrid search (vector + keyword, fused and
-   ranked) over the curated memory AND the conversation archive in one list.
+   ranked) over the curated memory AND the conversation archive in one list;
+   with the graph add-on, the history of decisions (what was decided, tried,
+   rejected or dropped, each dated with its reason) follows under the results.
 2. Follow the lanes where that list points:
    - **`search_history`** — the archive alone: past sessions in full, for
      what was said rather than what was kept.
    - **`get_record`** — the whole record behind a truncated preview.
-   - **`graph`** — what the memory links together around a name: kinds,
-     relations, what superseded what (superseded = a dead end).
    - **`get_playbook`** — a procedure, when the answer is "how it is done".
 3. Synthesize ONE grounded answer. Cite the record ids you used. Note dates
    and flag anything that looks stale. If the memory does not hold it, say so

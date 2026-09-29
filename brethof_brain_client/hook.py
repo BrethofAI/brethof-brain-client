@@ -143,7 +143,33 @@ RESUME_CHECK = (
     "memoryless in silence.")
 
 
+def _claude_block(inp: dict) -> None:
+    """THE MANAGED BLOCK FOR EVERY CLAUDE CODE INSTALL (2026-09-29). Claude
+    Code ships its own file memory (auto memory, on by default) and files
+    "remember X" there; the rig measured it (claude-code-mem@lin): without our
+    block in ~/.claude/CLAUDE.md all four facts went to Claude Code's local
+    MEMORY.md and the Brain kept one; with it, none went local and the Brain
+    kept all four. Only `install-hooks` wrote the block, so the plugin install
+    — the common one — lacked it. The session-start hook now writes it too,
+    idempotently, only under Claude Code; BRETHOF_BRAIN_NO_CLAUDE_MD=1 opts
+    out. Never the session's failure: said on stderr and moved on."""
+    if os.environ.get("BRETHOF_BRAIN_NO_CLAUDE_MD") == "1":
+        return
+    under_claude = (os.environ.get("CLAUDE_PLUGIN_ROOT") or os.environ.get("CLAUDECODE")
+                    or "/.claude/" in str(inp.get("transcript_path") or "").replace("\\", "/"))
+    if not under_claude:
+        return
+    try:
+        from .cli import _install_provider_block
+        got = _install_provider_block()
+        if got.startswith("FAILED"):
+            print(f"brethof-brain: the memory-provider block could not be written: {got}", file=sys.stderr)
+    except Exception as e:                                   # noqa: BLE001
+        print(f"brethof-brain: the memory-provider block: {type(e).__name__}: {e}", file=sys.stderr)
+
+
 def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    _claude_block(inp)
     # Claude Code caps EACH hook's output at 10k chars, so the payload is
     # delivered as budgeted parts — settings registers this event once per
     # part ("session-start 1", "session-start 2"). No part argument = the

@@ -24,7 +24,7 @@ only:
 1. forwards agent **hook events** to the service over HTTPS, and pastes back
    the memory it returns, and
 2. wires the **MCP** endpoint so the memory tools are available on demand —
-   search (`search_brain`, `search_history`, `get_record`, `graph`) and the
+   search (`search_brain`, `search_history`, `get_record`) and the
    four doors that write: `save_project` / `save_general` (a fact into the
    project's history; the service's curator decides whether it becomes a
    record — nothing writes records by hand), `save_note` (your session's

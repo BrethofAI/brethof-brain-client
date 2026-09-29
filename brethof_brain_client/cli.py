@@ -76,13 +76,15 @@ missing, the memory stack is broken; fix it first.
   record), `save_note` (where your work stands, before you stop),
   `save_playbook` (how a thing is done), `save_rule` (a standing
   convention). Unsure: save it.
-- To recall: `search_brain` first (the current truth), then
-  `search_history` (everything said, raw), `get_record`, `graph` — BEFORE
-  saying you don't remember something, and before diagnosing anything.
+- To recall: `search_brain` first (the current truth, with the history
+  of decisions under it), then `search_history` (everything said, raw),
+  `get_record` — BEFORE saying you don't remember something, and before
+  diagnosing anything.
 - Do NOT keep long-term memory in local files (CLAUDE.md, MEMORY.md,
-  notes): files are per-machine and unsearchable — a fact filed there is
-  invisible to every other session and agent. Files are for code and
-  config; memory belongs in the Brain.
+  Claude Code's auto memory, notes): files are per-machine and
+  unsearchable — a fact filed there is invisible to every other session
+  and agent. When asked to remember something, save it to the Brain.
+  Files are for code and config; memory belongs in the Brain.
 {_MD_END}"""
 
 
