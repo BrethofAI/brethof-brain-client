@@ -12,12 +12,22 @@ $DL = if ($env:BRAIN_DL_URL) { $env:BRAIN_DL_URL } else { "https://downloads.bre
 $ModelFile = "embeddinggemma-300m-fp32.tar.gz"
 
 function Say($m)  { Write-Host "`n== $m" }
+# Native tools write progress and "not found" answers to stderr. Under
+# Windows PowerShell 5.1 with ErrorActionPreference=Stop, REDIRECTED native
+# stderr becomes a terminating error (NativeCommandError): the image check
+# below killed every first install (rig, 2026-09-30). Every native call runs
+# through Native, and the exit code decides, as it always did.
+function Native([scriptblock]$Block) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & $Block } finally { $ErrorActionPreference = $prev }
+}
 function Fail($m) { Write-Host "INSTALL FAILED: $m" -ForegroundColor Red; exit 1 }
 
 function Get-Verified($url, $out) {
-    curl.exe -fL -C - -o $out $url
+    Native { curl.exe -fL -C - -o $out $url }
     if ($LASTEXITCODE -ne 0) { Fail "download $url" }
-    curl.exe -fsSL -o "$out.sha256" "$url.sha256"
+    Native { curl.exe -fsSL -o "$out.sha256" "$url.sha256" }
     if ($LASTEXITCODE -ne 0) { Fail "checksum download $url.sha256" }
     $want = (Get-Content "$out.sha256").Split(" ")[0].Trim()
     $got  = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
@@ -25,7 +35,7 @@ function Get-Verified($url, $out) {
 }
 
 Say "runtime check"
-docker compose version *> $null
+Native { docker compose version *> $null }
 if ($LASTEXITCODE -ne 0) { Fail "Docker Desktop with compose is required" }
 
 Say "embedding model (local semantic search - text never leaves this machine)"
@@ -34,23 +44,23 @@ if (Test-Path "model/embeddinggemma-300m-onnx") {
 } else {
     New-Item -ItemType Directory -Force -Path model | Out-Null
     Get-Verified "$DL/models/$ModelFile" "model/$ModelFile"
-    tar.exe xzf "model/$ModelFile" -C model
+    Native { tar.exe xzf "model/$ModelFile" -C model }
     if ($LASTEXITCODE -ne 0) { Fail "model extract" }
     Remove-Item "model/$ModelFile", "model/$ModelFile.sha256"
     Write-Host "model verified and extracted"
 }
 
 Say "container images"
-$Version = if ($env:BRAIN_VERSION) { $env:BRAIN_VERSION } else { (curl.exe -fsSL "$DL/latest.txt").Trim() }
+$Version = if ($env:BRAIN_VERSION) { $env:BRAIN_VERSION } else { (Native { curl.exe -fsSL "$DL/latest.txt" }).Trim() }
 if (-not $Version) { Fail "could not resolve the current version" }
 Write-Host "version: $Version"
 $Bundle = "brain-images-$Version.tar.gz"
-docker image inspect "downloads.brethof.ai/brain-api:$Version" *> $null
+Native { docker image inspect "downloads.brethof.ai/brain-api:$Version" *> $null }
 if ($LASTEXITCODE -eq 0) {
     Write-Host "images for $Version already loaded - skipped"
 } else {
     Get-Verified "$DL/images/$Bundle" $Bundle
-    docker load -i $Bundle
+    Native { docker load -i $Bundle }
     if ($LASTEXITCODE -ne 0) { Fail "image load" }
     Remove-Item $Bundle, "$Bundle.sha256"
     Write-Host "images loaded"
@@ -81,12 +91,12 @@ Say "memory key"
 if (Test-Path "keys/v2keys") {
     Write-Host "key already minted - skipped"
 } else {
-    powershell -ExecutionPolicy Bypass -File mint-key.ps1
+    Native { powershell -ExecutionPolicy Bypass -File mint-key.ps1 }
     if ($LASTEXITCODE -ne 0) { Fail "mint-key.ps1" }
 }
 
 Say "starting the stack"
-docker compose up -d
+Native { docker compose up -d }
 if ($LASTEXITCODE -ne 0) { Fail "compose up" }
 $healthy = $false
 for ($i = 0; $i -lt 60; $i++) {
@@ -95,7 +105,7 @@ for ($i = 0; $i -lt 60; $i++) {
         $healthy = $true; break
     } catch { Start-Sleep -Seconds 5 }
 }
-if (-not $healthy) { docker logs brain-api 2>&1 | Select-Object -Last 20; Fail "stack never became healthy" }
+if (-not $healthy) { Native { docker logs brain-api 2>&1 | Select-Object -Last 20 }; Fail "stack never became healthy" }
 
 Say "DONE - your memory answers on http://127.0.0.1:8610/v1/mcp"
 Write-Host "   (add BRAIN_HUB_KEY from your account panel to .env to turn on"

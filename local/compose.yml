@@ -109,23 +109,6 @@ services:
       # it costs judgment, never memory: recall and archiving never call home.
       BRAIN_HUB_URL: ${BRAIN_HUB_URL:-https://hub.brethof.ai}
       BRAIN_HUB_KEY: ${BRAIN_HUB_KEY:-}
-      # Curated records changed since the last heal before we OFFER one.
-      BRAIN_HEAL_THRESHOLD: ${BRAIN_HEAL_THRESHOLD:-40}
-      # WHO DOES THE THINKING. Empty (the default): curation, merges and
-      # drift are offered to the agent in YOUR harness, paid for with its
-      # tokens. Set url+model and this container does that work itself
-      # against any OpenAI-compatible endpoint — a local runner keeps
-      # everything on this machine, a remote one sends the piece to whoever
-      # you point at. See env.example. Either way it never comes to us.
-      BRAIN_INFERENCE_URL: ${BRAIN_INFERENCE_URL:-}
-      BRAIN_INFERENCE_MODEL: ${BRAIN_INFERENCE_MODEL:-}
-      BRAIN_INFERENCE_KEY: ${BRAIN_INFERENCE_KEY:-}
-      # Who heals your memory — YOUR dial, see env.example. `brethof` mode
-      # requires the consent sentence copied exactly; it is the one option
-      # where curated records reach our hub (never chat history).
-      BRAIN_HEAL_MODE: ${BRAIN_HEAL_MODE:-agent}
-      BRAIN_HEAL_CONSENT: ${BRAIN_HEAL_CONSENT:-}
-      BRAIN_GRAPH_MODE: ${BRAIN_GRAPH_MODE:-off}
     volumes:
       - ${BRAIN_KEY_DIR:-./keys}:/keys:ro
     # PODMAN + systemd-resolved ONLY. On a custom network podman resolves
