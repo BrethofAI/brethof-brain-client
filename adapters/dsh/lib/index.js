@@ -23,7 +23,12 @@ import { join } from 'node:path'
 
 export const name = 'brethof-brain'
 
-const SOURCE = { kind: 'plugin', plugin: 'brethof-brain' }
+// A PRODUCER-OWNED source kind (dsh 0.2, session format v4): the retired
+// wrapper { kind: 'plugin', plugin: <name> } is refused outright — "format v4
+// message requires a producer-owned source kind" (rig, 2026-09-29, dsh
+// 0.2.0-rc.2: every session exited 1). v4 names a plugin's messages
+// 'plugin:<name>', the exact form dsh's own v3-to-v4 conversion writes.
+const SOURCE = { kind: 'plugin:brethof-brain' }
 
 // Inline twin of @deepseek-ai/dsh-llm's createUserMessage (frozen
 // {content, source, role, id}) — importing the package from a

@@ -41,3 +41,8 @@ Remove the `brethof-brain` entries from `~/.codex/hooks.json` and
   normally without memory — never blocked.
 - Python 3.9+ on PATH is the only dependency (the plugin bundles its own
   client package; no pip install).
+- **Codex on an Ollama model:** Codex hands the memory to the model as
+  developer context, and Ollama's OpenAI-compatible Responses endpoint
+  currently drops developer messages (seen on Ollama 0.32.13 and 0.35.0,
+  2026-09-30), so the model never sees it. With OpenAI's models, or any
+  Responses provider that keeps developer messages, it arrives as normal.

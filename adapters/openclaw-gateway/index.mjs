@@ -71,7 +71,8 @@ var index_default = definePluginEntry({
         const prompt = textOf(event?.prompt);
         if (ctx?.runId != null) pendingPrompt.set(String(ctx.runId), prompt);
         pendingPrompt.set(sid, prompt);
-        const parts = [];
+        const parts = [];      // session start: static for the session
+        let recall = "";      // per prompt: this turn only
         if (!greeted.has(sid)) {
           greeted.add(sid);
           const env = await hookPost(
@@ -87,9 +88,18 @@ var index_default = definePluginEntry({
             prompt,
             session_id: sid
           });
-          if (env?.injection) parts.push(String(env.injection));
+          if (env?.injection) recall = String(env.injection);
         }
-        if (parts.length) return { appendSystemContext: parts.join("\n\n") };
+        // OpenClaw 2026.9 caches the system prompt per session: appendSystemContext
+        // is for static text (the session start) and a per-turn addition there
+        // never reaches the model after turn one (rig 2026-09-29, 2026.9.2:
+        // inject yes, recall no). Per-turn context goes in prependContext,
+        // as OpenClaw's hooks docs now direct.
+        const out = {};
+        if (parts.length) out.appendSystemContext = parts.join("\n\n");
+        if (recall) out.prependContext = recall;
+        if (parts.length || recall) return out;
+
       } catch {
       }
     });
