@@ -416,9 +416,6 @@ class _Facade:
     def search_history(self, q):
         return self.s.search_history(q, project=self.project)
 
-    def graph(self, name):
-        return self.s.graph(name, project=self.project)
-
     def context(self):
         return self.s.session_context(project=self.project)
 
@@ -524,10 +521,10 @@ def test_full_lifecycle_every_capability(monkeypatch, adapter):
                       "general rule reaches the project")
 
     # 6. SEARCH answers (records may be empty — the curator decides those);
-    # history search, graph and context all answer
+    # history search and context answer (the graph's lines arrive inside
+    # search since the graph tool was retired, 2026-09-27)
     assert "error" not in a.search("lifecycle canary").lower()
     for label, out in (("search_history", a.search_history("lifecycle")),
-                       ("graph", a.graph("conformance")),
                        ("session_context", a.context())):
         assert isinstance(out, str) and not out.lower().startswith("error"), \
             f"{label} failed: {out[:200]}"

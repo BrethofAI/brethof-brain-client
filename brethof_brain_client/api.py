@@ -52,9 +52,9 @@ class MindClient:
         """Invoke a memory tool; return its text result.
 
         Tool arguments go in **kwargs, or in the ``arguments`` dict when a
-        tool's own parameter collides with this method's signature — the
-        ``graph`` tool takes a parameter literally called ``name``, which
-        kwargs cannot express (found 2026-08-08).
+        tool's own parameter collides with this method's signature — a
+        parameter literally called ``name`` cannot be passed as a kwarg
+        (found 2026-08-08, on the graph tool retired 2026-09-27).
         """
         self._id += 1
         merged = {**(arguments or {}), **kwargs}
@@ -120,15 +120,6 @@ class MindClient:
 
     def list_rules(self, project: str = None) -> str:
         return self.call_tool("list_rules", project=project)
-
-    def graph(self, name: str, project: str = None) -> str:
-        """A person / tool / service / decision in the knowledge graph.
-
-        Uses the ``arguments`` dict, not kwargs: this tool's own parameter is
-        called ``name``, which would collide with call_tool's first parameter
-        and raise TypeError instead of calling the tool. The identical trap
-        bit the OpenClaw wrapper the same day."""
-        return self.call_tool("graph", {"name": name, "project": project})
 
     def session_context(self, project: str) -> str:
         """The full session-start briefing for a project."""

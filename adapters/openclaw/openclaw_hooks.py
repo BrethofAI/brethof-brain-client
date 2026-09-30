@@ -59,10 +59,11 @@ class MemorySession:
 
     # -- deliberate writes (the customer surface's two kinds) ---------------
     def _tool(self, tool, /, **arguments) -> str:
-        # POSITIONAL-ONLY (the '/'): tool arguments are passed as **kwargs, and
-        # the customer surface has tools whose OWN parameter is called 'name'
-        # (graph). Without this, graph(name=...) collides with the dispatcher's
-        # parameter and raises TypeError instead of calling the tool.
+        # POSITIONAL-ONLY (the '/'): tool arguments are passed as **kwargs, so a
+        # tool whose OWN parameter is called 'tool' or 'name' never collides
+        # with the dispatcher's parameter. (The graph tool that took 'name'
+        # was retired 2026-09-27: the graph's history lines arrive inside
+        # search_brain, so this adapter has no graph method.)
         self._rpc_id += 1
         resp = self._http.post("/v1/mcp", {
             "jsonrpc": "2.0", "id": self._rpc_id, "method": "tools/call",
@@ -154,11 +155,6 @@ class MemorySession:
         The conversation archive is never touched."""
         return self._tool("delete_record", project=project,
                           record_id=record_id)
-
-    def graph(self, name: str, project: str | None = None) -> str:
-        """Look up a person / tool / service / decision in the knowledge
-        graph: what it is, its status, aliases, when it came up."""
-        return self._tool("graph", name=name, project=project)
 
     def session_context(self, project: str | None = None) -> str:
         """The full session-start briefing, on demand (mid-session refresh)."""

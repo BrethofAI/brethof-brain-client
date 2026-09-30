@@ -86,6 +86,9 @@ def adapter_files():
         if (p.is_file() and p.suffix in SCAN_SUFFIXES
                 and "__pycache__" not in p.parts):
             yield p
+    # the client library too (2026-09-30: MindClient.graph() still called the
+    # graph tool retired 2026-09-27 — the scan covered only adapters/)
+    yield from sorted((ADAPTERS.parent / "brethof_brain_client").glob("*.py"))
 
 
 def test_adapters_reference_only_live_tools():
