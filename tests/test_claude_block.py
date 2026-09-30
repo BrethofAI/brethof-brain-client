@@ -1,6 +1,8 @@
 """The session-start hook writes the managed memory-provider block under
 Claude Code (2026-09-29): Claude Code's own auto memory otherwise takes
 "remember X" — measured on the rig (claude-code-mem@lin)."""
+from __future__ import annotations
+
 from brethof_brain_client import cli, hook
 
 
