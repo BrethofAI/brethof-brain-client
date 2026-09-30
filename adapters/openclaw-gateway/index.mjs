@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 function cfgFrom(pluginConfig) {
   const env = globalThis.process?.env ?? {};
@@ -63,12 +64,24 @@ var index_default = definePluginEntry({
   name: "brethof-brain memory",
   description: "Persistent cross-session memory via brethof-brain cloud.",
   register(api) {
+    // DIAGNOSTICS, off unless BRETHOF_BRAIN_DEBUG_FILE is set (2026-09-30:
+    // which hook fires on which turn, with how much prompt — OpenClaw 2026.9
+    // stopped delivering per-turn recall and the cause is in that order)
+    const dbg = (o) => {
+      const f = process.env.BRETHOF_BRAIN_DEBUG_FILE;
+      if (!f) return;
+      try { appendFileSync(f, JSON.stringify({ t: Date.now(), ...o }) + "\n"); } catch { /* never the run's failure */ }
+    };
+    api.on("agent_turn_prepare", async (event, ctx) => {
+      dbg({ hook: "agent_turn_prepare", promptLen: String(event?.prompt ?? "").length, runId: ctx?.runId ?? null, sid: ctx?.sessionId ?? ctx?.sessionKey ?? null });
+    });
     api.on("before_prompt_build", async (event, ctx) => {
       try {
         const cfg = cfgFrom(event?.context?.pluginConfig);
         if (!cfg.apiKey) return;
         const sid = String(ctx?.sessionId ?? ctx?.sessionKey ?? "openclaw");
         const prompt = textOf(event?.prompt);
+        dbg({ hook: "before_prompt_build", promptLen: prompt.length, rawType: typeof event?.prompt, runId: ctx?.runId ?? null, sid, greeted: greeted.has(sid) });
         if (ctx?.runId != null) pendingPrompt.set(String(ctx.runId), prompt);
         pendingPrompt.set(sid, prompt);
         const parts = [];      // session start: static for the session

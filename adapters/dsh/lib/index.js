@@ -126,7 +126,13 @@ export function apply(ctx, config = {}) {
     String(agent?.session?.id ?? agent?.session?.header?.id ?? 'dsh')
 
   // ── session start: brief the agent before turn 1 ─────────────────────────
-  ctx.on('agent/session-start', async ({ agent }) => {
+  // dsh 0.2 removed 'agent/session-start'; 'agent/created' (payload.source =
+  // startup | resume) is its successor. Both are registered for 0.1 and 0.2,
+  // and a per-agent mark keeps a host that fires both from briefing twice.
+  const briefed = new WeakSet()
+  const brief = async ({ agent }) => {
+    if (!agent || briefed.has(agent)) return
+    briefed.add(agent)
     try {
       const env = await call('/v1/hooks/session-start', { project }, 12_000)
       const block = env?.injection || ''
@@ -135,7 +141,9 @@ export function apply(ctx, config = {}) {
           content: [{ type: 'text', text: block }], source: SOURCE }))
       }
     } catch { /* fail-open */ }
-  })
+  }
+  ctx.on('agent/created', brief)
+  ctx.on('agent/session-start', brief)
 
   // ── pre-step: ambient recall for the claimed user messages ───────────────
   ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
@@ -162,7 +170,10 @@ export function apply(ctx, config = {}) {
   ctx.on('agent/turn-stopping', async ({ agent }) => {
     try {
       const s = forAgent(agent)
-      const events = [...agent.session.events]
+      // dsh 0.2: the log is read through snapshotEvents() — session.events
+      // is gone (every turn archived nothing, rig 2026-09-30); 0.1 had .events
+      const sess = agent.session
+      const events = [...(typeof sess?.snapshotEvents === 'function' ? sess.snapshotEvents() : (sess?.events || []))]
       // A user/message event's data IS the UserMessage — no turn field
       // (measured: filtering on data.turn dropped every user line). Track
       // the current turn positionally from turn/start markers instead.
