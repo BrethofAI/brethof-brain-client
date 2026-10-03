@@ -66,6 +66,11 @@ def _emit_context(event_name: str, text: str) -> None:
     """Hand context back to Claude Code via the documented hook output shape."""
     if not text:
         return
+    if os.environ.get("BRETHOF_BRAIN_HOOK_PLAIN"):
+        # Kiro CLI adds a hook's plain STDOUT to the context (its hooks
+        # reference, 2026-10-03) — no envelope to read, the text itself.
+        sys.stdout.write(text)
+        return
     if os.environ.get("BRETHOF_BRAIN_HOOK_FLAT"):
         # GitHub Copilot CLI consumes a TOP-LEVEL additionalContext (its hooks
         # reference, 2026-10-02); its hook config sets this variable. Claude
@@ -214,10 +219,15 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # "prompt-submit 2" = the second strong match alone). No part argument =
     # the legacy single-blob shape; old registrations keep working.
     project = _project(cfg, inp)
-    prompt = (inp.get("prompt") or "").strip()
+    prompt = (inp.get("prompt") or os.environ.get("USER_PROMPT") or "").strip()
     session_id = inp.get("session_id") or ""
     if not prompt or not session_id:
         return
+    if _from_hooks(inp):
+        # NO TRANSCRIPT (Devin, Kiro) or one we do not read (Qoder): the stop
+        # hook archives the turn from its own payload, and this is where the
+        # user's half is kept for it.
+        transcript.save_pending_prompt(session_id, prompt)
     payload = {"project": project, "prompt": prompt, "session_id": session_id}
     if args:
         try:
@@ -234,7 +244,10 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
     a failure mid-backlog keeps every confirmed chunk and retries the rest."""
     session_id = inp.get("session_id") or ""
     transcript_path = inp.get("transcript_path") or ""
-    if not session_id or not transcript_path:
+    if not session_id:
+        return
+    if _from_hooks(inp):
+        _stop_from_payload(cfg, inp, session_id)
         return
     project = _project(cfg, inp)
     turns, tail_offset, next_index = transcript.read_new_turns(transcript_path, session_id)
@@ -283,6 +296,48 @@ def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
         transcript.save_state(session_id, last["_offset"], last["index"] + 1)
     # Whole backlog confirmed — also advance past trailing non-conversation lines.
     transcript.save_state(session_id, tail_offset, next_index)
+
+
+def _from_hooks(inp: dict) -> bool:
+    """Archive from the hooks, not a transcript: when the harness passes no
+    transcript, or its adapter says so (BRETHOF_BRAIN_ARCHIVE=hooks)."""
+    return not inp.get("transcript_path") or os.environ.get("BRETHOF_BRAIN_ARCHIVE") == "hooks"
+
+
+# The reply's field in a stop payload, by harness: Devin and Qoder
+# last_assistant_message, Kiro assistant_response, Gemini CLI prompt_response.
+REPLY_FIELDS = ("last_assistant_message", "assistant_response", "prompt_response")
+
+
+def _stop_from_payload(cfg: Config, inp: dict, session_id: str) -> None:
+    """A TURN BUILT FROM THE HOOKS (2026-10-03): a harness that passes no
+    transcript gives the user's prompt at prompt-submit (kept by then) and
+    the assistant's reply in the stop payload. One user and one assistant
+    turn are archived under the session's running index; the kept prompt is
+    cleared only when the server confirmed it."""
+    reply = next((str(inp[k]).strip() for k in REPLY_FIELDS
+                  if isinstance(inp.get(k), str) and inp[k].strip()), "")
+    prompt = (inp.get("prompt") if isinstance(inp.get("prompt"), str) else "") \
+        or transcript.load_pending_prompt(session_id)
+    if not reply and not prompt:
+        return
+    state = transcript.load_state(session_id)
+    n = state["next_index"]
+    turns = []
+    for line_type, text in (("user", prompt), ("assistant", reply)):
+        if text.strip():
+            turns.append({"index": n, "line_type": line_type,
+                          "text": text.strip()[:transcript.TEXT_CAP],
+                          "timestamp": None, "embed": True})
+            n += 1
+    env = Client(cfg, timeout=20.0).post("/v1/hooks/stop", {
+        "project": _project(cfg, inp), "session_id": session_id, "turns": turns})
+    if env.get("status", "ok") != "ok":
+        sys.stderr.write(
+            f"brethof-brain: archive deferred ({env.get('notice') or env.get('status')})\n")
+        return
+    transcript.save_state(session_id, state["offset"], n)
+    transcript.save_pending_prompt(session_id, "")
 
 
 def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:

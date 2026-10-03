@@ -195,27 +195,16 @@ def test_gemini_hook_fails_open_on_garbage(monkeypatch):
             f"a hook must always exit 0. stderr: {r.stderr[:300]}")
 
 
-def test_gemini_transcript_parser(tmp_path):
-    """MessageRecord JSONL parses id-aware: a later line with the same id
-    SUPERSEDES the earlier one (the recording service updates in place),
-    info/error records never become turns, and content handles the genai
-    PartListUnion shapes (string, part, list)."""
+def test_gemini_recall_and_archive_use_the_persons_words():
+    """Headless Gemini CLI hands BeforeAgent and AfterAgent the prompt with the
+    injected brief in front as <hook_context> blocks (0.62.0, 2026-10-03):
+    recall and the archive must see only what the person wrote."""
     mod = _load(ADAPTERS / "gemini-cli" / "gemini_hook.py", "conf_gemini_hook")
-    parse = mod.parse_gemini_transcript
-    lines = [
-        {"id": "m1", "timestamp": "t1", "type": "user", "content": "add a toggle"},
-        {"id": "m2", "timestamp": "t2", "type": "gemini",
-         "content": [{"text": "Working on"}, {"text": "it."}]},
-        {"id": "m2", "timestamp": "t3", "type": "gemini",
-         "content": [{"text": "Done — toggle added."}]},   # supersedes m2
-        {"id": "m3", "timestamp": "t4", "type": "info", "content": "noise"},
-    ]
-    p = tmp_path / "session-x.jsonl"
-    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
-    turns = parse(str(p))
-    assert [t["line_type"] for t in turns] == ["user", "assistant"]
-    assert turns[1]["text"] == "Done — toggle added."
-    assert "Working on" not in turns[1]["text"]
+    assert mod.clean_prompt("<hook_context>the brief\n</hook_context>\n\nWhat is X?") == "What is X?"
+    assert mod.clean_prompt("<hook_context>a</hook_context><hook_context>b</hook_context> hi") == "hi"
+    assert mod.clean_prompt("no context here") == "no context here"
+    assert mod.clean_prompt("keep <hook_context>inside</hook_context> text") == \
+        "keep <hook_context>inside</hook_context> text"
 
 
 def test_antigravity_hook_fails_open_on_garbage(monkeypatch, tmp_path):
@@ -256,11 +245,15 @@ def test_junie_and_kiro_hooks_fail_open_on_garbage(monkeypatch, tmp_path):
         (ADAPTERS / "junie" / "junie_hook.py", [],
          '{"hook_event_name": "SessionStart", "session_id": "s", '
          '"cwd": "/tmp"}'),
-        (ADAPTERS / "kiro" / "kiro_hook.py", ["session-start"], 'not json'),
-        (ADAPTERS / "kiro" / "kiro_hook.py", ["prompt-submit"],
+        # Kiro runs the plugin's own hook entry in plain mode (2026-10-03)
+        (ADAPTERS.parent / "hook_entry.py", ["session-start"], 'not json'),
+        (ADAPTERS.parent / "hook_entry.py", ["prompt-submit"],
          '{"prompt": "hi", "session_id": "s"}'),
-        (ADAPTERS / "kiro" / "kiro_hook.py", ["unknown"], '{}'),
+        (ADAPTERS.parent / "hook_entry.py", ["stop"],
+         '{"session_id": "s", "assistant_response": "r"}'),
+        (ADAPTERS.parent / "hook_entry.py", ["unknown"], '{}'),
     ]
+    monkeypatch.setenv("BRETHOF_BRAIN_HOOK_PLAIN", "1")
     for hook, argv, payload in cases:
         r = subprocess.run([sys.executable, str(hook), *argv],
                            input=payload, text=True, capture_output=True,

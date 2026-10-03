@@ -109,3 +109,46 @@ def test_auth_failure_emits_notice(tmp_path, fake_client, capsys, monkeypatch):
     payload = json.loads(out)
     ctx = payload["hookSpecificOutput"]["additionalContext"]
     assert "key rejected" in ctx and "brethof-brain" in ctx
+
+
+def _run(event, payload):
+    sys.stdin = io.StringIO(json.dumps(payload))
+    try:
+        return hook.main([event])
+    finally:
+        sys.stdin = sys.__stdin__
+
+
+@pytest.mark.parametrize("reply_field", ["last_assistant_message", "assistant_response"])
+def test_a_harness_without_a_transcript_archives_the_turn_from_its_hooks(tmp_path, fake_client, reply_field):
+    # Devin (last_assistant_message) and Kiro (assistant_response) pass no
+    # transcript_path: the prompt is kept at prompt-submit, the reply comes
+    # with the stop payload (2026-10-03)
+    sid = f"nots-{reply_field}"
+    base = {"cwd": str(tmp_path), "session_id": sid}
+    assert _run("prompt-submit", {**base, "prompt": "what is X?"}) == 0
+    assert _run("stop", {**base, reply_field: "X is 7."}) == 0
+    stop = [c for c in fake_client.calls if "turns" in c][-1]
+    assert [(t["line_type"], t["text"], t["index"]) for t in stop["turns"]] == \
+        [("user", "what is X?", 0), ("assistant", "X is 7.", 1)]
+    # the next turn carries on the index, and the kept prompt was cleared
+    assert _run("prompt-submit", {**base, "prompt": "and Y?"}) == 0
+    assert _run("stop", {**base, reply_field: "Y is 8."}) == 0
+    stop = [c for c in fake_client.calls if "turns" in c][-1]
+    assert [t["index"] for t in stop["turns"]] == [2, 3] and stop["turns"][0]["text"] == "and Y?"
+
+
+def test_a_deferred_payload_archive_keeps_the_prompt_for_the_next_try(tmp_path, fake_client):
+    sid = "nots-deferred"
+    base = {"cwd": str(tmp_path), "session_id": sid}
+    _run("prompt-submit", {**base, "prompt": "keep me"})
+    fake_client.envelope = {"status": "over_cap"}
+    _run("stop", {**base, "last_assistant_message": "r"})
+    assert transcript.load_pending_prompt(sid) == "keep me"
+    assert transcript.load_state(sid)["next_index"] == 0
+
+
+def test_plain_mode_prints_the_text_itself(capsys, monkeypatch):
+    monkeypatch.setenv("BRETHOF_BRAIN_HOOK_PLAIN", "1")
+    hook._emit_context("UserPromptSubmit", "the memory block")
+    assert capsys.readouterr().out == "the memory block"

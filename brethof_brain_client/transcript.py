@@ -78,6 +78,19 @@ def save_state(session_id: str, offset: int, next_index: int) -> None:
     _write_raw(session_id, data)
 
 
+def save_pending_prompt(session_id: str, prompt: str) -> None:
+    """The user's half of a turn, for a harness whose stop hook carries only
+    the reply (hook._stop_from_payload). "" clears it."""
+    data = _read_raw(session_id)
+    data["pending_prompt"] = prompt
+    _write_raw(session_id, data)
+
+
+def load_pending_prompt(session_id: str) -> str:
+    p = _read_raw(session_id).get("pending_prompt")
+    return p if isinstance(p, str) else ""
+
+
 def load_project(session_id: str) -> str:
     """The project pinned for this session, or "" if none is pinned yet."""
     p = _read_raw(session_id).get("project")

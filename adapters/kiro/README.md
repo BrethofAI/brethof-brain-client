@@ -1,48 +1,26 @@
-# brethof-brain for Kiro (AWS)
+# brethof-brain for Kiro CLI (AWS)
 
-Ambient memory via Kiro's shell-command hooks — a hook's **stdout is
-added to the agent's context** on exit 0, so injection is plain printed
-text:
+Kiro CLI adds a hook's plain output to the agent's context, and its hooks
+live in an agent file. The setup writes a `brethof-brain` agent — every tool,
+like Kiro's default — with three hooks, and makes it your default agent:
 
-- **Session brief** — `agentSpawn` / Session Start trigger; the brief
-  persists for the session.
-- **Ambient recall** — `userPromptSubmit` / Prompt Submit trigger; recall
-  attaches to that prompt.
-- **Archive** — the prompt (from the prompt-submit payload) plus the stop
-  payload's assistant text, event-built. The stop payload's exact shape is
-  not fully documented by AWS — this leg is best-effort until the live rig
-  pins it.
+- **Session brief** — `agentSpawn` injects your project's memory.
+- **Ambient recall** — `userPromptSubmit` pulls the matching memory in ahead
+  of every answer.
+- **Archive** — `stop` ships the turn to your Brain's complete chat archive:
+  the prompt kept at prompt-submit and the reply from `assistant_response`.
 
-Every hook is fail-open.
+Every hook is fail-open: if the Brain is unreachable, Kiro just runs.
 
-## Install (Kiro CLI — agent config format)
+## Install
 
-1. `pip install git+https://github.com/BrethofAI/brethof-brain-client.git` (or run from a checkout).
-
-2. Add to your Kiro agent config's `hooks` object:
-
-```json
-{
-  "hooks": {
-    "agentSpawn": [
-      { "command": "python3 /ABSOLUTE/PATH/TO/adapters/kiro/kiro_hook.py session-start" }
-    ],
-    "userPromptSubmit": [
-      { "command": "python3 /ABSOLUTE/PATH/TO/adapters/kiro/kiro_hook.py prompt-submit" }
-    ],
-    "stop": [
-      { "command": "python3 /ABSOLUTE/PATH/TO/adapters/kiro/kiro_hook.py stop" }
-    ]
-  }
-}
+```bash
+git clone https://github.com/BrethofAI/brethof-brain-client ~/brethof-brain-client
+python3 ~/brethof-brain-client/adapters/kiro/setup.py
 ```
 
-In the Kiro IDE, create the equivalent Session Start / Prompt Submit /
-Stop hooks in `.kiro/hooks/` with a Shell Command action pointing at the
-same script (default timeout 60s).
-
-3. Key in `~/.brethof-brain/config.json` (`api_key`, `endpoint`,
-   `default_project`); env vars `BRETHOF_BRAIN_*` override.
-
-Rig status: adapter conformance-tested; the live rig row lands with an
-AWS builder account.
+The key comes from `~/.brethof-brain/config.json` or `BRETHOF_BRAIN_API_KEY`.
+The agent is `~/.kiro/agents/brethof-brain.json`; the setup runs
+`kiro-cli agent set-default brethof-brain` for you. To use memory with
+another agent of yours, copy its `hooks` block into that agent. Re-running
+is safe.
