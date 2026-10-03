@@ -252,8 +252,17 @@ pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.1
 (There is no PyPI package — the client is installed from source, so you get
 exactly the code you can read here.)
 
-Get an API key from [brethof.ai/account](https://brethof.ai) (the brethof-brain
-tab), then:
+For a **hosted** memory, sign this machine in — you confirm a code on
+[brethof.ai/account/device](https://brethof.ai/account/device/) while signed in,
+and the key goes straight into `~/.brethof-brain/config.json` without ever
+being printed (so an agent running the install never sees it):
+
+```bash
+brethof-brain login
+```
+
+Or get an API key from [brethof.ai/account](https://brethof.ai) (the
+brethof-brain tab) — a local memory's key is made on its own machine — then:
 
 ```bash
 brethof-brain setup --api-key bmv2_xxxxxxxx
