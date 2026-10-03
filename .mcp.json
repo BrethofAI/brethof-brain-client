@@ -1,11 +1,11 @@
 {
   "mcpServers": {
     "brain": {
-      "type": "http",
-      "url": "${user_config.endpoint}/v1/mcp",
-      "headers": {
-        "Authorization": "Bearer ${user_config.api_key}"
-      }
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/hooks/run_bridge.sh"
+      ]
     }
   }
 }

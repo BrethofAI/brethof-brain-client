@@ -101,16 +101,16 @@ def test_hook_commands_point_at_real_files_and_use_forward_slashes():
     assert seen >= 4, f"only {seen} hook commands wired"
 
 
-def test_the_mcp_server_is_wired_to_user_config_not_a_baked_in_key():
+def test_the_mcp_server_carries_no_key_and_reads_the_customers_config():
     # "brain" since 2026-08-10 — the server name stamps the tool ids the
-    # agent sees (mcp__brain__*), which is itself a product feature.
+    # agent sees (mcp__brain__*), which is itself a product feature. Since
+    # 2026-10-04 it is the local stdio bridge, which reads the key and address
+    # from ~/.brethof-brain/config.json (what `connect` saves) — so nothing in
+    # the bundle names a key, ours or anyone's.
     mcp = _json(REPO / ".mcp.json")["mcpServers"]["brain"]
-    assert "${user_config.api_key}" in json.dumps(mcp), (
-        "the MCP server does not read the key from user config — a key baked "
-        "into a published bundle would be OUR key, shipped to every customer")
     assert "bmv2_" not in json.dumps(mcp), "a real key is in the bundle"
-    assert mcp["url"].endswith("/v1/mcp"), (
-        f"the MCP url is {mcp['url']} — the customer surface is /v1/mcp")
+    assert mcp["type"] == "stdio" and mcp["args"][0].endswith("hooks/run_bridge.sh")
+    assert (REPO / "mcp_bridge.py").is_file() and (REPO / "hooks" / "run_bridge.sh").is_file()
 
 
 def test_every_advertised_command_exists():
