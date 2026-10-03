@@ -6,7 +6,10 @@ memory across sessions: it remembers past decisions, conversations, and project
 context so you don't re-explain yourself every time.
 
 Fully supported: **Claude Code**, **Codex**, **Qwen Code**, **OpenClaw**, **Hermes Agent**,
-**DeepSeek Harness (dsh)**, **Cline**, **OpenCode**, and **Kilo Code** —
+**DeepSeek Harness (dsh)**, **Cline**, **OpenCode** (1.x and 2.0), **Kilo Code**,
+**GitHub Copilot CLI**, **Pi**, **CodeBuddy Code**, **Devin CLI**, **Kiro CLI**,
+**Gemini CLI**, **Google Antigravity CLI**, **Amp**, **Qoder CLI**, **goose** and
+**MiniMax Code** — the table below says which are proven on Windows too —
 supported means the complete ambient loop (session brief, per-prompt
 recall, automatic archiving), proven by our test rig against the real
 platform. Any MCP-compatible client can additionally use the memory tools
@@ -47,6 +50,17 @@ runs anywhere Python 3.9+ does.
 | **Cline** | [`adapters/cline/`](adapters/cline/) | Full: `beforeModel` request overlay (brief + ambient recall) + `afterRun` archival (npm: `brethof-brain-cline`) |
 | **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`) |
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
+| **GitHub Copilot CLI** | [`adapters/copilot/`](adapters/copilot/) | Full: user hooks (inject + recall + archive). Proven on Linux and Windows, including offline with your own model |
+| **Pi** | [`adapters/pi/`](adapters/pi/) | Full: one extension file — brief in the system prompt, recall before every prompt, every run archived. Proven on Linux and Windows |
+| **CodeBuddy Code** (Tencent) | [`adapters/codebuddy/`](adapters/codebuddy/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
+| **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux |
+| **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux |
+| **Gemini CLI** (Google) | [`adapters/gemini-cli/`](adapters/gemini-cli/) | Full: hooks (inject + recall + archive). Proven on Linux |
+| **Antigravity CLI** (Google, `agy`) | [`adapters/antigravity/`](adapters/antigravity/) | Full: brief and recall on every model call, every turn archived. Proven on Linux |
+| **Amp** | [`adapters/amp/`](adapters/amp/) | Full: one plugin file — brief with a thread's first prompt, recall on every prompt, every turn archived. Proven on Linux |
+| **Qoder CLI** (Alibaba) | [`adapters/qoder/`](adapters/qoder/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux |
+| **goose** | [`adapters/goose/`](adapters/goose/) | Full: plugin hooks write the memory into the file goose reads every turn; every turn archived. Proven on Linux |
+| **MiniMax Code** | [`adapters/minimax/`](adapters/minimax/) | Full: a local plugin (inject + recall + archive). Proven on Linux |
 | **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
 
 Each adapter has its own README with install instructions. The table above
