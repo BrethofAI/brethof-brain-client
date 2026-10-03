@@ -26,7 +26,7 @@
  * from ~/.brethof-brain/config.json or the environment — the same triple
  * every brethof-brain adapter documents.
  */
-import { readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -146,8 +146,88 @@ function syntheticPart(message, text) {
   }
 }
 
+// ── OpenCode 2 (2026-09-11, the @opencode/cli package): "V1 plugin
+// implementations do not run in V2". V2 reads the default export's `id` and
+// `setup(ctx)` and ignores server(); V1 and Kilo read server() and ignore
+// setup() — one file serves all three. V2's hooks: `prompt` (each user
+// message, before admission) and `context` (before every primary model
+// call; system parts added there reach only that call, never history), and
+// ctx.session.wait/context for the settled turn's messages to archive.
+// BRETHOF_BRAIN_DEBUG_FILE (set by the rig) traces what fired.
+function dbg(...a) {
+  const f = process.env.BRETHOF_BRAIN_DEBUG_FILE
+  if (!f) return
+  try { appendFileSync(f, new Date().toISOString() + ' ' + a.map(x =>
+    typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + '\n') } catch {}
+}
+
+function textOfV2(content) {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content.filter(p => p && p.type === 'text' && typeof p.text === 'string' && !p.synthetic)
+    .map(p => p.text).join('\n')
+}
+
+async function archiveV2(ctx, s, sessionID, project) {
+  const got = await ctx.session.context({ sessionID })
+  const msgs = Array.isArray(got) ? got : (got?.messages || got?.data || [])
+  const turns = []
+  for (let i = s.archived; i < msgs.length; i++) {
+    const m = msgs[i]
+    const role = m?.role || m?.info?.role
+    const text = textOfV2(m?.content ?? m?.parts).trim()
+    if (!text || (role !== 'user' && role !== 'assistant')) continue
+    turns.push({ index: s.index++, line_type: role, text, embed: true })
+  }
+  s.archived = msgs.length
+  dbg('v2 archive', sessionID, msgs.length, 'messages', turns.length, 'turns')
+  if (!turns.length && !s.pending.length) return
+  const batch = [...s.pending, ...turns]
+  const env = await call('/v1/hooks/stop', { project, session_id: sessionID, turns: batch }, 20_000)
+  s.pending = (env && (env.status ?? 'ok') === 'ok') ? [] : batch
+}
+
 export default {
   id: NAME,
+  async setup(ctx) {
+    const options = ctx?.options || {}
+    const { apiKey, project } = config(options)
+    dbg('v2 setup', !!apiKey)
+    if (!apiKey) return
+    await ctx.session.hook('prompt', async (ev) => {
+      try {
+        const sessionID = ev.sessionID || 'opencode'
+        const s = stateFor(sessionID)
+        if (s.briefP === undefined) {
+          s.briefP = call('/v1/hooks/session-start', { project }, 12_000)
+            .then(env => { s.brief = env?.injection || '' })
+            .catch(() => {})
+        }
+        const prompt = String(ev.prompt?.text || '').trim()
+        s.recall = ''
+        if (prompt) {
+          const env = await call('/v1/hooks/prompt-submit',
+            { project, prompt, session_id: sessionID }, 12_000)
+          s.recall = env?.injection || ''
+        }
+        dbg('v2 prompt', sessionID, prompt.length, 'chars, recall', s.recall.length)
+        // archive once the turn has settled — never blocks the prompt
+        void (async () => {
+          try { await ctx.session.wait({ sessionID }); await archiveV2(ctx, s, sessionID, project) }
+          catch (e) { dbg('v2 archive failed', String(e)) }
+        })()
+      } catch (e) { dbg('v2 prompt failed', String(e)) }
+    })
+    await ctx.session.hook('context', async (ev) => {
+      try {
+        const s = stateFor(ev.sessionID || 'opencode')
+        await s.briefP
+        const text = [s.brief, s.recall].filter(Boolean).join('\n\n')
+        if (text) ev.system.push({ type: 'text', text })
+        dbg('v2 context', ev.sessionID, text.length, 'chars injected')
+      } catch (e) { dbg('v2 context failed', String(e)) }
+    })
+  },
   async server(input, options = {}) {
     const client = input.client
     return {

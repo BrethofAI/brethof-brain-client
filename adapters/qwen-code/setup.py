@@ -33,10 +33,20 @@ through `save_rule`.
 {MARK_B}"""
 
 
-def _hook(*args: str, timeout_ms: int = 12000) -> dict:
+def _hook(*args: str, timeout_s: int = 12) -> dict:
+    """Qwen Code reads a hook's timeout in SECONDS since 0.23.4 (2026-09-12;
+    it was milliseconds — 12000 there now means three hours). Windows has no
+    sh and Qwen runs hooks through cmd.exe, whose quoting breaks a quoted
+    program path (QwenLM/qwen-code#8649), so on Windows the hook runs under
+    PowerShell ("shell": "powershell") and calls the Python that ran this
+    setup on hook_entry.py directly (2026-10-03, the Windows rig row)."""
+    if os.name == "nt":
+        cmd = f'& "{sys.executable}" "{ROOT / "hook_entry.py"}" {" ".join(args)}'
+        return {"hooks": [{"type": "command", "command": cmd, "shell": "powershell",
+                           "timeout": timeout_s}]}
     cmd = f'sh "{ROOT}/hooks/run_hook.sh" {" ".join(args)}'
     return {"hooks": [{"type": "command", "command": cmd,
-                       "timeout": timeout_ms}]}
+                       "timeout": timeout_s}]}
 
 
 def main() -> int:
@@ -56,10 +66,10 @@ def main() -> int:
     hooks = settings.setdefault("hooks", {})
     ours = {"SessionStart": _hook("session-start"),
             "UserPromptSubmit": _hook("prompt-submit"),
-            "Stop": _hook("stop", timeout_ms=30000)}
+            "Stop": _hook("stop", timeout_s=30)}
     for event, entry in ours.items():
         existing = hooks.setdefault(event, [])
-        if not any("run_hook.sh" in h.get("command", "")
+        if not any("run_hook.sh" in h.get("command", "") or "hook_entry.py" in h.get("command", "")
                    for e in existing for h in e.get("hooks", [])):
             existing.append(entry)
 

@@ -36,8 +36,22 @@ conventions you are told to remember belong in `save_rule`.
 {MARK_B}"""
 
 
+def _cmd(*args: str) -> str:
+    """The hook command. Windows has no sh, and Codex runs hook commands
+    through PowerShell there, so it calls the Python that ran this setup —
+    a real interpreter, never the Microsoft Store stub — on hook_entry.py
+    directly (2026-10-03, the Windows rig row)."""
+    if os.name == "nt":
+        return f'& "{sys.executable}" "{ROOT / "hook_entry.py"}" {" ".join(args)}'
+    return f'sh "{ROOT}/hooks/run_hook.sh" {" ".join(args)}'
+
+
+def _ours(command: str) -> bool:
+    return "run_hook.sh" in command or "hook_entry.py" in command
+
+
 def _hook(event: str, *args: str) -> dict:
-    cmd = f'sh "{ROOT}/hooks/run_hook.sh" {" ".join(args)}'
+    cmd = _cmd(*args)
     return {"matcher": "", "hooks": [{"type": "command", "command": cmd,
                                       "timeout": 12 if event != "Stop" else 30}]}
 
@@ -59,7 +73,7 @@ def install_hooks() -> None:
     }
     for event, entry in ours.items():
         existing = hooks.setdefault(event, [])
-        if not any("run_hook.sh" in h.get("command", "")
+        if not any(_ours(h.get("command", ""))
                    for e in existing for h in e.get("hooks", [])):
             existing.append(entry)
     CODEX.mkdir(parents=True, exist_ok=True)
@@ -81,8 +95,10 @@ def install_mcp() -> None:
     # (verified 0.147.0: hooks.json events do NOT fire headless; notify does,
     # with the full exchange). Never clobber an existing notify program.
     if "notify" not in text.splitlines()[0:1] and "\nnotify" not in text:
-        text = (f'notify = ["python3", '
-                f'"{ROOT}/adapters/codex/notify_archive.py"]\n') + text
+        py = sys.executable if os.name == "nt" else "python3"
+        script = ROOT / "adapters" / "codex" / "notify_archive.py"
+        # json.dumps escapes a Windows path the way a TOML basic string needs
+        text = f'notify = [{json.dumps(py)}, {json.dumps(str(script))}]\n' + text
         changed = True
     else:
         print("  ! a notify program is already configured — archival notify "
