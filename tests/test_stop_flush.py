@@ -148,10 +148,10 @@ def test_a_deferred_payload_archive_keeps_the_prompt_for_the_next_try(tmp_path, 
     assert transcript.load_state(sid)["next_index"] == 0
 
 
-def test_plain_mode_prints_the_text_itself(capsys, monkeypatch):
+def test_plain_mode_prints_the_text_itself_as_utf8(capfdbinary, monkeypatch):
     monkeypatch.setenv("BRETHOF_BRAIN_HOOK_PLAIN", "1")
-    hook._emit_context("UserPromptSubmit", "the memory block")
-    assert capsys.readouterr().out == "the memory block"
+    hook._emit_context("UserPromptSubmit", "the memory block — ★")
+    assert capfdbinary.readouterr().out == "the memory block — ★".encode("utf-8")
 
 
 def test_goose_gets_its_brief_and_recall_through_the_turn_file(tmp_path, fake_client, monkeypatch):

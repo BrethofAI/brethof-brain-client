@@ -91,8 +91,16 @@ def _emit_context(event_name: str, text: str) -> None:
         return
     if os.environ.get("BRETHOF_BRAIN_HOOK_PLAIN"):
         # Kiro CLI adds a hook's plain STDOUT to the context (its hooks
-        # reference, 2026-10-03) — no envelope to read, the text itself.
-        sys.stdout.write(text)
+        # reference, 2026-10-03) — no envelope to read, the text itself. As
+        # UTF-8 bytes: on Windows the console code page cannot write the
+        # brief's em dashes and stars, and the hook died on the brief while
+        # the plain-ASCII recall went through (kiro@win, 2026-10-03).
+        out = getattr(sys.stdout, "buffer", None)
+        if out is not None:
+            out.write(text.encode("utf-8"))
+            out.flush()
+        else:
+            sys.stdout.write(text)
         return
     if os.environ.get("BRETHOF_BRAIN_HOOK_FLAT"):
         # GitHub Copilot CLI consumes a TOP-LEVEL additionalContext (its hooks
