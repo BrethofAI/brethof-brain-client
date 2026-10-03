@@ -26,12 +26,25 @@ HOOK = Path(__file__).resolve().parent / "antigravity_hook.py"
 PATH = Path.home() / ".gemini" / "config" / "hooks.json"
 
 
+def _short(path: Path) -> str:
+    """A path with no spaces: agy on Windows splits the command itself and
+    keeps quote marks as part of the word (2026-10-03: python was handed
+    '"C:\\...\\antigravity_hook.py"' and looked for it inside the config
+    folder) — so the Windows command carries no quotes, and a path with a
+    space goes by its 8.3 short name."""
+    p = str(path)
+    if " " not in p:
+        return p
+    import ctypes
+    buf = ctypes.create_unicode_buffer(1024)
+    n = ctypes.windll.kernel32.GetShortPathNameW(p, buf, 1024)
+    return buf.value if n else p
+
+
 def _cmd(event: str) -> str:
     if os.name == "nt":
-        # cmd /c strips the first and the last quote of a line that opens
-        # with one, so a quoted python.exe path breaks; the Python launcher
-        # (py, installed with python.org's Python) is called by name instead
-        return f'py -3 "{HOOK}" {event}'
+        # no quotes (see _short); the Python launcher, called by name
+        return f"py -3 {_short(HOOK)} {event}"
     return f'python3 "{HOOK}" {event}'
 
 
