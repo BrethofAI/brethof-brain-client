@@ -252,17 +252,24 @@ pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.1
 (There is no PyPI package — the client is installed from source, so you get
 exactly the code you can read here.)
 
-For a **hosted** memory, sign this machine in — you confirm a code on
-[brethof.ai/account/device](https://brethof.ai/account/device/) while signed in,
-and the key goes straight into `~/.brethof-brain/config.json` without ever
-being printed (so an agent running the install never sees it):
+Then connect it to your memory — one command, which your agent can run for you:
 
 ```bash
-brethof-brain login
+brethof-brain connect
 ```
 
-Or get an API key from [brethof.ai/account](https://brethof.ai) (the
-brethof-brain tab) — a local memory's key is made on its own machine — then:
+A window opens on your own screen and asks for your API key (and, for a hosted
+memory, its passphrase); it checks them with your memory and saves them in
+`~/.brethof-brain/config.json` (readable by you only). Your agent never sees
+them. A memory on this computer is found by itself, and its installer has
+already saved its key there — nothing to type. No screen (SSH)? It asks in the
+terminal instead. A hosted memory can also sign this machine in with
+`brethof-brain login` (you confirm a code at brethof.ai/account/device).
+
+**Your passphrase cannot be recovered.** If you forget it, your hosted memory
+can never be opened again — by you or by us.
+
+The older way still works:
 
 ```bash
 brethof-brain setup --api-key bmv2_xxxxxxxx

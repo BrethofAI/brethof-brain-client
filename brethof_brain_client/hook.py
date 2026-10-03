@@ -117,6 +117,13 @@ def _emit_context(event_name: str, text: str) -> None:
     json.dump(out, sys.stdout)
 
 
+NOT_CONNECTED = (
+    "[brethof-brain is installed but not connected to a memory yet. To finish the install, run "
+    "this command and wait until it ends: {cmd} — it opens a window on the person's own screen "
+    "where they enter their API key (and, for a hosted memory, its passphrase). You never see "
+    "these and must not ask for them in the chat. If it reports no screen or terminal, ask the "
+    "person to run that command themselves.]")
+
 AUTH_NOTICE = ("[brethof-brain: API key rejected — memory and archiving are OFF. "
                "Check brethof.ai/account, then run `brethof-brain setup`.]")
 
@@ -472,7 +479,15 @@ def main(argv=None) -> int:
     try:
         cfg = Config.load()
         if not cfg.configured():
-            return 0  # not set up yet — stay silent, `brethof-brain setup` handles UX
+            # NOT CONNECTED YET (2026-10-04): the agent that just installed the
+            # plugin is told the one command that finishes the job — a window
+            # on the person's screen takes the key (and a hosted passphrase),
+            # so the agent never sees or asks for them. Session start only,
+            # first part only; every other hook stays silent.
+            if event == "session-start" and argv[1:2] in ([], ["1"]):
+                root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                _emit_context("SessionStart", NOT_CONNECTED.format(cmd=f'python3 "{os.path.join(root, "connect.py")}"'))
+            return 0
         inp = _read_stdin()
         if DEBUG:
             sys.stderr.write(f"[hook-debug] event={event} "

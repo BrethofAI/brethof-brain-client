@@ -16,3 +16,15 @@ os.environ.pop("BRETHOF_MIND_API_KEY", None)
 os.environ.pop("BRETHOF_MIND_ENDPOINT", None)
 os.environ.pop("BRETHOF_MIND_PROJECT", None)
 os.environ.pop("BRETHOF_MIND_DEFAULT_PROJECT", None)
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_window(monkeypatch):
+    """No test ever opens a browser on the machine running the suite
+    (2026-10-04: a login test opened the founder's browser)."""
+    from brethof_brain_client import cli
+    monkeypatch.setattr(cli, "_can_open_browser", lambda: False)
+    monkeypatch.setattr(cli, "_open_browser", lambda url: False)

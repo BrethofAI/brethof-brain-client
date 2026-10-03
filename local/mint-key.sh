@@ -43,7 +43,45 @@ printf '%s:%s:customer\n' "$HASH" "$TENANT" > "$KEYFILE"
 # by construction.
 chmod 644 "$KEYFILE"
 
-cat <<TXT
+# THE KEY GOES STRAIGHT INTO THE CLIENT'S CONFIG (2026-10-04): an agent runs
+# this install, and a key printed here lands in its chat — so it is written to
+# ~/.brethof-brain/config.json (0600, pointed at this memory) and never shown.
+# BRAIN_SHOW_KEY=1 shows it as well, for wiring another tool by hand.
+PORT=${BRAIN_API_PORT:-8610}
+SAVED=""
+if [ "${BRAIN_SHOW_KEY:-0}" != "1" ] && command -v python3 >/dev/null 2>&1; then
+  SAVED=$(BRAIN_NEW_KEY="$KEY" BRAIN_NEW_ENDPOINT="http://127.0.0.1:$PORT" python3 -c '
+import json, os
+d = os.environ.get("BRETHOF_BRAIN_HOME") or os.path.join(os.path.expanduser("~"), ".brethof-brain")
+os.makedirs(d, exist_ok=True)
+p = os.path.join(d, "config.json")
+try:
+    conf = json.load(open(p, encoding="utf-8"))
+except Exception:
+    conf = {}
+conf["api_key"], conf["endpoint"] = os.environ["BRAIN_NEW_KEY"], os.environ["BRAIN_NEW_ENDPOINT"]
+conf.setdefault("default_project", "global")
+tmp = p + ".tmp"
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    json.dump(conf, f, indent=2)
+os.replace(tmp, p)
+os.chmod(p, 0o600)
+print(p)
+' || true)
+fi
+if [ -n "$SAVED" ]; then
+  cat <<TXT
+
+  Your memory key is saved for your agents: $SAVED
+  (readable by you only; it is not shown here). The brethof-brain hooks and
+  plugins read it from there.
+
+  Stored on the memory side: $KEYFILE (the hash only)
+
+TXT
+else
+  cat <<TXT
 
   Your memory key -- copy it now, it is not shown again:
 
@@ -53,10 +91,11 @@ cat <<TXT
 
     "brain": {
       "type": "http",
-      "url": "http://127.0.0.1:${BRAIN_API_PORT:-8610}/v1/mcp",
+      "url": "http://127.0.0.1:${PORT}/v1/mcp",
       "headers": { "Authorization": "Bearer $KEY" }
     }
 
   Stored: $KEYFILE (the hash only)
 
 TXT
+fi

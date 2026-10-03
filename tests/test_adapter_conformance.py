@@ -261,7 +261,12 @@ def test_junie_and_kiro_hooks_fail_open_on_garbage(monkeypatch, tmp_path):
         assert r.returncode == 0, (
             f"{hook.name} exited {r.returncode} on {argv}/{payload[:30]!r} — "
             f"a hook must always exit 0. stderr: {r.stderr[:300]}")
-        assert r.stdout.strip() == "", (
+        out = r.stdout.strip()
+        # with no key the session start says, on purpose, how to connect
+        # (2026-10-04) — that one notice and nothing else
+        notice = (hook.name == "hook_entry.py" and argv == ["session-start"]
+                  and out.startswith("[brethof-brain is installed but not connected") and "connect.py" in out)
+        assert out == "" or notice, (
             f"{hook.name} wrote to stdout with a dead endpoint — on this "
             f"platform stdout IS injected context: {r.stdout[:200]}")
 

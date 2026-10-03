@@ -291,6 +291,26 @@ def _post_json(url: str, body: dict, timeout: float = 30.0) -> tuple[int, dict]:
         return 0, {"error": "unreachable", "error_description": f"{type(e).__name__}: {e}"}
 
 
+def _can_open_browser() -> bool:
+    """A browser this process can show: a desktop session (Linux needs a
+    display), macOS and Windows always; never over plain SSH."""
+    if sys.platform in ("darwin", "win32"):
+        return True
+    if os.environ.get("SSH_CONNECTION") and not os.environ.get("DISPLAY"):
+        return False
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _open_browser(url: str) -> bool:
+    if not url or not _can_open_browser():
+        return False
+    try:
+        import webbrowser
+        return bool(webbrowser.open(url, new=2))
+    except Exception:  # noqa: BLE001 — the printed link is the fallback
+        return False
+
+
 def cmd_login(args, sleep=None) -> int:
     """DEVICE LOGIN (2026-10-04): this machine asks the control plane for a
     code, the human approves it on brethof.ai/account/device while signed in
@@ -308,9 +328,11 @@ def cmd_login(args, sleep=None) -> int:
               f"{code.get('error_description') or code.get('error') or 'no answer'})", file=sys.stderr)
         return 1
     link = code.get("verification_uri_complete") or code.get("verification_uri") or ""
-    print("To connect this machine to your memory, open this page while signed in:")
+    opened = (not getattr(args, "no_browser", False)) and _open_browser(link)
+    print("Opening your browser to confirm this machine…" if opened else
+          "To connect this machine to your memory, open this page while signed in:")
     print(f"  {link}")
-    print(f"and confirm the code  {code.get('user_code', '')}")
+    print(f"and confirm the code  {code.get('user_code', '')}", flush=True)
     interval = max(1, int(code.get("interval") or 5))
     deadline = _time.time() + int(code.get("expires_in") or 600)
     while _time.time() < deadline:
@@ -344,18 +366,103 @@ def cmd_login(args, sleep=None) -> int:
             data = {}
     data["api_key"], data["endpoint"] = tok["api_key"], endpoint
     data.setdefault("default_project", "global")
+    save_file(data)                     # the key first: it is good on its own
     if tok.get("needs_passphrase") and not data.get("unlock_passphrase"):
-        if sys.stdin.isatty():
-            # the human's own secret: typed here, hidden, never shown to anyone
+        # THE HUMAN'S OWN SECRET, never through the agent: a one-shot page in
+        # their browser when one can open; a hidden prompt only on a real
+        # terminal; never a prompt that waits on nobody (no tty under an agent)
+        pp = ""
+        if not getattr(args, "no_browser", False) and _can_open_browser():
+            from . import connectpage
+            pp = connectpage.serve({"passphrase": ""}, f"brethof-brain-client/{__version__}",
+                                   _open_browser, endpoint=endpoint).get("passphrase", "")
+        elif sys.stdin.isatty():
+            print("WARNING: if you forget your passphrase, your memory can never be opened again — "
+                  "by you or by us. There is no way to recover it.", file=sys.stderr)
             pp = getpass.getpass("Your memory's passphrase (hidden; it unlocks your hosted memory): ").strip()
-            if pp:
-                data["unlock_passphrase"] = pp
-        if not data.get("unlock_passphrase"):
-            print("note: your hosted memory locks when idle; add its passphrase with "
-                  "`brethof-brain login` in a terminal, or as unlock_passphrase in "
-                  f"{CONFIG_PATH}", file=sys.stderr)
-    save_file(data)
+            if pp and getpass.getpass("Passphrase again: ").strip() != pp:
+                print("error: the two passphrases are not the same — not saved", file=sys.stderr)
+                pp = ""
+        if pp:
+            data["unlock_passphrase"] = pp
+            save_file(data)
+        else:
+            print("note: your hosted memory locks when idle and needs its passphrase — run "
+                  "`brethof-brain login` again on a machine with a browser or a terminal, or set "
+                  f"unlock_passphrase in {CONFIG_PATH}", file=sys.stderr)
     print(f"OK: connected — key and endpoint saved to {CONFIG_PATH} (readable by you only)")
+    return 0
+
+
+LOCAL_ENDPOINT = "http://127.0.0.1:8610"
+
+
+def _local_memory_here() -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(LOCAL_ENDPOINT + "/v1/health", timeout=3) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def cmd_connect(args) -> int:
+    """THE INSTALL'S ONE STEP FOR THE HUMAN (founder 2026-10-04): the client
+    needs the API key and, for a hosted memory, the passphrase — and the agent
+    running the install must see neither. A window opens on the person's own
+    screen, takes them, checks them with the memory and saves them; the agent
+    only learns that it is connected. No screen: hidden prompts on a real
+    terminal. Neither: say so — never wait on nobody."""
+    from . import connectpage
+    ua = f"brethof-brain-client/{__version__}"
+    ensure_dirs()
+    data = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    endpoint = args.endpoint or data.get("endpoint") or ""
+    if not endpoint and _local_memory_here():
+        endpoint = LOCAL_ENDPOINT
+    got: dict = {}
+    if not args.no_browser and _can_open_browser():
+        got = connectpage.serve({"endpoint": endpoint, "key": "", "passphrase": ""}, ua, _open_browser)
+        if not got:
+            print("error: the window was not filled in before it timed out — run connect again", file=sys.stderr)
+            return 1
+    elif sys.stdin.isatty():
+        ep = input(f"Where your memory is [{endpoint or 'https://memory.brethof.cloud/t/<yours>'}]: ").strip() or endpoint
+        key = getpass.getpass("API key (bmv2_…, hidden): ").strip()
+        pp = ""
+        if not connectpage._is_local(ep):
+            print("WARNING: if you forget your passphrase, your memory can never be opened again — "
+                  "by you or by us. There is no way to recover it.", file=sys.stderr)
+            pp = getpass.getpass("Passphrase (hosted memory; hidden, empty if none): ").strip()
+            if pp and getpass.getpass("Passphrase again: ").strip() != pp:
+                print("error: the two passphrases are not the same", file=sys.stderr)
+                return 1
+        why = connectpage.check(ep, key, pp, ua)
+        if why:
+            print(f"error: {why}", file=sys.stderr)
+            return 1
+        got = {"endpoint": ep.rstrip("/"), "key": key, "passphrase": pp}
+    else:
+        print("error: there is no screen and no terminal here to ask the person — they run "
+              "`brethof-brain connect` themselves on this computer", file=sys.stderr)
+        return 2
+    try:
+        data["endpoint"] = _valid_endpoint(got["endpoint"])
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    data["api_key"] = got["key"]
+    if got.get("passphrase"):
+        data["unlock_passphrase"] = got["passphrase"]
+    data.setdefault("default_project", "global")
+    save_file(data)
+    print(f"OK: connected to your memory — saved to {CONFIG_PATH} (readable by you only)")
     return 0
 
 
@@ -587,8 +694,14 @@ def build_parser() -> argparse.ArgumentParser:
                    ).set_defaults(func=cmd_uninstall_hooks)
     sub.add_parser("mcp-command", help="print the `claude mcp add` line"
                    ).set_defaults(func=cmd_mcp_command)
+    cn = sub.add_parser("connect", help="connect this computer to your memory: a window takes the key "
+                        "(and a hosted memory's passphrase) — the agent never sees them")
+    cn.add_argument("--endpoint", default="", help="where the memory is (found by itself for this computer)")
+    cn.add_argument("--no-browser", action="store_true", help="ask in the terminal instead of a window")
+    cn.set_defaults(func=cmd_connect)
     lg = sub.add_parser("login", help="connect this machine to your hosted memory by approving a code on brethof.ai")
     lg.add_argument("--control", default="", help=argparse.SUPPRESS)
+    lg.add_argument("--no-browser", action="store_true", help="print the links instead of opening a browser")
     lg.set_defaults(func=cmd_login)
     sub.add_parser("status", help="show plan + usage").set_defaults(func=cmd_status)
     sub.add_parser("doctor", help="diagnose setup").set_defaults(func=cmd_doctor)

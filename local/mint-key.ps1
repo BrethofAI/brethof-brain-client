@@ -40,18 +40,52 @@ New-Item -ItemType Directory -Force -Path $KeyDir | Out-Null
 # its permissions are deliberately ordinary.
 Set-Content -NoNewline -Path $KeyFile -Value "${Hash}:${Tenant}:customer`n"
 
-Write-Output ''
-Write-Output '  Your memory key -- copy it now, it is not shown again:'
-Write-Output ''
-Write-Output "    $Key"
-Write-Output ''
-Write-Output '  Point your agent at this stack with:'
-Write-Output ''
-Write-Output '    "brain": {'
-Write-Output '      "type": "http",'
-Write-Output "      `"url`": `"http://127.0.0.1:$Port/v1/mcp`","
-Write-Output "      `"headers`": { `"Authorization`": `"Bearer $Key`" }"
-Write-Output '    }'
-Write-Output ''
-Write-Output "  Stored: $KeyFile (the hash only)"
-Write-Output ''
+# THE KEY GOES STRAIGHT INTO THE CLIENT'S CONFIG (2026-10-04): an agent runs
+# this install, and a key printed here lands in its chat -- so it is written to
+# %USERPROFILE%\.brethof-brain\config.json (pointed at this memory; the
+# profile's own permissions keep it yours) and never shown. BRAIN_SHOW_KEY=1
+# shows it as well, for wiring another tool by hand.
+$Saved = ''
+if ($env:BRAIN_SHOW_KEY -ne '1') {
+    try {
+        $home2 = if ($env:BRETHOF_BRAIN_HOME) { $env:BRETHOF_BRAIN_HOME } else { Join-Path $env:USERPROFILE '.brethof-brain' }
+        New-Item -ItemType Directory -Force -Path $home2 | Out-Null
+        $cfgPath = Join-Path $home2 'config.json'
+        $conf = @{}
+        if (Test-Path $cfgPath) {
+            $old = Get-Content -Raw $cfgPath | ConvertFrom-Json
+            foreach ($prop in $old.PSObject.Properties) { $conf[$prop.Name] = $prop.Value }
+        }
+        $conf['api_key'] = $Key
+        $conf['endpoint'] = "http://127.0.0.1:$Port"
+        if (-not $conf.ContainsKey('default_project')) { $conf['default_project'] = 'global' }
+        $tmp = "$cfgPath.tmp"
+        [IO.File]::WriteAllText($tmp, ($conf | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
+        Move-Item -Force $tmp $cfgPath
+        $Saved = $cfgPath
+    } catch { $Saved = '' }
+}
+if ($Saved) {
+    Write-Output ''
+    Write-Output "  Your memory key is saved for your agents: $Saved"
+    Write-Output '  (it is not shown here). The brethof-brain hooks and plugins read it from there.'
+    Write-Output ''
+    Write-Output "  Stored on the memory side: $KeyFile (the hash only)"
+    Write-Output ''
+} else {
+    Write-Output ''
+    Write-Output '  Your memory key -- copy it now, it is not shown again:'
+    Write-Output ''
+    Write-Output "    $Key"
+    Write-Output ''
+    Write-Output '  Point your agent at this stack with:'
+    Write-Output ''
+    Write-Output '    "brain": {'
+    Write-Output '      "type": "http",'
+    Write-Output "      `"url`": `"http://127.0.0.1:$Port/v1/mcp`","
+    Write-Output "      `"headers`": { `"Authorization`": `"Bearer $Key`" }"
+    Write-Output '    }'
+    Write-Output ''
+    Write-Output "  Stored: $KeyFile (the hash only)"
+    Write-Output ''
+}
