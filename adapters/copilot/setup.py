@@ -33,8 +33,13 @@ def _cmd(*args: str) -> str:
 
 
 def _hook(*args: str, timeout: int = 15) -> dict:
-    return {"type": "command", "command": _cmd(*args), "timeoutSec": timeout,
-            "env": {"BRETHOF_BRAIN_HOOK_FLAT": "1"}}
+    env = {"BRETHOF_BRAIN_HOOK_FLAT": "1"}
+    if os.name == "nt":
+        # Windows: Copilot's exec + args form starts the process directly —
+        # no shell, so no cmd or PowerShell quoting to get wrong
+        return {"type": "command", "exec": sys.executable,
+                "args": [str(ROOT / "hook_entry.py"), *args], "timeoutSec": timeout, "env": env}
+    return {"type": "command", "command": _cmd(*args), "timeoutSec": timeout, "env": env}
 
 
 def main() -> int:
