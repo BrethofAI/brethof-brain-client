@@ -171,11 +171,18 @@ function textOfV2(content) {
 async function archiveV2(ctx, s, sessionID, project) {
   const got = await ctx.session.context({ sessionID })
   const msgs = Array.isArray(got) ? got : (got?.messages || got?.data || [])
+  if (msgs.length && !s.shapeLogged) {
+    s.shapeLogged = true
+    dbg('v2 got keys', Array.isArray(got) ? 'array' : Object.keys(got || {}),
+        'all', JSON.stringify(msgs).slice(0, 1500))
+  }
   const turns = []
   for (let i = s.archived; i < msgs.length; i++) {
     const m = msgs[i]
-    const role = m?.role || m?.info?.role
-    const text = textOfV2(m?.content ?? m?.parts).trim()
+    // V2 messages (2.0.22): {type: "user", text}, the reply, then
+    // {type: "idle", outcome} — the kind is `type`, the words `text`
+    const role = m?.role || m?.info?.role || m?.type
+    const text = (typeof m?.text === 'string' ? m.text : textOfV2(m?.content ?? m?.parts)).trim()
     if (!text || (role !== 'user' && role !== 'assistant')) continue
     turns.push({ index: s.index++, line_type: role, text, embed: true })
   }
@@ -211,13 +218,23 @@ export default {
           s.recall = env?.injection || ''
         }
         dbg('v2 prompt', sessionID, prompt.length, 'chars, recall', s.recall.length)
-        // archive once the turn has settled — never blocks the prompt
-        void (async () => {
-          try { await ctx.session.wait({ sessionID }); await archiveV2(ctx, s, sessionID, project) }
-          catch (e) { dbg('v2 archive failed', String(e)) }
-        })()
       } catch (e) { dbg('v2 prompt failed', String(e)) }
     })
+    // what V2's public event stream carries, for the trace (2026-10-03)
+    void (async () => {
+      try {
+        for await (const ev of ctx.event.subscribe()) {
+          const t = String(ev?.type || '')
+          if (t === 'session.execution.succeeded' || t === 'session.execution.failed') {
+            // the run is over: archive what it said (2026-10-03: wait() and
+            // the context hook both fired before the reply existed)
+            const sid = ev?.sessionID || ev?.properties?.sessionID || ev?.data?.sessionID
+            dbg('v2 event', t, 'keys', Object.keys(ev || {}), 'sid', sid)
+            if (sid) await archiveV2(ctx, stateFor(sid), sid, project).catch(e => dbg('v2 archive failed', String(e)))
+          }
+        }
+      } catch (e) { dbg('v2 events failed', String(e)) }
+    })()
     await ctx.session.hook('context', async (ev) => {
       try {
         const s = stateFor(ev.sessionID || 'opencode')
@@ -225,6 +242,7 @@ export default {
         const text = [s.brief, s.recall].filter(Boolean).join('\n\n')
         if (text) ev.system.push({ type: 'text', text })
         dbg('v2 context', ev.sessionID, text.length, 'chars injected')
+
       } catch (e) { dbg('v2 context failed', String(e)) }
     })
   },

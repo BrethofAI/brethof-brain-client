@@ -66,6 +66,12 @@ def _emit_context(event_name: str, text: str) -> None:
     """Hand context back to Claude Code via the documented hook output shape."""
     if not text:
         return
+    if os.environ.get("BRETHOF_BRAIN_HOOK_FLAT"):
+        # GitHub Copilot CLI consumes a TOP-LEVEL additionalContext (its hooks
+        # reference, 2026-10-02); its hook config sets this variable. Claude
+        # Code keeps the wrapped shape — it rejects output it cannot read.
+        json.dump({"additionalContext": text}, sys.stdout)
+        return
     out = {
         "hookSpecificOutput": {
             "hookEventName": event_name,

@@ -102,6 +102,7 @@ var index_default = definePluginEntry({
             session_id: sid
           });
           if (env?.injection) recall = String(env.injection);
+          dbg({ hook: "recall", sid, len: recall.length, status: env?.status ?? (env ? "ok" : "no answer") });
         }
         // OpenClaw 2026.9 caches the system prompt per session: appendSystemContext
         // is for static text (the session start) and a per-turn addition there

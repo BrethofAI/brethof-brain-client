@@ -184,9 +184,18 @@ def read_new_turns(transcript_path: str, session_id: str):
                 if not isinstance(d, dict):
                     continue
                 t = d.get("type")
-                if t not in ("user", "assistant"):
+                if t in ("user.message", "assistant.message"):
+                    # GitHub Copilot CLI's events.jsonl (1.0.91, 2026-10-03):
+                    # {"type": "user.message" | "assistant.message",
+                    #  "data": {"content": "<the words>", ...}} — the user's
+                    # own words, never transformedContent (Copilot's wrapper)
+                    t = t.split(".", 1)[0]
+                    c = (d.get("data") or {}).get("content")
+                    text, embed = (c, True) if isinstance(c, str) else ("", False)
+                elif t not in ("user", "assistant"):
                     continue
-                text, embed = _extract_text(d)
+                else:
+                    text, embed = _extract_text(d)
                 if not text.strip():
                     continue
                 turns.append({
