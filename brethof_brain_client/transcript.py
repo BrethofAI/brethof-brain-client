@@ -86,6 +86,18 @@ def save_pending_prompt(session_id: str, prompt: str) -> None:
     _write_raw(session_id, data)
 
 
+def save_pending_brief(session_id: str, brief: str) -> None:
+    """The session brief, kept for the first prompt (hook TURN_FILE). "" clears it."""
+    data = _read_raw(session_id)
+    data["pending_brief"] = brief
+    _write_raw(session_id, data)
+
+
+def load_pending_brief(session_id: str) -> str:
+    b = _read_raw(session_id).get("pending_brief")
+    return b if isinstance(b, str) else ""
+
+
 def load_pending_prompt(session_id: str) -> str:
     p = _read_raw(session_id).get("pending_prompt")
     return p if isinstance(p, str) else ""

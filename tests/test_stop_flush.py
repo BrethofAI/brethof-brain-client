@@ -152,3 +152,37 @@ def test_plain_mode_prints_the_text_itself(capsys, monkeypatch):
     monkeypatch.setenv("BRETHOF_BRAIN_HOOK_PLAIN", "1")
     hook._emit_context("UserPromptSubmit", "the memory block")
     assert capsys.readouterr().out == "the memory block"
+
+
+def test_goose_gets_its_brief_and_recall_through_the_turn_file(tmp_path, fake_client, monkeypatch):
+    # goose shows the model only the GOOSE_MOIM_MESSAGE_FILE, read after the
+    # prompt hook ran; its payload names the prompt "message" (2026-10-03)
+    f = tmp_path / "turn.txt"
+    monkeypatch.setattr(hook, "TURN_FILE", str(f))
+    fake_client.envelope = {"status": "ok", "injection": "MEMORY"}
+    base = {"session_id": "goose-1", "event": "SessionStart"}
+    assert _run("session-start", base) == 0
+    assert not f.exists()                               # the brief waits for the first prompt
+    assert _run("prompt-submit", {"session_id": "goose-1", "message": "what is X?"}) == 0
+    assert f.read_text() == "MEMORY\n\nMEMORY"          # brief + recall
+    fake_client.envelope = {"status": "ok", "injection": ""}
+    assert _run("prompt-submit", {"session_id": "goose-1", "message": "and Y?"}) == 0
+    assert f.read_text() == ""                          # nothing stale on a later turn
+    assert _run("stop", {"session_id": "goose-1", "last_assistant_message": "Y is 8."}) == 0
+    stop = [c for c in fake_client.calls if "turns" in c][-1]
+    assert [t["text"] for t in stop["turns"]] == ["and Y?", "Y is 8."]
+
+
+def test_the_archive_mode_can_come_on_the_command_line(tmp_path, fake_client, monkeypatch):
+    # ZCode's process handlers carry no environment (2026-10-03)
+    monkeypatch.delenv("BRETHOF_BRAIN_ARCHIVE", raising=False)
+    base = {"session_id": "zc-1", "transcript_path": str(tmp_path / "one-line.jsonl")}
+    sys.stdin = io.StringIO(json.dumps({**base, "prompt": "hi"}))
+    try:
+        hook.main(["prompt-submit", "--archive=hooks"])
+        sys.stdin = io.StringIO(json.dumps({**base, "last_assistant_message": "hello"}))
+        hook.main(["stop", "--archive=hooks"])
+    finally:
+        sys.stdin = sys.__stdin__
+    stop = [c for c in fake_client.calls if "turns" in c][-1]
+    assert [t["text"] for t in stop["turns"]] == ["hi", "hello"]

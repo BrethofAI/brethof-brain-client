@@ -62,6 +62,29 @@ def _read_stdin() -> dict:
         return {}
 
 
+# THE TURN FILE (goose, 2026-10-03): goose adds no hook output to the model's
+# context; what reaches it is the file named by GOOSE_MOIM_MESSAGE_FILE, read
+# every turn AFTER the prompt hook ran. Its adapter points this variable at
+# the same file: the prompt hook writes the brief (first prompt only) and the
+# recall there, and empties it when there is nothing, so no stale text
+# rides a later turn.
+TURN_FILE = os.environ.get("BRETHOF_BRAIN_TURN_FILE", "")
+
+
+def _write_turn_file(session_id: str, recall: str) -> None:
+    brief = transcript.load_pending_brief(session_id)
+    text = "\n\n".join(t for t in (brief, recall) if t)
+    try:
+        path = os.path.expanduser(TURN_FILE)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+    except OSError:
+        return
+    if brief:
+        transcript.save_pending_brief(session_id, "")
+
+
 def _emit_context(event_name: str, text: str) -> None:
     """Hand context back to Claude Code via the documented hook output shape."""
     if not text:
@@ -131,7 +154,7 @@ def _project(cfg: Config, inp: dict) -> str:
         pinned = transcript.load_project(sid)
         if pinned:
             return pinned
-    project, confident = cfg.resolve(inp.get("cwd", ""))
+    project, confident = cfg.resolve(inp.get("cwd") or inp.get("working_dir") or "")
     if sid and confident:
         try:
             transcript.save_project(sid, project)
@@ -209,6 +232,11 @@ def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # fails on turn one instead of hour seven. Emitted on the first part only.
     if inp.get("source") == "resume" and payload.get("part", 1) == 1:
         text = RESUME_CHECK + ("\n\n" + text if text else "")
+    if TURN_FILE and payload["session_id"]:
+        # goose: the brief waits for the session's first prompt, which writes
+        # it into the turn file with that prompt's recall
+        transcript.save_pending_brief(payload["session_id"], text)
+        return
     _emit_context("SessionStart", text)
 
 
@@ -219,7 +247,8 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # "prompt-submit 2" = the second strong match alone). No part argument =
     # the legacy single-blob shape; old registrations keep working.
     project = _project(cfg, inp)
-    prompt = (inp.get("prompt") or os.environ.get("USER_PROMPT") or "").strip()
+    msg = inp.get("message") if isinstance(inp.get("message"), str) else ""    # goose
+    prompt = (inp.get("prompt") or msg or os.environ.get("USER_PROMPT") or "").strip()
     session_id = inp.get("session_id") or ""
     if not prompt or not session_id:
         return
@@ -235,6 +264,9 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
         except (TypeError, ValueError):
             pass
     env = Client(cfg).post("/v1/hooks/prompt-submit", payload)
+    if TURN_FILE:
+        _write_turn_file(session_id, _injection_from_envelope(env))
+        return
     _emit_context("UserPromptSubmit", _injection_from_envelope(env))
 
 
@@ -419,6 +451,11 @@ _HANDLERS = {
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    # --archive=hooks on the command line, for a harness whose hook config
+    # carries no environment (ZCode's "process" handlers)
+    for a in [a for a in argv if a.startswith("--archive=")]:
+        os.environ["BRETHOF_BRAIN_ARCHIVE"] = a.split("=", 1)[1]
+        argv.remove(a)
     event = argv[0] if argv else ""
     handler = _HANDLERS.get(event)
     if handler is None:

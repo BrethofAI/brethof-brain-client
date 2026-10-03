@@ -28,7 +28,10 @@ PATH = Path.home() / ".gemini" / "config" / "hooks.json"
 
 def _cmd(event: str) -> str:
     if os.name == "nt":
-        return f'"{sys.executable}" "{HOOK}" {event}'
+        # cmd /c strips the first and the last quote of a line that opens
+        # with one, so a quoted python.exe path breaks; the Python launcher
+        # (py, installed with python.org's Python) is called by name instead
+        return f'py -3 "{HOOK}" {event}'
     return f'python3 "{HOOK}" {event}'
 
 
