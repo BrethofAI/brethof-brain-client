@@ -96,10 +96,14 @@ var index_default = definePluginEntry({
           if (env?.injection) parts.push(String(env.injection));
         }
         if (prompt) {
+          // prependContext rides ONE model call and is never kept in the
+          // session (2026-10-03, the Windows rig: a record shown on turn one
+          // was gone and cooled on turn two) — "ephemeral" lifts the cooldown
           const env = await hookPost(cfg, "/v1/hooks/prompt-submit", {
             project: cfg.project,
             prompt,
-            session_id: sid
+            session_id: sid,
+            ephemeral: true
           });
           if (env?.injection) recall = String(env.injection);
           dbg({ hook: "recall", sid, len: recall.length, status: env?.status ?? (env ? "ok" : "no answer") });

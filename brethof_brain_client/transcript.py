@@ -192,6 +192,20 @@ def read_new_turns(transcript_path: str, session_id: str):
                     t = t.split(".", 1)[0]
                     c = (d.get("data") or {}).get("content")
                     text, embed = (c, True) if isinstance(c, str) else ("", False)
+                elif t == "message" and d.get("role") in ("user", "assistant"):
+                    # Tencent CodeBuddy Code (2.161, 2026-10-03): OpenAI Agents
+                    # SDK items — {"type": "message", "role", "content":
+                    # [{"type": "input_text" | "output_text", "text"}]}
+                    t = d["role"]
+                    c = d.get("content")
+                    if isinstance(c, str):
+                        text = c
+                    elif isinstance(c, list):
+                        text = "\n".join(p.get("text", "") for p in c if isinstance(p, dict)
+                                         and p.get("type") in ("input_text", "output_text", "text") and p.get("text"))
+                    else:
+                        text = ""
+                    embed = bool(text)
                 elif t not in ("user", "assistant"):
                     continue
                 else:

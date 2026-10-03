@@ -213,8 +213,10 @@ export default {
         const prompt = String(ev.prompt?.text || '').trim()
         s.recall = ''
         if (prompt) {
+          // V2's context hook adds our text to one model call only, never to
+          // history — "ephemeral" lifts the record cooldown (2026-10-03)
           const env = await call('/v1/hooks/prompt-submit',
-            { project, prompt, session_id: sessionID }, 12_000)
+            { project, prompt, session_id: sessionID, ephemeral: true }, 12_000)
           s.recall = env?.injection || ''
         }
         dbg('v2 prompt', sessionID, prompt.length, 'chars, recall', s.recall.length)
