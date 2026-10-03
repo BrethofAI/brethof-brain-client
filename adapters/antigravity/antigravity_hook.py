@@ -155,9 +155,9 @@ def _pre_invocation(cfg: Config, payload: dict) -> None:
             env = Client(cfg).post("/v1/hooks/prompt-submit",
                                    {"project": project, "prompt": prompt,
                                     "session_id": conv, "ephemeral": True})
-            st["prompt_sig"], st["recall"] = sig, cc_hook._injection_from_envelope(env)
+            st["prompt_sig"], st["recall_text"] = sig, cc_hook._injection_from_envelope(env)
     _agstate_save(conv, st)
-    pieces = [p for p in (st.get("brief"), st.get("recall") if prompt else "") if p]
+    pieces = [p for p in (st.get("brief"), st.get("recall_text") if prompt else "") if p]
     _dbg(f"agy pre-invocation {conv} #{payload.get('invocationNum')} "
          f"brief {len(st.get('brief') or '')} recall {len(st.get('recall') or '') if prompt else 0}")
     if pieces:
