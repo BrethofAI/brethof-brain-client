@@ -267,6 +267,93 @@ def cmd_setup(args) -> int:
     return 0
 
 
+CONTROL_URL = os.environ.get("BRETHOF_BRAIN_CONTROL_URL", "https://api.brethof.ai").rstrip("/")
+
+
+def _post_json(url: str, body: dict, timeout: float = 30.0) -> tuple[int, dict]:
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": f"brethof-brain-client/{__version__}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except ValueError:
+            return e.code, {}
+
+
+def cmd_login(args, sleep=None) -> int:
+    """DEVICE LOGIN (2026-10-04): this machine asks the control plane for a
+    code, the human approves it on brethof.ai/account/device while signed in
+    (2FA), and the key comes back to this process — written to the config
+    file and never printed, so an agent running the install never sees it.
+    Hosted memories only: a local memory mints its own key on its machine."""
+    import socket
+    import time as _time
+    sleep = sleep or _time.sleep
+    control = (args.control or CONTROL_URL).rstrip("/")
+    st, code = _post_json(f"{control}/v1/device/code",
+                          {"client_name": f"brethof-brain on {socket.gethostname()}"[:80]})
+    if st != 200 or not code.get("device_code"):
+        print(f"error: could not start the sign-in ({st}: "
+              f"{code.get('error_description') or code.get('error') or 'no answer'})", file=sys.stderr)
+        return 1
+    link = code.get("verification_uri_complete") or code.get("verification_uri") or ""
+    print("To connect this machine to your memory, open this page while signed in:")
+    print(f"  {link}")
+    print(f"and confirm the code  {code.get('user_code', '')}")
+    interval = max(1, int(code.get("interval") or 5))
+    deadline = _time.time() + int(code.get("expires_in") or 600)
+    while _time.time() < deadline:
+        sleep(interval)
+        st, tok = _post_json(f"{control}/v1/device/token", {"device_code": code["device_code"]})
+        if st == 200 and tok.get("api_key"):
+            break
+        err = tok.get("error", "")
+        if err == "authorization_pending":
+            continue
+        if err == "slow_down":
+            interval += 5
+            continue
+        print(f"error: {tok.get('error_description') or err or f'HTTP {st}'}", file=sys.stderr)
+        return 1
+    else:
+        print("error: the code expired before it was approved — run login again", file=sys.stderr)
+        return 1
+    try:
+        endpoint = _valid_endpoint(tok.get("endpoint") or "")
+    except ValueError as e:
+        print(f"error: the service answered an unusable endpoint: {e}", file=sys.stderr)
+        return 1
+    ensure_dirs()
+    data = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data["api_key"], data["endpoint"] = tok["api_key"], endpoint
+    data.setdefault("default_project", "global")
+    if tok.get("needs_passphrase") and not data.get("unlock_passphrase"):
+        if sys.stdin.isatty():
+            # the human's own secret: typed here, hidden, never shown to anyone
+            pp = getpass.getpass("Your memory's passphrase (hidden; it unlocks your hosted memory): ").strip()
+            if pp:
+                data["unlock_passphrase"] = pp
+        if not data.get("unlock_passphrase"):
+            print("note: your hosted memory locks when idle; add its passphrase with "
+                  "`brethof-brain login` in a terminal, or as unlock_passphrase in "
+                  f"{CONFIG_PATH}", file=sys.stderr)
+    save_file(data)
+    print(f"OK: connected — key and endpoint saved to {CONFIG_PATH} (readable by you only)")
+    return 0
+
+
 def cmd_install_hooks(args) -> int:
     settings = _load_settings()
     hooks = settings.setdefault("hooks", {})
@@ -495,6 +582,9 @@ def build_parser() -> argparse.ArgumentParser:
                    ).set_defaults(func=cmd_uninstall_hooks)
     sub.add_parser("mcp-command", help="print the `claude mcp add` line"
                    ).set_defaults(func=cmd_mcp_command)
+    lg = sub.add_parser("login", help="connect this machine to your hosted memory by approving a code on brethof.ai")
+    lg.add_argument("--control", default="", help=argparse.SUPPRESS)
+    lg.set_defaults(func=cmd_login)
     sub.add_parser("status", help="show plan + usage").set_defaults(func=cmd_status)
     sub.add_parser("doctor", help="diagnose setup").set_defaults(func=cmd_doctor)
     return p
