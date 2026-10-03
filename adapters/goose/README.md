@@ -23,5 +23,7 @@ python3 ~/brethof-brain-client/adapters/goose/setup.py
 The setup writes `~/.agents/plugins/brethof-brain/hooks/hooks.json` and adds
 `GOOSE_MOIM_MESSAGE_FILE=~/.brethof-brain/goose-turn.md` to your shell profile
 (bash, zsh, fish; your user environment on Windows) — open a new terminal
-afterwards. The key comes from `~/.brethof-brain/config.json` or
+afterwards. On Windows, goose needs Microsoft's Visual C++ runtime
+(`vc_redist.x64.exe` from aka.ms/vs/17/release) and Git Bash on PATH (goose
+runs hooks through `sh`). The key comes from `~/.brethof-brain/config.json` or
 `BRETHOF_BRAIN_API_KEY`. Re-running is safe.
