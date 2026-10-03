@@ -53,13 +53,13 @@ runs anywhere Python 3.9+ does.
 | **GitHub Copilot CLI** | [`adapters/copilot/`](adapters/copilot/) | Full: user hooks (inject + recall + archive). Proven on Linux and Windows, including offline with your own model |
 | **Pi** | [`adapters/pi/`](adapters/pi/) | Full: one extension file — brief in the system prompt, recall before every prompt, every run archived. Proven on Linux and Windows |
 | **CodeBuddy Code** (Tencent) | [`adapters/codebuddy/`](adapters/codebuddy/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
-| **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux |
-| **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux |
+| **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
+| **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux and Windows (needs Microsoft's Visual C++ runtime there) |
 | **Gemini CLI** (Google) | [`adapters/gemini-cli/`](adapters/gemini-cli/) | Full: hooks (inject + recall + archive). Proven on Linux |
 | **Antigravity CLI** (Google, `agy`) | [`adapters/antigravity/`](adapters/antigravity/) | Full: brief and recall on every model call, every turn archived. Proven on Linux |
 | **Amp** | [`adapters/amp/`](adapters/amp/) | Full: one plugin file — brief with a thread's first prompt, recall on every prompt, every turn archived. Proven on Linux |
-| **Qoder CLI** (Alibaba) | [`adapters/qoder/`](adapters/qoder/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux |
-| **goose** | [`adapters/goose/`](adapters/goose/) | Full: plugin hooks write the memory into the file goose reads every turn; every turn archived. Proven on Linux |
+| **Qoder CLI** (Alibaba) | [`adapters/qoder/`](adapters/qoder/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
+| **goose** | [`adapters/goose/`](adapters/goose/) | Full: plugin hooks write the memory into the file goose reads every turn; every turn archived. Proven on Linux and Windows (needs the Visual C++ runtime and Git Bash there) |
 | **MiniMax Code** | [`adapters/minimax/`](adapters/minimax/) | Full: a local plugin (inject + recall + archive). Proven on Linux |
 | **OpenClaw** (library) | [`adapters/openclaw/`](adapters/openclaw/) | `MemorySession` wrapper for agents with no hook system of their own |
 
