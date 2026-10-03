@@ -49,3 +49,19 @@ def test_a_refusal_is_said_and_nothing_is_saved(monkeypatch, capsys):
     assert rc == 1 and "own machine" in out.err
     after = open(cli.CONFIG_PATH).read() if os.path.exists(cli.CONFIG_PATH) else None
     assert before == after
+
+
+def test_login_sends_its_own_user_agent_and_names_an_edge_block(monkeypatch):
+    # Cloudflare answers 403 "error code: 1010" to Python's default agent
+    import io
+    import urllib.error
+    import urllib.request
+    seen = {}
+
+    def fake(req, timeout=30.0):
+        seen["ua"] = req.get_header("User-agent")
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"error code: 1010"))
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    st, body = cli._post_json("https://cp.test/v1/device/code", {})
+    assert seen["ua"].startswith("brethof-brain-client/")
+    assert st == 403 and body["error"] == "blocked" and "edge" in body["error_description"]

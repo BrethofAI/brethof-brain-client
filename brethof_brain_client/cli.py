@@ -283,7 +283,12 @@ def _post_json(url: str, body: dict, timeout: float = 30.0) -> tuple[int, dict]:
         try:
             return e.code, json.loads(e.read() or b"{}")
         except ValueError:
-            return e.code, {}
+            # not the service speaking: Cloudflare's edge answers its own
+            # pages (403 "error code: 1010" to a bare urllib, 2026-10-04)
+            return e.code, {"error": "blocked",
+                            "error_description": f"HTTP {e.code} from the network edge, not the service"}
+    except (urllib.error.URLError, OSError) as e:
+        return 0, {"error": "unreachable", "error_description": f"{type(e).__name__}: {e}"}
 
 
 def cmd_login(args, sleep=None) -> int:
