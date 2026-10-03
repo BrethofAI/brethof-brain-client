@@ -32,15 +32,21 @@ else:
 
 
 def _cmd(*args: str) -> str:
-    # Windows runs hook commands in PowerShell: call the Python that ran this
-    # setup on hook_entry.py directly; elsewhere the launcher finds a Python
-    if os.name == "nt":
-        return f'& "{sys.executable}" "{ROOT / "hook_entry.py"}" {" ".join(args)}'
+    # elsewhere the launcher finds a real Python
     return f'sh "{ROOT}/hooks/run_hook.sh" {" ".join(args)}'
 
 
 def _hook(*args: str, timeout: int = 15) -> dict:
-    return {"matcher": "", "hooks": [{"type": "command", "command": _cmd(*args), "timeout": timeout}]}
+    h = {"type": "command", "command": _cmd(*args), "timeout": timeout}
+    if os.name == "nt":
+        # Windows: `command` runs through bash when Git Bash is there
+        # (2026-10-03: a PowerShell-style command was a bash syntax error and
+        # the failed prompt hook blocked the prompt) and `powershell` through
+        # PowerShell — both call the Python that ran this setup directly
+        py, entry = Path(sys.executable).as_posix(), (ROOT / "hook_entry.py").as_posix()
+        h["command"] = f'"{py}" "{entry}" {" ".join(args)}'
+        h["powershell"] = f'& "{sys.executable}" "{ROOT / "hook_entry.py"}" {" ".join(args)}'
+    return {"matcher": "", "hooks": [h]}
 
 
 def _ours(entry: dict) -> bool:
