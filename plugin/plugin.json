@@ -1,0 +1,22 @@
+{
+  "name": "brethof-brain",
+  "displayName": "brethof-brain",
+  "version": "1.2.20",
+  "description": "Shared long-term memory for your AI agents — auto-recall at session start, auto-archive every turn, and the full memory toolset on demand — on your own memory container, local or hosted.",
+  "author": {
+    "name": "Brethof AI",
+    "email": "hello@brethof.ai",
+    "url": "https://brethof.ai/brain/"
+  },
+  "homepage": "https://brethof.ai/brain/",
+  "repository": "https://github.com/BrethofAI/brethof-brain-client",
+  "license": "LicenseRef-brethof-brain-Client-License",
+  "keywords": [
+    "memory",
+    "mcp",
+    "claude",
+    "agents",
+    "recall"
+  ],
+  "mcpServers": "./.mcp.json"
+}
