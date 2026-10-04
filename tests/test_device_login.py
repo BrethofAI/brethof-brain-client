@@ -117,3 +117,22 @@ def test_the_connect_window_checks_the_values_and_wants_the_passphrase_twice(mon
         assert False, "the page outlived its one use"
     except Exception:
         pass
+
+
+def test_the_connect_window_opens_at_once_even_when_name_lookups_hang(monkeypatch):
+    # macOS: HTTPServer's bind asked socket.getfqdn() for 127.0.0.1's name and
+    # the lookup hung, so the window opened late (the CI macOS jobs, 1.2.12 to
+    # 1.2.15). The window's server must never look a name up.
+    import socket
+    import threading
+    import time
+    from brethof_brain_client import connectpage
+    monkeypatch.setattr(socket, "getfqdn", lambda *a: time.sleep(30) or "slow.example")
+    opened = threading.Event()
+    t = threading.Thread(target=lambda: connectpage.serve(
+        {"key": ""}, "ua", lambda u: opened.set() or True, timeout_s=1), daemon=True)
+    t0 = time.monotonic()
+    t.start()
+    assert opened.wait(3), "the connect window did not open within 3 s"
+    assert time.monotonic() - t0 < 3
+    t.join(5)

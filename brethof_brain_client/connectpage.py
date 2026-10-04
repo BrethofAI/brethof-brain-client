@@ -14,6 +14,7 @@ import html
 import http.server
 import json
 import secrets
+import socketserver
 import threading
 import urllib.error
 import urllib.parse
@@ -99,6 +100,18 @@ def check(endpoint: str, key: str, passphrase: str, user_agent: str) -> str:
     return ""
 
 
+class _LocalServer(http.server.HTTPServer):
+    """HTTPServer without its reverse-DNS lookup. HTTPServer.server_bind asks
+    socket.getfqdn() for the bound address's name; on macOS that lookup can
+    hang for many seconds, so the window opened late or not at all — the CI
+    macOS jobs failed on it from 1.2.12 to 1.2.15 (2026-10-04). We only ever
+    serve 127.0.0.1 and never use the name."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
+
+
 def serve(fields: dict, user_agent: str, open_url, endpoint: str = "", timeout_s: float = 900.0) -> dict:
     """Serve the one-shot page with `fields` (endpoint/key/passphrase, each
     with its starting value), open it, wait for values the memory accepts;
@@ -147,7 +160,7 @@ def serve(fields: dict, user_agent: str, open_url, endpoint: str = "", timeout_s
             self._send('<p class="ok">Connected. Your agent can carry on — you can close this tab.</p>')
             done.set()
 
-    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    srv = _LocalServer(("127.0.0.1", 0), H)
     url = f"http://127.0.0.1:{srv.server_address[1]}{path}"
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
