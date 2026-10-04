@@ -182,6 +182,18 @@ Then run `brethof-brain connect` once (see [Configuration](#configuration)).
 The older route, `python3 adapters/gemini-cli/setup.py` (hooks in
 `~/.gemini/settings.json`), still works.
 
+### GitHub Copilot CLI
+
+Copilot CLI installs the Claude Code plugin as it is:
+
+```bash
+copilot plugin install BrethofAI/brethof-brain-client:plugin
+```
+
+Then run the plugin's `connect.py` once. Proven on Linux this way (2026-10-04);
+on Windows use `python3 adapters/copilot/setup.py`, which is proven on both and
+also runs offline with your own model.
+
 ### Pi
 
 ```bash
