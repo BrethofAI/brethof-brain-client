@@ -38,7 +38,7 @@ def test_connected_forwards_and_reads_the_config_each_time(monkeypatch):
 def test_the_plugin_needs_no_key_at_install_and_sets_no_endpoint_default():
     import json
     import pathlib
-    root = pathlib.Path(__file__).resolve().parent.parent
+    root = pathlib.Path(__file__).resolve().parent.parent / "plugin"
     uc = json.loads((root / ".claude-plugin" / "plugin.json").read_text())["userConfig"]
     assert uc["api_key"]["required"] is False
     # a default here is exported to the hooks and would outrank the hosted

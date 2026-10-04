@@ -22,7 +22,7 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent   # plugin repo root
+ROOT = Path(__file__).resolve().parent.parent.parent / "plugin"   # the Claude Code plugin folder
 DATA = Path(os.environ.get("MINIMAX_DATA_DIR", Path.home() / ".minimax"))
 KEEP = (".claude-plugin", "hooks", "brethof_brain_client", "hook_entry.py")
 
@@ -44,15 +44,13 @@ def main() -> int:
     # MiniMax Code skips a plugin whose manifest names a file that is not
     # there, without a word (`mcode plugin list` just comes back empty —
     # found 2026-10-03): the Claude manifest's mcpServers points at an
-    # .mcp.json this copy does not carry, and the marketplace file beside it
-    # is a Claude Code catalogue, not part of a plugin. The copy gets a
+    # .mcp.json this copy does not carry. The copy gets a
     # manifest of its own: name, version, description, hooks.
     manifest = dest / ".claude-plugin" / "plugin.json"
     claude = json.loads(manifest.read_text())
     manifest.write_text(json.dumps({k: claude[k] for k in ("name", "displayName", "version", "description",
                                                             "author", "homepage", "repository", "license")
                                     if k in claude} | {"hooks": "./hooks/hooks.json"}, indent=2) + "\n")
-    (dest / ".claude-plugin" / "marketplace.json").unlink(missing_ok=True)
     hooks_path = dest / "hooks" / "hooks.json"
     hooks = json.loads(hooks_path.read_text())
     for entries in hooks.get("hooks", {}).values():

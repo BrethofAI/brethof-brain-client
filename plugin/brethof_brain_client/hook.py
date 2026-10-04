@@ -1,0 +1,530 @@
+"""Claude Code hook entrypoint.
+
+One dispatcher wired to Claude Code's hook events. Invoke as::
+
+    python -m brethof_brain_client.hook <event>
+
+where ``<event>`` is one of: session-start, prompt-submit, stop, pre-compact,
+commit. Each reads the hook JSON on stdin, forwards it to the data plane, and —
+for the two injecting events — prints the server's memory blob back as
+``additionalContext`` for Claude Code to load.
+
+FAIL-OPEN CONTRACT: a hook must never break the user's session. Every path is
+wrapped so that ANY error (bad config, network down, HTTP 5xx, malformed input)
+exits 0 with no injected context. Memory is an enhancement, never a gate.
+
+ONE deliberate exception to silence: auth failures (401/403, envelope
+``auth_failed``). A rotated key or lapsed plan halts memory AND archiving
+persistently — staying silent there means the user finds out weeks later,
+after Claude Code's transcript cleanup has already deleted the unarchived
+turns. Those get a one-line notice; everything transient stays quiet.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import traceback
+
+from .client import Client, ClientError
+from .config import Config, valid_project
+from . import transcript
+
+# BRETHOF_BRAIN_HOOK_DEBUG=1 turns the fail-open silence into stderr truth.
+# The 2026-07-06 audit named silent swallowing this client's biggest risk;
+# 2026-07-28 proved it: a pre-compact that never enqueued took four probing
+# rounds to even OBSERVE because every layer ate the evidence.
+DEBUG = bool(os.environ.get("BRETHOF_BRAIN_HOOK_DEBUG"))
+
+# Chunked archive flush: bounded batches, state committed per confirmed batch,
+# so a large backlog (fresh install on an old session, over_cap period, outage)
+# drains incrementally instead of all-or-nothing in a single doomed POST.
+MAX_TURNS_PER_FLUSH = 40
+MAX_BYTES_PER_FLUSH = 800_000
+
+_EVENT_NAMES = {"session-start": "SessionStart", "prompt-submit": "UserPromptSubmit"}
+
+
+def _read_stdin() -> dict:
+    try:
+        # lstrip the BOM: Windows PowerShell pipes stamp U+FEFF onto the
+        # payload (bit a live probe 2026-08-11) — a customer's wrapper script
+        # can do the same, and a hook that no-ops on it is invisible amnesia.
+        data = json.loads(sys.stdin.read().lstrip("﻿"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        # A parse failure degrades to {} and every handler no-ops on the
+        # missing session_id — fail-open holds. But silently: a mangled test
+        # payload cost four debugging rounds on 2026-07-28 because this except
+        # ate the JSONDecodeError. Debug mode tells the truth.
+        if DEBUG:
+            traceback.print_exc()
+        return {}
+
+
+# THE TURN FILE (goose, 2026-10-03): goose adds no hook output to the model's
+# context; what reaches it is the file named by GOOSE_MOIM_MESSAGE_FILE, read
+# every turn AFTER the prompt hook ran. Its adapter points this variable at
+# the same file: the prompt hook writes the brief (first prompt only) and the
+# recall there, and empties it when there is nothing, so no stale text
+# rides a later turn.
+TURN_FILE = os.environ.get("BRETHOF_BRAIN_TURN_FILE", "")
+
+
+def _write_turn_file(session_id: str, recall: str) -> None:
+    brief = transcript.load_pending_brief(session_id)
+    text = "\n\n".join(t for t in (brief, recall) if t)
+    try:
+        path = os.path.expanduser(TURN_FILE)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+    except OSError:
+        return
+    if brief:
+        transcript.save_pending_brief(session_id, "")
+
+
+def _emit_context(event_name: str, text: str) -> None:
+    """Hand context back to Claude Code via the documented hook output shape."""
+    if not text:
+        return
+    if os.environ.get("BRETHOF_BRAIN_HOOK_PLAIN"):
+        # Kiro CLI adds a hook's plain STDOUT to the context (its hooks
+        # reference, 2026-10-03) — no envelope to read, the text itself. As
+        # UTF-8 bytes: on Windows the console code page cannot write the
+        # brief's em dashes and stars, and the hook died on the brief while
+        # the plain-ASCII recall went through (kiro@win, 2026-10-03).
+        out = getattr(sys.stdout, "buffer", None)
+        if out is not None:
+            out.write(text.encode("utf-8"))
+            out.flush()
+        else:
+            sys.stdout.write(text)
+        return
+    if os.environ.get("BRETHOF_BRAIN_HOOK_FLAT"):
+        # GitHub Copilot CLI consumes a TOP-LEVEL additionalContext (its hooks
+        # reference, 2026-10-02); its hook config sets this variable. Claude
+        # Code keeps the wrapped shape — it rejects output it cannot read.
+        json.dump({"additionalContext": text}, sys.stdout)
+        return
+    out = {
+        "hookSpecificOutput": {
+            "hookEventName": event_name,
+            "additionalContext": text,
+        }
+    }
+    json.dump(out, sys.stdout)
+
+
+NOT_CONNECTED = (
+    "[brethof-brain is installed but not connected to a memory yet. To finish the install, run "
+    "this command and wait until it ends: {cmd} — it opens a window on the person's own screen "
+    "where they enter their API key (and, for a hosted memory, its passphrase). You never see "
+    "these and must not ask for them in the chat. If it reports no screen or terminal, ask the "
+    "person to run that command themselves.]")
+
+AUTH_NOTICE = ("[brethof-brain: API key rejected — memory and archiving are OFF. "
+               "Check brethof.ai/account, then run `brethof-brain setup`.]")
+
+
+def _injection_from_envelope(env: dict) -> str:
+    """Turn an envelope into the text to inject. On non-ok statuses we surface a
+    short one-line notice instead of silently showing nothing (the anti-silent-
+    failure contract), but never a stack trace or raw error."""
+    status = env.get("status", "ok")
+    injection = env.get("injection") or ""
+    notice = env.get("notice") or ""
+    if status == "ok":
+        return injection
+    if status == "auth_failed":
+        return AUTH_NOTICE
+    if status in ("provisioning", "over_cap", "read_only", "unknown_project"):
+        tag = {"provisioning": "setting up", "over_cap": "memory full",
+               "read_only": "read-only", "unknown_project": "no memory"}[status]
+        return injection or (f"[brethof-brain: {tag}"
+                             + (f" — {notice}" if notice else "") + "]")
+    return injection  # server_error → transient, inject nothing extra
+
+
+def _project(cfg: Config, inp: dict) -> str:
+    """The project for this session — PINNED at the first confident answer.
+
+    Claude Code reports the working directory as it stands when the hook
+    fires, and that moves: the shell keeps its directory between commands, so
+    a job that steps into ansible/roles, or a recovery run on a USB mount,
+    silently re-homes every later turn of the session. Re-deriving per call
+    filed one session's turns under three different projects on 2026-08-14,
+    and *_chat is immutable, so the split can never be re-joined.
+
+    A guess (a bare folder name) is used but never pinned, so a session that
+    starts in $HOME and then moves into a real repo still lands correctly.
+    """
+    env = (os.environ.get("BRETHOF_BRAIN_PROJECT")
+           or os.environ.get("BRETHOF_MIND_PROJECT"))
+    if env and valid_project(env):
+        return env                      # an explicit instruction outranks a pin
+    sid = inp.get("session_id") or ""
+    if sid:
+        pinned = transcript.load_project(sid)
+        if pinned:
+            return pinned
+    project, confident = cfg.resolve(inp.get("cwd") or inp.get("working_dir") or "")
+    if sid and confident:
+        try:
+            transcript.save_project(sid, project)
+        except Exception:
+            pass          # a hook must never fail over bookkeeping
+    return project
+
+
+# ── event handlers ──────────────────────────────────────────────────────────
+
+RESUME_CHECK = (
+    "=== POST-RESUME CHECK (mandatory) ===\n"
+    "This session was RESUMED — the one harness path known to re-attach a "
+    "session WITHOUT its MCP servers (2026-08-09: an agent worked memoryless "
+    "in silence for hours this way). FIRST ACTION: call any brethof-brain "
+    "tool (recall / session_context) to verify Mind is connected. If the "
+    "tools are missing from your toolset or the call fails: STOP — tell the "
+    "user plainly \"Mind MCP is down — restart Claude Code or reconnect via "
+    "/mcp\" and ask for a decision before doing ANY work. Never work "
+    "memoryless in silence.")
+
+
+def _claude_block(inp: dict) -> None:
+    """THE MANAGED BLOCK FOR EVERY CLAUDE CODE INSTALL (2026-09-29). Claude
+    Code ships its own file memory (auto memory, on by default) and files
+    "remember X" there; the rig measured it (claude-code-mem@lin): without our
+    block in ~/.claude/CLAUDE.md all four facts went to Claude Code's local
+    MEMORY.md and the Brain kept one; with it, none went local and the Brain
+    kept all four. Only `install-hooks` wrote the block, so the plugin install
+    — the common one — lacked it. The session-start hook now writes it too,
+    idempotently, only under Claude Code; BRETHOF_BRAIN_NO_CLAUDE_MD=1 opts
+    out. Never the session's failure: said on stderr and moved on."""
+    if os.environ.get("BRETHOF_BRAIN_NO_CLAUDE_MD") == "1":
+        return
+    under_claude = (os.environ.get("CLAUDE_PLUGIN_ROOT") or os.environ.get("CLAUDECODE")
+                    or "/.claude/" in str(inp.get("transcript_path") or "").replace("\\", "/"))
+    if not under_claude:
+        return
+    try:
+        from .cli import _install_provider_block
+        got = _install_provider_block()
+        if got.startswith("FAILED"):
+            print(f"brethof-brain: the memory-provider block could not be written: {got}", file=sys.stderr)
+    except Exception as e:                                   # noqa: BLE001
+        print(f"brethof-brain: the memory-provider block: {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def _session_start(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    _claude_block(inp)
+    # Claude Code caps EACH hook's output at 10k chars, so the payload is
+    # delivered as budgeted parts — settings registers this event once per
+    # part ("session-start 1", "session-start 2"). No part argument = the
+    # whole payload in one piece (legacy registrations keep working).
+    project = _project(cfg, inp)
+    # `source` is why the session is starting (startup / resume / compact).
+    # After a compact the agent holds the whole session in its summary, and
+    # the Brain asks it — then, not on a cold start — whether the project's
+    # description still fits.
+    # `session_id` rides along (2026-09-03): the BRAIN header hands it back
+    # so the agent can leave its handover NOTE for this session.
+    payload: dict = {"project": project,
+                     "source": str(inp.get("source") or ""),
+                     "session_id": str(inp.get("session_id") or "")}
+    if args:
+        try:
+            payload["part"] = int(args[0])
+        except (TypeError, ValueError):
+            pass
+    env = Client(cfg).post("/v1/hooks/session-start", payload)
+    text = _injection_from_envelope(env)
+    # THE RESUME HANDSHAKE: hooks stay alive when the MCP attachment dies, so
+    # the hook is the one messenger that can still reach the model. Turning
+    # the warning into a first ACTION makes the failure self-diagnosing: a
+    # healthy session's verify call succeeds and work continues; a broken one
+    # fails on turn one instead of hour seven. Emitted on the first part only.
+    if inp.get("source") == "resume" and payload.get("part", 1) == 1:
+        text = RESUME_CHECK + ("\n\n" + text if text else "")
+    if TURN_FILE and payload["session_id"]:
+        # goose: the brief waits for the session's first prompt, which writes
+        # it into the turn file with that prompt's recall
+        transcript.save_pending_brief(payload["session_id"], text)
+        return
+    _emit_context("SessionStart", text)
+
+
+def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    # Like session-start, the ambient payload is delivered as parts — one
+    # registered hook per injected record, each under the harness's 10K
+    # per-hook cap ("prompt-submit 1" = rule + dead-ends + record #1,
+    # "prompt-submit 2" = the second strong match alone). No part argument =
+    # the legacy single-blob shape; old registrations keep working.
+    project = _project(cfg, inp)
+    msg = inp.get("message") if isinstance(inp.get("message"), str) else ""    # goose
+    prompt = (inp.get("prompt") or msg or os.environ.get("USER_PROMPT") or "").strip()
+    session_id = inp.get("session_id") or ""
+    if not prompt or not session_id:
+        return
+    if _from_hooks(inp):
+        # NO TRANSCRIPT (Devin, Kiro) or one we do not read (Qoder): the stop
+        # hook archives the turn from its own payload, and this is where the
+        # user's half is kept for it.
+        transcript.save_pending_prompt(session_id, prompt)
+    payload = {"project": project, "prompt": prompt, "session_id": session_id}
+    if args:
+        try:
+            payload["part"] = int(args[0])
+        except (TypeError, ValueError):
+            pass
+    env = Client(cfg).post("/v1/hooks/prompt-submit", payload)
+    if TURN_FILE:
+        _write_turn_file(session_id, _injection_from_envelope(env))
+        return
+    _emit_context("UserPromptSubmit", _injection_from_envelope(env))
+
+
+def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    """Archive new conversation turns in bounded chunks. State (offset + index)
+    advances ONLY past turns the server has confirmed, one chunk at a time, so
+    a failure mid-backlog keeps every confirmed chunk and retries the rest."""
+    session_id = inp.get("session_id") or ""
+    transcript_path = inp.get("transcript_path") or ""
+    if not session_id:
+        return
+    if _from_hooks(inp):
+        _stop_from_payload(cfg, inp, session_id)
+        return
+    project = _project(cfg, inp)
+    turns, tail_offset, next_index = transcript.read_new_turns(transcript_path, session_id)
+    # PRINT-MODE FLUSH RACE (verified 2026-08-17): in `claude -p` the Stop
+    # hook fires before the final assistant line reaches the transcript —
+    # the file provably holds it moments after exit, so one-shot sessions
+    # archived user turns only. When the tail is a user line, give the
+    # writer a short window and re-read; interactive sessions never enter
+    # this branch (their previous reply is always flushed).
+    if turns and turns[-1].get("line_type") == "user":
+        import time as _t
+        for _ in range(4):
+            _t.sleep(0.6)
+            t2, o2, n2 = transcript.read_new_turns(transcript_path, session_id)
+            if t2 and t2[-1].get("line_type") == "assistant":
+                turns, tail_offset, next_index = t2, o2, n2
+                break
+    if not turns:
+        # Nothing to send, but advance past any complete non-conversation lines
+        # we scanned so we don't re-read them forever.
+        state = transcript.load_state(session_id)
+        if (tail_offset, next_index) != (state["offset"], state["next_index"]):
+            transcript.save_state(session_id, tail_offset, next_index)
+        return
+    client = Client(cfg, timeout=20.0)
+    i = 0
+    while i < len(turns):
+        chunk, size = [], 0
+        while (i < len(turns) and len(chunk) < MAX_TURNS_PER_FLUSH
+               and size < MAX_BYTES_PER_FLUSH):
+            chunk.append(turns[i])
+            size += len(turns[i]["text"])
+            i += 1
+        payload = [{k: v for k, v in t.items() if k != "_offset"} for t in chunk]
+        env = client.post("/v1/hooks/stop",
+                          {"project": project, "session_id": session_id,
+                           "turns": payload})
+        if env.get("status", "ok") != "ok":
+            # over_cap / read_only / server_error: keep what's confirmed,
+            # DON'T advance past this chunk — retry next turn. stderr only
+            # (shows in hook debug, never in the session).
+            sys.stderr.write(
+                f"brethof-brain: archive deferred ({env.get('notice') or env.get('status')})\n")
+            return
+        last = chunk[-1]
+        transcript.save_state(session_id, last["_offset"], last["index"] + 1)
+    # Whole backlog confirmed — also advance past trailing non-conversation lines.
+    transcript.save_state(session_id, tail_offset, next_index)
+
+
+def _from_hooks(inp: dict) -> bool:
+    """Archive from the hooks, not a transcript: when the harness passes no
+    transcript, or its adapter says so (BRETHOF_BRAIN_ARCHIVE=hooks)."""
+    return not inp.get("transcript_path") or os.environ.get("BRETHOF_BRAIN_ARCHIVE") == "hooks"
+
+
+# The reply's field in a stop payload, by harness: Devin and Qoder
+# last_assistant_message, Kiro assistant_response, Gemini CLI prompt_response.
+REPLY_FIELDS = ("last_assistant_message", "assistant_response", "prompt_response")
+
+
+def _stop_from_payload(cfg: Config, inp: dict, session_id: str) -> None:
+    """A TURN BUILT FROM THE HOOKS (2026-10-03): a harness that passes no
+    transcript gives the user's prompt at prompt-submit (kept by then) and
+    the assistant's reply in the stop payload. One user and one assistant
+    turn are archived under the session's running index; the kept prompt is
+    cleared only when the server confirmed it."""
+    reply = next((str(inp[k]).strip() for k in REPLY_FIELDS
+                  if isinstance(inp.get(k), str) and inp[k].strip()), "")
+    prompt = (inp.get("prompt") if isinstance(inp.get("prompt"), str) else "") \
+        or transcript.load_pending_prompt(session_id)
+    if not reply and not prompt:
+        return
+    state = transcript.load_state(session_id)
+    n = state["next_index"]
+    turns = []
+    for line_type, text in (("user", prompt), ("assistant", reply)):
+        if text.strip():
+            turns.append({"index": n, "line_type": line_type,
+                          "text": text.strip()[:transcript.TEXT_CAP],
+                          "timestamp": None, "embed": True})
+            n += 1
+    env = Client(cfg, timeout=20.0).post("/v1/hooks/stop", {
+        "project": _project(cfg, inp), "session_id": session_id, "turns": turns})
+    if env.get("status", "ok") != "ok":
+        sys.stderr.write(
+            f"brethof-brain: archive deferred ({env.get('notice') or env.get('status')})\n")
+        return
+    transcript.save_state(session_id, state["offset"], n)
+    transcript.save_pending_prompt(session_id, "")
+
+
+def _commit(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    project = _project(cfg, inp)
+    payload = {"project": project}
+    for k in ("hash", "branch", "repo", "message"):
+        if inp.get(k) is not None:
+            payload[k] = inp.get(k)
+    files = inp.get("files")
+    if isinstance(files, list):
+        payload["files"] = files
+    if not payload.get("hash"):
+        return
+    Client(cfg).post("/v1/hooks/commit", payload)
+
+
+def _pre_compact(cfg: Config, inp: dict, args: tuple = ()) -> None:
+    """/compact is the moment the client is about to summarize its transcript
+    away — the last chance to guarantee the server archive holds ALL of it.
+
+    ARCHIVE PARITY (the hook's whole job since 2026-08-06 — the compact-era
+    curate enqueue is retired; per-turn curation owns every window):
+    1. FLUSH the pending tail (stop-hook logic).
+    2. HANDSHAKE — send our last index; the server answers with its own max
+       AND row count, so both a lagging tail and MID-STREAM HOLES (backup
+       restore, lost writes) are visible.
+    3. HEAL — on any gap, reset the flush state to zero and re-send the
+       whole transcript (server inserts are idempotent), then verify once
+       more. A healed or unhealable gap is reported on stderr; the compact
+       itself is never blocked — memory is an enhancement, not a gate.
+    """
+    session_id = inp.get("session_id", "")
+    project = _project(cfg, inp)
+
+    def _flush():
+        try:
+            _stop(cfg, inp)
+        except Exception:  # noqa: BLE001 — flush is best-effort here; _stop
+            if DEBUG:      # has its own state discipline, retries next turn
+                traceback.print_exc()
+
+    def _handshake():
+        state = transcript.load_state(session_id)
+        return Client(cfg, timeout=10.0).post(
+            "/v1/hooks/pre-compact",
+            {"session_id": session_id, "project": project,
+             "last_index": max(0, state["next_index"] - 1)})
+
+    _flush()
+    try:
+        env = _handshake()
+        if env.get("flush_needed"):
+            # The archive disagrees with this transcript — re-send it all.
+            transcript.save_state(session_id, 0, 0)
+            _flush()
+            env = _handshake()
+            if env.get("flush_needed"):
+                sys.stderr.write(
+                    "brethof-brain: archive STILL behind this transcript "
+                    "after full re-flush — some turns may be lost to "
+                    "compaction (server last_index="
+                    f"{env.get('server_last_index')}).\n")
+            else:
+                sys.stderr.write("brethof-brain: archive gap detected and "
+                                 "healed before compact.\n")
+    except ClientError:
+        if DEBUG:
+            traceback.print_exc()
+
+
+_HANDLERS = {
+    "session-start": _session_start,
+    "prompt-submit": _prompt_submit,
+    "stop": _stop,
+    "commit": _commit,
+    "pre-compact": _pre_compact,
+}
+
+
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # --archive=hooks on the command line, for a harness whose hook config
+    # carries no environment (ZCode's "process" handlers)
+    for a in [a for a in argv if a.startswith("--archive=")]:
+        os.environ["BRETHOF_BRAIN_ARCHIVE"] = a.split("=", 1)[1]
+        argv.remove(a)
+    event = argv[0] if argv else ""
+    handler = _HANDLERS.get(event)
+    if handler is None:
+        # Unknown event: do nothing, don't break the session.
+        return 0
+    try:
+        cfg = Config.load()
+        if not cfg.configured():
+            # NOT CONNECTED YET (2026-10-04): the agent that just installed the
+            # plugin is told the one command that finishes the job — a window
+            # on the person's screen takes the key (and a hosted passphrase),
+            # so the agent never sees or asks for them. Session start only,
+            # first part only; every other hook stays silent.
+            if event == "session-start" and argv[1:2] in ([], ["1"]):
+                root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                _emit_context("SessionStart", NOT_CONNECTED.format(cmd=f'python3 "{os.path.join(root, "connect.py")}"'))
+            return 0
+        inp = _read_stdin()
+        if DEBUG:
+            sys.stderr.write(f"[hook-debug] event={event} "
+                             f"inp_keys={sorted(inp)}\n")
+        handler(cfg, inp, tuple(argv[1:]))
+        if DEBUG:
+            sys.stderr.write(f"[hook-debug] {event} handler returned clean\n")
+    except ClientError as e:
+        # PERSISTENT problems are the ones worth a signal — a transient
+        # network blip self-heals, but a dead key or broken TLS trust kills
+        # every future call identically and silently. Two such classes:
+        if e.status_code in (401, 403):
+            # a dead key silently halts archiving until transcripts age out
+            if event in _EVENT_NAMES:
+                _emit_context(_EVENT_NAMES[event], AUTH_NOTICE)
+            else:
+                sys.stderr.write("brethof-brain: API key rejected — archiving off; "
+                                 "run `brethof-brain doctor`\n")
+        elif "CERTIFICATE_VERIFY" in str(e) or "SSL:" in str(e):
+            # TLS trust failure — measured 2026-08-31: a fresh Windows
+            # machine populates root CAs lazily, Python cannot trigger the
+            # download, and every hook died silently. One https contact
+            # from a browser (or anything SChannel-based) fixes it forever.
+            sys.stderr.write(
+                "brethof-brain: TLS trust failure reaching the memory "
+                "endpoint — hooks are failing. On a fresh Windows machine, "
+                "open the endpoint once in a browser to load root "
+                "certificates, then retry.\n")
+        elif DEBUG:
+            # never let a failure be silent when someone is LOOKING for it
+            sys.stderr.write(f"[hook-debug] {event}: {e}\n")
+        # Anything else: data plane unreachable → memory just doesn't load.
+    except Exception:  # noqa: BLE001 — absolute last resort; never break the turn
+        if DEBUG:
+            traceback.print_exc()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

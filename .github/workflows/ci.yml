@@ -74,4 +74,5 @@ jobs:
         shell: bash
         run: |
           npm install -g @anthropic-ai/claude-code || { echo "claude CLI unavailable — skipping"; exit 0; }
-          claude plugin validate ./ --strict || echo "plugin validate reported issues (informational)"
+          claude plugin validate ./ --strict || echo "marketplace validate reported issues (informational)"
+          claude plugin validate ./plugin --strict || echo "plugin validate reported issues (informational)"

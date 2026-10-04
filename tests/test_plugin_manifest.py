@@ -34,7 +34,10 @@ import re
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-PLUGIN = REPO / ".claude-plugin" / "plugin.json"
+# The plugin is its own folder since 2026-10-04 (scripts/sync_plugin.py says
+# why); the marketplace stays at the repo root and points at it.
+BUNDLE = REPO / "plugin"
+PLUGIN = BUNDLE / ".claude-plugin" / "plugin.json"
 MARKET = REPO / ".claude-plugin" / "marketplace.json"
 
 
@@ -52,6 +55,8 @@ def test_manifests_parse_and_agree_on_the_version():
     assert listed, (f"the marketplace does not list '{plug['name']}' — "
                     f"`/plugin install {plug['name']}@{market['name']}` "
                     f"cannot resolve")
+    assert listed[0]["source"] == "./plugin", (
+        f"the marketplace installs {listed[0]['source']!r} — the plugin is ./plugin")
     assert listed[0]["version"] == plug["version"], (
         f"version drift: marketplace says {listed[0]['version']}, the plugin "
         f"says {plug['version']} — installs pin the marketplace entry")
@@ -62,7 +67,7 @@ def test_hooks_load_from_the_standard_file_only():
     # manifest makes the loader report a duplicate hooks file (Anthropic's
     # directory validator, HOOKS_STANDARD_FILE_DUPLICATED, 2026-10-04).
     assert "hooks" not in _json(PLUGIN), "plugin.json must not re-list hooks/hooks.json"
-    assert (REPO / "hooks" / "hooks.json").is_file()
+    assert (BUNDLE / "hooks" / "hooks.json").is_file()
 
 
 def test_every_path_the_manifest_names_exists():
@@ -73,14 +78,14 @@ def test_every_path_the_manifest_names_exists():
         # removeprefix, NOT lstrip: lstrip takes a CHARACTER SET, so
         # "./.mcp.json".lstrip("./") eats the dotfile's own dot and yields
         # "mcp.json" — a test that fails on a perfectly good bundle.
-        target = (REPO / rel.removeprefix("./")).resolve()
+        target = (BUNDLE / rel.removeprefix("./")).resolve()
         assert target.is_file(), (
             f"plugin.json -> {key} points at {rel}, which does not exist. The "
             f"plugin would install and do nothing.")
 
 
 def test_hook_commands_point_at_real_files_and_use_forward_slashes():
-    hooks = _json(REPO / "hooks" / "hooks.json")["hooks"]
+    hooks = _json(BUNDLE / "hooks" / "hooks.json")["hooks"]
     assert set(hooks) >= {"SessionStart", "UserPromptSubmit", "Stop"}, (
         f"a core hook is not wired: {sorted(hooks)} — without Stop nothing is "
         f"ever archived, and the customer's memory stays empty forever")
@@ -100,7 +105,7 @@ def test_hook_commands_point_at_real_files_and_use_forward_slashes():
                     f"{cmd!r} — it would only work from one directory")
                 m = re.search(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"']+)", cmd)
                 assert m, f"cannot read a script path out of {cmd!r}"
-                assert (REPO / m.group(1)).is_file(), (
+                assert (BUNDLE / m.group(1)).is_file(), (
                     f"{event} hook runs {m.group(1)}, which is not in the "
                     f"bundle")
                 assert int(h.get("timeout", 0)) > 0, (
@@ -115,17 +120,17 @@ def test_the_mcp_server_carries_no_key_and_reads_the_customers_config():
     # 2026-10-04 it is the local stdio bridge, which reads the key and address
     # from ~/.brethof-brain/config.json (what `connect` saves) — so nothing in
     # the bundle names a key, ours or anyone's.
-    mcp = _json(REPO / ".mcp.json")["mcpServers"]["brain"]
+    mcp = _json(BUNDLE / ".mcp.json")["mcpServers"]["brain"]
     assert "bmv2_" not in json.dumps(mcp), "a real key is in the bundle"
     assert mcp["type"] == "stdio" and mcp["args"][0].endswith("hooks/run_bridge.sh")
-    assert (REPO / "mcp_bridge.py").is_file() and (REPO / "hooks" / "run_bridge.sh").is_file()
+    assert (BUNDLE / "mcp_bridge.py").is_file() and (BUNDLE / "hooks" / "run_bridge.sh").is_file()
 
 
 def test_every_advertised_command_exists():
     # /heal left the bundle 2026-09-04: curation, consolidation and heal are
     # the service's; the plugin ships the three commands the README names.
     for name in ("recall", "curate", "onboard"):
-        assert (REPO / "commands" / f"{name}.md").is_file(), (
+        assert (BUNDLE / "commands" / f"{name}.md").is_file(), (
             f"/{name} is advertised in the README but commands/{name}.md is "
             f"not in the bundle")
 
@@ -140,3 +145,20 @@ def test_no_hardcoded_tool_COUNT_in_customer_facing_copy():
         f"the plugin manifests advertise a tool COUNT ({stale}). It is already "
         f"wrong once and will be wrong again — describe the capability, not "
         f"the number.")
+
+
+def test_the_bundle_carries_the_shared_code_unchanged():
+    # plugin/ ships COPIES of the client package, hook_entry.py, connect.py,
+    # run_hook.sh and LICENSE; a release that forgets scripts/sync_plugin.py
+    # would ship an older client inside the plugin than everywhere else.
+    import subprocess, sys
+    r = subprocess.run([sys.executable, str(REPO / "scripts" / "sync_plugin.py"), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, f"plugin/ is out of sync — run scripts/sync_plugin.py:\n{r.stdout}"
+
+
+def test_the_bundle_ships_nothing_but_the_plugin():
+    # What Anthropic's directory scans is exactly this folder; the local
+    # edition's installer, the CI file and the other adapters stay out.
+    for name in ("adapters", "local", ".github", "tests", "test-container", "pyproject.toml"):
+        assert not (BUNDLE / name).exists(), f"plugin/{name} would ship with the plugin"

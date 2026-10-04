@@ -1,0 +1,724 @@
+"""``brethof-brain`` command-line tool: set up the client, wire Claude Code, and
+check status. Stdlib only.
+
+    brethof-brain setup --api-key bmv2_xxx [--endpoint URL] [--project KEY]
+    brethof-brain install-hooks     # add the 4 hooks to ~/.claude/settings.json
+    brethof-brain mcp-command       # print the `claude mcp add` line to run
+    brethof-brain status            # show plan + usage
+    brethof-brain doctor            # diagnose config / connectivity / wiring
+
+(The hook dispatcher also understands a 5th event, ``commit``, for programmatic
+wiring — e.g. a git post-commit hook; the installer wires the 4 session events.)
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import re
+import sys
+import urllib.parse
+
+from . import DEFAULT_ENDPOINT, __version__
+from .client import Client, ClientError
+from .config import (CONFIG_PATH, Config, ensure_dirs, save_file, valid_project)
+
+# SessionStart is registered once PER PART: Claude Code caps each hook's
+# output at 10k chars, so the server auto-splits the payload into as many
+# ≤9k parts as the tenant's rules + projects need and returns "" for unused
+# parts. 12 slots ≈ a 108KB envelope — sized so the server-side law
+# budgets (48K general + 20K project rule pools) can never crowd out the
+# briefing sections; same-event hooks run in parallel, so empty slots are
+# almost free.
+SESSION_START_PARTS = 12
+# UserPromptSubmit is registered once per ambient part: part 1 = rule
+# reminder + dead-end cards + top record, part 2 = the second strong match
+# alone. One record per hook keeps every injection WHOLE under the 10k
+# per-hook cap — a cut record misleads (the model uses cut text as if
+# complete), so nothing is ever trimmed to fit.
+PROMPT_SUBMIT_PARTS = 2
+HOOK_EVENTS = (
+    [("SessionStart", f"session-start {i}")
+     for i in range(1, SESSION_START_PARTS + 1)]
+    + [("UserPromptSubmit", f"prompt-submit {i}")
+       for i in range(1, PROMPT_SUBMIT_PARTS + 1)]
+    + [
+        ("Stop", "stop"),
+        ("PreCompact", "pre-compact"),
+    ])
+CLAUDE_SETTINGS = os.path.expanduser("~/.claude/settings.json")
+CLAUDE_USER_MD = os.path.expanduser("~/.claude/CLAUDE.md")
+MCP_PATH = "/v1/mcp"
+
+# The PROVIDER BLOCK — our one scriptable line into the harness's own
+# instruction channel (founder, 2026-08-10: "CLAUDE.md is the only thing
+# which we can really script, so we could add the provider"). The
+# hostile-harness bait measured why: a workspace CLAUDE.md saying "record
+# facts in this file" was obeyed in half the runs, because agents obey
+# CLAUDE.md. So the Brain claims the same channel — a managed block in
+# the USER-level file (loads in every project); the customer's own
+# project CLAUDE.md is never touched.
+_MD_BEGIN = "<!-- brain:provider (managed by brethof-brain install-hooks) -->"
+_MD_END = "<!-- /brain:provider -->"
+PROVIDER_BLOCK = f"""{_MD_BEGIN}
+## Memory provider: the Brain
+
+Long-term memory on this machine is the BRAIN (the `brain` MCP server).
+It is shared across sessions, projects and agents, curated automatically,
+and survives every restart, reboot and compact. The session-start and
+prompt hooks put the rules, each project's purpose, the last sessions'
+notes and the matching records in front of you — if that block is
+missing, the memory stack is broken; fix it first.
+
+- Four doors, nothing else writes: `save_project` / `save_general` (a
+  fact, a decision, a measurement — the Brain decides what becomes a
+  record), `save_note` (where your work stands, before you stop),
+  `save_playbook` (how a thing is done), `save_rule` (a standing
+  convention). Unsure: save it.
+- To recall: `search_brain` first (the current truth, with the history
+  of decisions under it), then `search_history` (everything said, raw),
+  `get_record` — BEFORE saying you don't remember something, and before
+  diagnosing anything.
+- Do NOT keep long-term memory in local files (CLAUDE.md, MEMORY.md,
+  Claude Code's auto memory, notes): files are per-machine and
+  unsearchable — a fact filed there is invisible to every other session
+  and agent. When asked to remember something, save it to the Brain.
+  Files are for code and config; memory belongs in the Brain.
+{_MD_END}"""
+
+
+def _install_provider_block() -> str:
+    """Idempotent upsert of the managed block in ~/.claude/CLAUDE.md.
+    Returns what happened: 'added' | 'updated' | 'current' | 'FAILED …'."""
+    try:
+        orig = ""
+        if os.path.exists(CLAUDE_USER_MD):
+            with open(CLAUDE_USER_MD, encoding="utf-8") as f:
+                orig = f.read()
+        # A block planted by the pre-rename client carries the old marker;
+        # normalize it so the upsert below replaces it instead of doubling.
+        # Compare against ORIG — a marker-only change must still be written.
+        text = orig.replace("(managed by brethof-mind install-hooks)",
+                            "(managed by brethof-brain install-hooks)")
+        if _MD_BEGIN in text and _MD_END in text:
+            head, _, rest = text.partition(_MD_BEGIN)
+            _, _, tail = rest.partition(_MD_END)
+            new = head + PROVIDER_BLOCK + tail
+            action = "current" if new == orig else "updated"
+        else:
+            new = ((text.rstrip() + "\n\n") if text.strip() else "") \
+                + PROVIDER_BLOCK + "\n"
+            action = "added"
+        if action != "current":
+            os.makedirs(os.path.dirname(CLAUDE_USER_MD), exist_ok=True)
+            with open(CLAUDE_USER_MD, "w", encoding="utf-8") as f:
+                f.write(new)
+        return action
+    except OSError as e:
+        return f"FAILED ({e})"
+
+
+def _remove_provider_block() -> bool:
+    """Remove ONLY our managed block; everything else passes untouched."""
+    try:
+        if not os.path.exists(CLAUDE_USER_MD):
+            return False
+        with open(CLAUDE_USER_MD, encoding="utf-8") as f:
+            text = f.read()
+        if _MD_BEGIN not in text:
+            return False
+        head, _, rest = text.partition(_MD_BEGIN)
+        _, _, tail = rest.partition(_MD_END)
+        new = (head.rstrip() + "\n" + tail.lstrip()).strip()
+        with open(CLAUDE_USER_MD, "w", encoding="utf-8") as f:
+            f.write(new + ("\n" if new else ""))
+        return True
+    except OSError:
+        return False
+
+# Matches our own installed hook command and captures the baked interpreter:
+#   "<python path>" -m brethof_brain_client.hook <event> [part]
+# Accepts the pre-rename module too, so install-hooks MIGRATES an old
+# install's entries in place instead of orphaning them beside new ones.
+_CMD_RE = re.compile(r'^"([^"]+)" -m brethof_(?:brain|mind)_client\.hook (\S+(?: \d+)?)$')
+
+
+def _hook_command(event_arg: str) -> str:
+    """The command Claude Code runs for a hook. Bakes in THIS interpreter so the
+    right Python (the one this package is installed into) is always used.
+    Forward slashes always — Claude Code runs hook commands through bash even on
+    Windows, and bash eats backslashes."""
+    py = sys.executable.replace("\\", "/")
+    return f'"{py}" -m brethof_brain_client.hook {event_arg}'
+
+
+def _ours(command: str, event_arg: str):
+    """If ``command`` is our hook command for ``event_arg``, return the baked
+    interpreter path; else None."""
+    m = _CMD_RE.match(command or "")
+    return m.group(1) if m and m.group(2) == event_arg else None
+
+
+def _valid_endpoint(url: str) -> str:
+    """Return a normalized endpoint or raise ValueError with a human reason."""
+    url = (url or "").strip().rstrip("/")
+    p = urllib.parse.urlparse(url)
+    if p.scheme not in ("http", "https") or not p.netloc:
+        raise ValueError(f"endpoint must be a full https:// URL, got {url!r}")
+    if p.scheme == "http" and p.hostname not in ("localhost", "127.0.0.1", "::1"):
+        raise ValueError("http:// endpoints would send your API key in cleartext — "
+                         "use https:// (http is allowed for localhost only)")
+    return url
+
+
+# ── ~/.claude/settings.json plumbing (always backed up, always atomic) ───────
+
+def _load_settings() -> dict:
+    if os.path.exists(CLAUDE_SETTINGS):
+        try:
+            with open(CLAUDE_SETTINGS, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            print(f"error: {CLAUDE_SETTINGS} is not valid JSON - fix it first",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        if not isinstance(data, dict) or not isinstance(data.get("hooks", {}), dict):
+            print(f"error: {CLAUDE_SETTINGS} has an unexpected shape "
+                  "(expected an object, with 'hooks' an object) - fix it first",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        return data
+    return {}
+
+
+def _write_settings(settings: dict) -> None:
+    """Back up the current file, then write atomically (tmp + os.replace) so an
+    interrupted write can never truncate the user's whole Claude Code config."""
+    os.makedirs(os.path.dirname(CLAUDE_SETTINGS), exist_ok=True)
+    if os.path.exists(CLAUDE_SETTINGS):
+        try:
+            with open(CLAUDE_SETTINGS, encoding="utf-8") as f:
+                old = f.read()
+            with open(CLAUDE_SETTINGS + ".bak", "w", encoding="utf-8") as f:
+                f.write(old)
+        except Exception:
+            pass
+    tmp = CLAUDE_SETTINGS + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
+    os.replace(tmp, CLAUDE_SETTINGS)
+
+
+# ── commands ────────────────────────────────────────────────────────────────
+
+def cmd_setup(args) -> int:
+    api_key = args.api_key
+    if not api_key:
+        if sys.stdin.isatty():
+            # getpass: the key must not echo to the terminal or scrollback.
+            api_key = getpass.getpass(
+                "brethof-brain API key (bmv2_... or bm_test_..., hidden): ").strip()
+        else:
+            print("error: --api-key required (or run in an interactive terminal)",
+                  file=sys.stderr)
+            return 2
+    if not api_key.startswith(("bmv2_", "bm_test_")):
+        print("warning: key doesn't look like a brethof-brain key (bmv2_/bm_test_)",
+              file=sys.stderr)
+
+    ensure_dirs()
+    data = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    try:
+        endpoint = _valid_endpoint(args.endpoint or data.get("endpoint") or DEFAULT_ENDPOINT)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    data["api_key"] = api_key
+    data["endpoint"] = endpoint
+    if args.project:
+        if not valid_project(args.project):
+            print(f"error: invalid project key '{args.project}' "
+                  "(must match [a-z][a-z0-9_]{0,15})", file=sys.stderr)
+            return 2
+        data["default_project"] = args.project
+    data.setdefault("default_project", "global")
+    save_file(data)
+    print(f"OK: saved {CONFIG_PATH} (readable by you only)")
+
+    # verify connectivity
+    cfg = Config.load()
+    try:
+        snap = Client(cfg).get("/v1/usage")
+        plan = snap.get("plan", "?")
+        print(f"OK: connected to {cfg.endpoint} - plan: {plan}")
+    except ClientError as e:
+        print(f"warning: saved, but could not reach the service yet: {e}", file=sys.stderr)
+
+    print("\nNext:")
+    print("  brethof-brain install-hooks   # auto-load & archive memory in Claude Code")
+    print("  brethof-brain mcp-command     # wire the memory tools (remote MCP)")
+    return 0
+
+
+CONTROL_URL = os.environ.get("BRETHOF_BRAIN_CONTROL_URL", "https://api.brethof.ai").rstrip("/")
+
+
+def _post_json(url: str, body: dict, timeout: float = 30.0) -> tuple[int, dict]:
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": f"brethof-brain-client/{__version__}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except ValueError:
+            # not the service speaking: Cloudflare's edge answers its own
+            # pages (403 "error code: 1010" to a bare urllib, 2026-10-04)
+            return e.code, {"error": "blocked",
+                            "error_description": f"HTTP {e.code} from the network edge, not the service"}
+    except (urllib.error.URLError, OSError) as e:
+        return 0, {"error": "unreachable", "error_description": f"{type(e).__name__}: {e}"}
+
+
+def _can_open_browser() -> bool:
+    """A browser this process can show: a desktop session (Linux needs a
+    display), macOS and Windows always; never over plain SSH."""
+    if sys.platform in ("darwin", "win32"):
+        return True
+    if os.environ.get("SSH_CONNECTION") and not os.environ.get("DISPLAY"):
+        return False
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _open_browser(url: str) -> bool:
+    if not url or not _can_open_browser():
+        return False
+    try:
+        import webbrowser
+        return bool(webbrowser.open(url, new=2))
+    except Exception:  # noqa: BLE001 — the printed link is the fallback
+        return False
+
+
+def cmd_login(args, sleep=None) -> int:
+    """DEVICE LOGIN (2026-10-04): this machine asks the control plane for a
+    code, the human approves it on brethof.ai/account/device while signed in
+    (2FA), and the key comes back to this process — written to the config
+    file and never printed, so an agent running the install never sees it.
+    Hosted memories only: a local memory mints its own key on its machine."""
+    import socket
+    import time as _time
+    sleep = sleep or _time.sleep
+    control = (args.control or CONTROL_URL).rstrip("/")
+    st, code = _post_json(f"{control}/v1/device/code",
+                          {"client_name": f"brethof-brain on {socket.gethostname()}"[:80]})
+    if st != 200 or not code.get("device_code"):
+        print(f"error: could not start the sign-in ({st}: "
+              f"{code.get('error_description') or code.get('error') or 'no answer'})", file=sys.stderr)
+        return 1
+    link = code.get("verification_uri_complete") or code.get("verification_uri") or ""
+    opened = (not getattr(args, "no_browser", False)) and _open_browser(link)
+    print("Opening your browser to confirm this machine…" if opened else
+          "To connect this machine to your memory, open this page while signed in:")
+    print(f"  {link}")
+    print(f"and confirm the code  {code.get('user_code', '')}", flush=True)
+    interval = max(1, int(code.get("interval") or 5))
+    deadline = _time.time() + int(code.get("expires_in") or 600)
+    while _time.time() < deadline:
+        sleep(interval)
+        st, tok = _post_json(f"{control}/v1/device/token", {"device_code": code["device_code"]})
+        if st == 200 and tok.get("api_key"):
+            break
+        err = tok.get("error", "")
+        if err == "authorization_pending":
+            continue
+        if err == "slow_down":
+            interval += 5
+            continue
+        print(f"error: {tok.get('error_description') or err or f'HTTP {st}'}", file=sys.stderr)
+        return 1
+    else:
+        print("error: the code expired before it was approved — run login again", file=sys.stderr)
+        return 1
+    try:
+        endpoint = _valid_endpoint(tok.get("endpoint") or "")
+    except ValueError as e:
+        print(f"error: the service answered an unusable endpoint: {e}", file=sys.stderr)
+        return 1
+    ensure_dirs()
+    data = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data["api_key"], data["endpoint"] = tok["api_key"], endpoint
+    data.setdefault("default_project", "global")
+    save_file(data)                     # the key first: it is good on its own
+    if tok.get("needs_passphrase") and not data.get("unlock_passphrase"):
+        # THE HUMAN'S OWN SECRET, never through the agent: a one-shot page in
+        # their browser when one can open; a hidden prompt only on a real
+        # terminal; never a prompt that waits on nobody (no tty under an agent)
+        pp = ""
+        if not getattr(args, "no_browser", False) and _can_open_browser():
+            from . import connectpage
+            pp = connectpage.serve({"passphrase": ""}, f"brethof-brain-client/{__version__}",
+                                   _open_browser, endpoint=endpoint).get("passphrase", "")
+        elif sys.stdin.isatty():
+            print("WARNING: if you forget your passphrase, your memory can never be opened again — "
+                  "by you or by us. There is no way to recover it.", file=sys.stderr)
+            pp = getpass.getpass("Your memory's passphrase (hidden; it unlocks your hosted memory): ").strip()
+            if pp and getpass.getpass("Passphrase again: ").strip() != pp:
+                print("error: the two passphrases are not the same — not saved", file=sys.stderr)
+                pp = ""
+        if pp:
+            data["unlock_passphrase"] = pp
+            save_file(data)
+        else:
+            print("note: your hosted memory locks when idle and needs its passphrase — run "
+                  "`brethof-brain login` again on a machine with a browser or a terminal, or set "
+                  f"unlock_passphrase in {CONFIG_PATH}", file=sys.stderr)
+    print(f"OK: connected — key and endpoint saved to {CONFIG_PATH} (readable by you only)")
+    return 0
+
+
+LOCAL_ENDPOINT = "http://127.0.0.1:8610"
+
+
+def _local_memory_here() -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(LOCAL_ENDPOINT + "/v1/health", timeout=3) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def cmd_connect(args) -> int:
+    """THE INSTALL'S ONE STEP FOR THE HUMAN (founder 2026-10-04): the client
+    needs the API key and, for a hosted memory, the passphrase — and the agent
+    running the install must see neither. A window opens on the person's own
+    screen, takes them, checks them with the memory and saves them; the agent
+    only learns that it is connected. No screen: hidden prompts on a real
+    terminal. Neither: say so — never wait on nobody."""
+    from . import connectpage
+    ua = f"brethof-brain-client/{__version__}"
+    ensure_dirs()
+    data = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    endpoint = args.endpoint or data.get("endpoint") or ""
+    if not endpoint and _local_memory_here():
+        endpoint = LOCAL_ENDPOINT
+    got: dict = {}
+    if not args.no_browser and _can_open_browser():
+        got = connectpage.serve({"endpoint": endpoint, "key": "", "passphrase": ""}, ua, _open_browser)
+        if not got:
+            print("error: the window was not filled in before it timed out — run connect again", file=sys.stderr)
+            return 1
+    elif sys.stdin.isatty():
+        ep = input(f"Where your memory is [{endpoint or 'https://memory.brethof.cloud/t/<yours>'}]: ").strip() or endpoint
+        key = getpass.getpass("API key (bmv2_…, hidden): ").strip()
+        pp = ""
+        if not connectpage._is_local(ep):
+            print("WARNING: if you forget your passphrase, your memory can never be opened again — "
+                  "by you or by us. There is no way to recover it.", file=sys.stderr)
+            pp = getpass.getpass("Passphrase (hosted memory; hidden, empty if none): ").strip()
+            if pp and getpass.getpass("Passphrase again: ").strip() != pp:
+                print("error: the two passphrases are not the same", file=sys.stderr)
+                return 1
+        why = connectpage.check(ep, key, pp, ua)
+        if why:
+            print(f"error: {why}", file=sys.stderr)
+            return 1
+        got = {"endpoint": ep.rstrip("/"), "key": key, "passphrase": pp}
+    else:
+        print("error: there is no screen and no terminal here to ask the person — they run "
+              "`brethof-brain connect` themselves on this computer", file=sys.stderr)
+        return 2
+    try:
+        data["endpoint"] = _valid_endpoint(got["endpoint"])
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    data["api_key"] = got["key"]
+    if got.get("passphrase"):
+        data["unlock_passphrase"] = got["passphrase"]
+    data.setdefault("default_project", "global")
+    save_file(data)
+    print(f"OK: connected to your memory — saved to {CONFIG_PATH} (readable by you only)")
+    return 0
+
+
+def cmd_install_hooks(args) -> int:
+    settings = _load_settings()
+    hooks = settings.setdefault("hooks", {})
+    added = repaired = 0
+    # MIGRATION: the pre-parts registration was a single bare "session-start"
+    # hook. Left in place next to "session-start 1/2" it would inject the
+    # whole payload a THIRD time — remove ours (and only ours) on sight.
+    legacy = 0
+    for g in hooks.get("SessionStart", []) or []:
+        if isinstance(g, dict):
+            inner = [h for h in g.get("hooks", [])
+                     if not (isinstance(h, dict)
+                             and _ours(h.get("command", ""), "session-start"))]
+            legacy += len(g.get("hooks", [])) - len(inner)
+            g["hooks"] = inner
+    if legacy:
+        repaired += legacy
+    for event_name, event_arg in HOOK_EVENTS:
+        command = _hook_command(event_arg)
+        groups = hooks.setdefault(event_name, [])
+        if not isinstance(groups, list):
+            print(f"error: settings hooks.{event_name} is not a list - fix it first",
+                  file=sys.stderr)
+            return 2
+        found = False
+        for g in groups:
+            if not isinstance(g, dict):
+                continue
+            for h in g.get("hooks", []):
+                if not isinstance(h, dict):
+                    continue
+                py = _ours(h.get("command", ""), event_arg)
+                if py is None:
+                    continue
+                found = True
+                # Repair a stale interpreter (deleted venv, Python upgrade):
+                # the baked path must exist AND be this install's interpreter.
+                if not os.path.exists(py) or h.get("command") != command:
+                    h["command"] = command
+                    repaired += 1
+        if not found:
+            groups.append({"matcher": "", "hooks": [{"type": "command", "command": command}]})
+            added += 1
+
+    if added or repaired:
+        _write_settings(settings)
+        what = []
+        if added:
+            what.append(f"wired {added} hook(s)")
+        if repaired:
+            what.append(f"repaired {repaired} stale interpreter path(s)")
+        print(f"OK: {', '.join(what)} in {CLAUDE_SETTINGS} (backup: {CLAUDE_SETTINGS}.bak)")
+        print("  Restart Claude Code (or start a new session) to activate.")
+    else:
+        print("OK: hooks already installed - nothing to do")
+    action = _install_provider_block()
+    print(f"OK: Brain provider block {action} in {CLAUDE_USER_MD}")
+    return 0
+
+
+def cmd_uninstall_hooks(args) -> int:
+    if not os.path.exists(CLAUDE_SETTINGS):
+        print("OK: no Claude Code settings file - nothing installed")
+        return 0
+    settings = _load_settings()
+    hooks = settings.get("hooks", {})
+    removed = 0
+    # "session-start" (bare) = the pre-parts registration — still removable.
+    for event_name, event_arg in HOOK_EVENTS + [("SessionStart", "session-start")]:
+        groups = hooks.get(event_name, [])
+        if not isinstance(groups, list):
+            continue
+        kept = []
+        for g in groups:
+            if not isinstance(g, dict):
+                kept.append(g)  # not ours — pass through untouched
+                continue
+            inner = [h for h in g.get("hooks", [])
+                     if not (isinstance(h, dict) and _ours(h.get("command", ""), event_arg))]
+            lost = len(g.get("hooks", [])) - len(inner)
+            removed += lost
+            # Drop a group only if WE emptied it; a user's own (even empty)
+            # group passes through untouched.
+            if inner or not lost:
+                g["hooks"] = inner if lost else g.get("hooks", inner)
+                kept.append(g)
+        if kept:
+            hooks[event_name] = kept
+        elif event_name in hooks:
+            del hooks[event_name]
+    if removed:
+        _write_settings(settings)
+    print(f"OK: removed {removed} brethof-brain hook(s) from {CLAUDE_SETTINGS}")
+    if _remove_provider_block():
+        print(f"OK: removed the Brain provider block from {CLAUDE_USER_MD}")
+    return 0
+
+
+def cmd_mcp_command(args) -> int:
+    cfg = Config.load()
+    key = cfg.api_key or "bmv2_YOUR_KEY"
+    url = cfg.endpoint + MCP_PATH
+    print("Run this once to add the Brain to Claude Code:\n")
+    # ONE line, no continuation characters — POSIX `\` breaks in PowerShell/cmd.
+    # The server registers as "brain": the harness stamps that name into
+    # every tool id the model reads (mcp__brain__search_brain).
+    print(f'  claude mcp add --transport http brain {url} '
+          f'--header "Authorization: Bearer {key}"')
+    print("\n(That stores the server in Claude Code's MCP config; the tools then "
+          "appear as save_project, search_brain, list_brain, ...)")
+    if cfg.api_key:
+        print("note: the line contains your real API key and will land in shell "
+              "history - clear it afterwards if the machine is shared.")
+    return 0
+
+
+def cmd_status(args) -> int:
+    cfg = Config.load()
+    if not cfg.configured():
+        print("not configured - run: brethof-brain setup --api-key ...", file=sys.stderr)
+        return 2
+    try:
+        snap = Client(cfg).get("/v1/usage")
+    except ClientError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(f"endpoint : {cfg.endpoint}")
+    print(f"plan     : {snap.get('plan', '?')}")
+    enforced = snap.get("enforced")
+    if enforced is not None:
+        print(f"enforced : {enforced}  (caps {'block' if enforced else 'measured only'})")
+    counters = snap.get("counters") or snap.get("usage") or {}
+    if isinstance(counters, dict) and counters:
+        print("usage:")
+        for k, v in counters.items():
+            print(f"  {k:<22} {v}")
+    return 0
+
+
+def cmd_doctor(args) -> int:
+    cfg = Config.load()
+    ok = True
+
+    def check(label, good, detail=""):
+        nonlocal ok
+        mark = "[ok]" if good else "[XX]"
+        ok = ok and good
+        print(f"  {mark} {label}" + (f" - {detail}" if detail else ""))
+
+    print("brethof-brain client doctor")
+    print(f"client version : {__version__}")
+    check("config file", os.path.exists(CONFIG_PATH), CONFIG_PATH)
+    check("api key set", bool(cfg.api_key),
+          "run: brethof-brain setup" if not cfg.api_key else cfg.api_key[:12] + "...")
+    try:
+        _valid_endpoint(cfg.endpoint)
+        check("endpoint", True, cfg.endpoint)
+    except ValueError as e:
+        check("endpoint", False, str(e))
+
+    # project routing sanity
+    env_proj = os.environ.get("BRETHOF_BRAIN_PROJECT")
+    if env_proj:
+        check("BRETHOF_BRAIN_PROJECT", valid_project(env_proj),
+              env_proj if valid_project(env_proj)
+              else f"'{env_proj}' invalid (must match [a-z][a-z0-9_]{{0,15}}) - IGNORED")
+    if not valid_project(cfg.default_project):
+        check("default_project", False,
+              f"'{cfg.default_project}' invalid - falling back to 'global'")
+    bad_keys = [p.get("key") for p in cfg.projects if isinstance(p, dict)
+                and p.get("key") and not valid_project(p.get("key"))]
+    if bad_keys:
+        check("projects[].key", False, f"invalid keys ignored: {', '.join(bad_keys)}")
+
+    if cfg.configured():
+        try:
+            snap = Client(cfg, timeout=8.0).get("/v1/usage")
+            check("service reachable + key valid", True, f"plan {snap.get('plan','?')}")
+        except ClientError as e:
+            detail = str(e)
+            if "1010" in detail or "Cloudflare" in detail:
+                detail += "  <- looks like an edge/WAF block, NOT a bad key"
+            check("service reachable + key valid", False, detail)
+
+    # hooks wired? (and does each baked interpreter still exist?)
+    try:
+        settings = _load_settings()
+    except SystemExit:
+        settings = {}
+    hooks = settings.get("hooks", {}) if isinstance(settings.get("hooks", {}), dict) else {}
+    for event_name, event_arg in HOOK_EVENTS:
+        pys = [
+            _ours(h.get("command", ""), event_arg)
+            for g in hooks.get(event_name, []) if isinstance(g, dict)
+            for h in g.get("hooks", []) if isinstance(h, dict)
+        ]
+        pys = [p for p in pys if p]
+        if not pys:
+            check(f"hook {event_name}", False, "run: brethof-brain install-hooks")
+        elif not all(os.path.exists(p) for p in pys):
+            dead = next(p for p in pys if not os.path.exists(p))
+            check(f"hook {event_name}", False,
+                  f"interpreter missing: {dead} - rerun: brethof-brain install-hooks")
+        else:
+            check(f"hook {event_name}", True)
+
+    print("\n" + ("all good" if ok else "issues found - see [XX] above"))
+    return 0 if ok else 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="brethof-brain",
+                                description="brethof-brain cloud client")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("setup", help="save credentials and verify connectivity")
+    s.add_argument("--api-key", help="your brethof-brain API key")
+    s.add_argument("--endpoint", help=f"data-plane URL (default {DEFAULT_ENDPOINT})")
+    s.add_argument("--project", help="default project key for this account")
+    s.set_defaults(func=cmd_setup)
+
+    sub.add_parser("install-hooks", help="wire the hooks into Claude Code"
+                   ).set_defaults(func=cmd_install_hooks)
+    sub.add_parser("uninstall-hooks", help="remove the hooks from Claude Code"
+                   ).set_defaults(func=cmd_uninstall_hooks)
+    sub.add_parser("mcp-command", help="print the `claude mcp add` line"
+                   ).set_defaults(func=cmd_mcp_command)
+    cn = sub.add_parser("connect", help="connect this computer to your memory: a window takes the key "
+                        "(and a hosted memory's passphrase) — the agent never sees them")
+    cn.add_argument("--endpoint", default="", help="where the memory is (found by itself for this computer)")
+    cn.add_argument("--no-browser", action="store_true", help="ask in the terminal instead of a window")
+    cn.set_defaults(func=cmd_connect)
+    lg = sub.add_parser("login", help="connect this machine to your hosted memory by approving a code on brethof.ai")
+    lg.add_argument("--control", default="", help=argparse.SUPPRESS)
+    lg.add_argument("--no-browser", action="store_true", help="print the links instead of opening a browser")
+    lg.set_defaults(func=cmd_login)
+    sub.add_parser("status", help="show plan + usage").set_defaults(func=cmd_status)
+    sub.add_parser("doctor", help="diagnose setup").set_defaults(func=cmd_doctor)
+    return p
+
+
+def main(argv=None) -> int:
+    # Windows consoles default to cp1252; make our output crash-proof.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

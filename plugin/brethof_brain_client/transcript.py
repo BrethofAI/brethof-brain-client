@@ -1,0 +1,251 @@
+"""Read NEW turns from a Claude Code transcript, incrementally.
+
+Claude Code appends JSONL to a per-session transcript. The Stop hook fires
+every assistant turn; we keep a per-session byte offset (plus a monotonic turn
+index) so each line is shipped exactly once and retries converge — the data
+plane hashes (session_id, turn_index, text) into the row id, so re-sending the
+same line is an idempotent UPSERT, never a duplicate.
+
+Offset + index advance ONLY after the server confirms the write (see hook.stop),
+so a failed flush is simply retried next turn from the same point. The file is
+read in BINARY mode and offsets are plain byte counts, so they can be validated
+against the file size and a stored offset can never land mid-character.
+
+Safety properties:
+- Only NEWLINE-TERMINATED lines are consumed. A half-written final line (the
+  writer mid-flush) is left for the next pass instead of being skipped forever.
+- If the transcript was replaced or truncated (stored offset > file size),
+  state resets to (0, 0) and the file is re-read from the start — identical
+  (session_id, index, text) triples upsert to the same server rows, so the
+  resend cannot duplicate.
+- Every turn carries ``_offset`` (the byte offset just past its line) so the
+  caller can flush in bounded chunks and commit state per confirmed chunk.
+
+Turn shape emitted (matches mindcore/archive.archive_turns), minus the
+client-internal ``_offset``:
+    {"index": int, "line_type": "user"|"assistant", "text": str,
+     "timestamp": iso-or-None, "embed": bool}
+Only real conversation lines are emitted. Tool RESULTS are dropped entirely —
+they carry the contents of the user's files and command output, which the
+README promises never leave the machine. Assistant tool CALLS ship as one-line
+markers ("[tool_use: Bash]").
+"""
+from __future__ import annotations
+
+import json
+import os
+
+from .config import STATE_DIR
+
+TEXT_CAP = 50_000  # trim pathologically long single lines before shipping
+
+
+def _state_path(session_id: str) -> str:
+    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    return os.path.join(STATE_DIR, f"{safe}.json")
+
+
+def _read_raw(session_id: str) -> dict:
+    try:
+        with open(_state_path(session_id), encoding="utf-8") as f:
+            s = json.load(f)
+        return s if isinstance(s, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_raw(session_id: str, data: dict) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = _state_path(session_id) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    os.replace(tmp, _state_path(session_id))
+
+
+def load_state(session_id: str) -> dict:
+    s = _read_raw(session_id)
+    try:
+        return {"offset": int(s.get("offset", 0)), "next_index": int(s.get("next_index", 0))}
+    except Exception:
+        return {"offset": 0, "next_index": 0}
+
+
+def save_state(session_id: str, offset: int, next_index: int) -> None:
+    # MERGE, never overwrite: this file also carries the session's pinned
+    # project, and a blind rewrite would drop it on the first flush.
+    data = _read_raw(session_id)
+    data["offset"], data["next_index"] = offset, next_index
+    _write_raw(session_id, data)
+
+
+def save_pending_prompt(session_id: str, prompt: str) -> None:
+    """The user's half of a turn, for a harness whose stop hook carries only
+    the reply (hook._stop_from_payload). "" clears it."""
+    data = _read_raw(session_id)
+    data["pending_prompt"] = prompt
+    _write_raw(session_id, data)
+
+
+def save_pending_brief(session_id: str, brief: str) -> None:
+    """The session brief, kept for the first prompt (hook TURN_FILE). "" clears it."""
+    data = _read_raw(session_id)
+    data["pending_brief"] = brief
+    _write_raw(session_id, data)
+
+
+def load_pending_brief(session_id: str) -> str:
+    b = _read_raw(session_id).get("pending_brief")
+    return b if isinstance(b, str) else ""
+
+
+def load_pending_prompt(session_id: str) -> str:
+    p = _read_raw(session_id).get("pending_prompt")
+    return p if isinstance(p, str) else ""
+
+
+def load_project(session_id: str) -> str:
+    """The project pinned for this session, or "" if none is pinned yet."""
+    p = _read_raw(session_id).get("project")
+    return p if isinstance(p, str) else ""
+
+
+def save_project(session_id: str, project: str) -> None:
+    data = _read_raw(session_id)
+    data["project"] = project
+    _write_raw(session_id, data)
+
+
+def _parts_text(msg: dict) -> str:
+    """Gemini-lineage transcripts (Qwen Code 0.21+, verified 2026-08-17)
+    carry `message.parts: [{text: ...}]` instead of Claude's `content`.
+    Same JSONL envelope, same type/role fields — only the text moved."""
+    parts = msg.get("parts")
+    if not isinstance(parts, list):
+        return ""
+    return "\n".join(p.get("text", "") for p in parts
+                     if isinstance(p, dict) and p.get("text"))
+
+
+def _extract_text(d: dict):
+    """Return (text, embed_flag). embed_flag True only for genuine dialogue."""
+    t = d.get("type")
+    msg = d.get("message") if isinstance(d.get("message"), dict) else None
+    if t in ("user", "assistant") and msg and "parts" in msg \
+            and "content" not in msg:
+        text = _parts_text(msg)
+        return text, bool(text)
+    if t == "user" and msg:
+        c = msg.get("content")
+        if isinstance(c, str):
+            return c, True
+        if isinstance(c, list):
+            # List-form user content mixes genuine typed text blocks with
+            # tool_result blocks. Keep the dialogue; DROP tool results — they
+            # carry file contents and command output that must not leave the
+            # machine (the README's "What leaves your machine" contract).
+            out = [b.get("text", "") for b in c
+                   if isinstance(b, dict) and b.get("type") == "text"]
+            text = "\n".join(s for s in out if s)
+            return text, bool(text)
+    if t == "assistant" and msg:
+        c = msg.get("content")
+        # String-form assistant content is what `claude -p` (SDK query path)
+        # writes — verified 2026-08-17 when the rig's role-aware oracle found
+        # print-mode archives holding user turns ONLY. Interactive sessions
+        # use the list form below and were never affected.
+        if isinstance(c, str):
+            return c, True
+        if isinstance(c, list):
+            out = []
+            for b in c:
+                if not isinstance(b, dict):
+                    continue
+                bt = b.get("type")
+                if bt == "text":
+                    out.append(b.get("text", ""))
+                elif bt == "thinking":
+                    out.append(b.get("thinking", ""))
+                elif bt == "tool_use":
+                    out.append(f"[tool_use: {b.get('name', '?')}]")
+            return "\n".join(s for s in out if s), True
+    return "", False
+
+
+def read_new_turns(transcript_path: str, session_id: str):
+    """Return ``(turns, tail_offset, next_index)`` for COMPLETE lines added
+    since the last committed offset.
+
+    ``tail_offset`` is the byte offset just past the last newline-terminated
+    line scanned (conversation or not); each turn's ``_offset`` is the offset
+    just past its own line. Does not persist anything — the caller commits
+    state only after the server confirms a flush."""
+    state = load_state(session_id)
+    offset, idx = state["offset"], state["next_index"]
+    turns = []
+    if not transcript_path or not os.path.exists(transcript_path):
+        return turns, offset, idx
+    try:
+        if offset > os.path.getsize(transcript_path):
+            # Transcript replaced/rewritten shorter: reset and re-read from 0.
+            # The server's idempotent row ids turn the resend into a no-op.
+            offset, idx = 0, 0
+        pos = offset
+        with open(transcript_path, "rb") as f:
+            f.seek(offset)
+            while True:
+                raw = f.readline()
+                if not raw or not raw.endswith(b"\n"):
+                    # EOF, or a half-written final line: leave it for the next
+                    # pass rather than committing the offset past it.
+                    break
+                pos += len(raw)
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line.decode("utf-8", "replace"))
+                except Exception:
+                    continue
+                if not isinstance(d, dict):
+                    continue
+                t = d.get("type")
+                if t in ("user.message", "assistant.message"):
+                    # GitHub Copilot CLI's events.jsonl (1.0.91, 2026-10-03):
+                    # {"type": "user.message" | "assistant.message",
+                    #  "data": {"content": "<the words>", ...}} — the user's
+                    # own words, never transformedContent (Copilot's wrapper)
+                    t = t.split(".", 1)[0]
+                    c = (d.get("data") or {}).get("content")
+                    text, embed = (c, True) if isinstance(c, str) else ("", False)
+                elif t == "message" and d.get("role") in ("user", "assistant"):
+                    # Tencent CodeBuddy Code (2.161, 2026-10-03): OpenAI Agents
+                    # SDK items — {"type": "message", "role", "content":
+                    # [{"type": "input_text" | "output_text", "text"}]}
+                    t = d["role"]
+                    c = d.get("content")
+                    if isinstance(c, str):
+                        text = c
+                    elif isinstance(c, list):
+                        text = "\n".join(p.get("text", "") for p in c if isinstance(p, dict)
+                                         and p.get("type") in ("input_text", "output_text", "text") and p.get("text"))
+                    else:
+                        text = ""
+                    embed = bool(text)
+                elif t not in ("user", "assistant"):
+                    continue
+                else:
+                    text, embed = _extract_text(d)
+                if not text.strip():
+                    continue
+                turns.append({
+                    "index": idx,
+                    "line_type": t,
+                    "text": text[:TEXT_CAP],
+                    "timestamp": d.get("timestamp"),
+                    "embed": embed,
+                    "_offset": pos,
+                })
+                idx += 1
+    except Exception:
+        return [], state["offset"], state["next_index"]
+    return turns, pos, idx
