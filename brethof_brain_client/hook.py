@@ -102,10 +102,13 @@ def _emit_context(event_name: str, text: str) -> None:
         else:
             sys.stdout.write(text)
         return
-    if os.environ.get("BRETHOF_BRAIN_HOOK_FLAT"):
+    if os.environ.get("BRETHOF_BRAIN_HOOK_FLAT") or os.environ.get("COPILOT_CLI"):
         # GitHub Copilot CLI consumes a TOP-LEVEL additionalContext (its hooks
-        # reference, 2026-10-02); its hook config sets this variable. Claude
-        # Code keeps the wrapped shape — it rejects output it cannot read.
+        # reference, 2026-10-02). The setup script's hook config sets the
+        # variable; a PLUGIN install has no per-hook env, so Copilot is known
+        # by the COPILOT_CLI it sets for every hook process (probed on the rig,
+        # copilot-plugin@lin, 2026-10-04). Claude Code keeps the wrapped shape —
+        # it rejects output it cannot read.
         json.dump({"additionalContext": text}, sys.stdout)
         return
     out = {

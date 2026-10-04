@@ -1,5 +1,5 @@
 {
   "name": "brethof-brain",
-  "version": "1.2.18",
+  "version": "1.2.19",
   "description": "Long-term memory for Gemini CLI: a brief at session start, the records that bear on every prompt, every turn archived — one memory shared with your other agents. Needs a brethof-brain account; run `brethof-brain connect` once to save your key."
 }

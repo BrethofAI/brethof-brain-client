@@ -136,3 +136,17 @@ def test_the_connect_window_opens_at_once_even_when_name_lookups_hang(monkeypatc
     assert opened.wait(3), "the connect window did not open within 3 s"
     assert time.monotonic() - t0 < 3
     t.join(5)
+
+
+def test_copilot_is_known_by_its_own_variable(monkeypatch, capsys):
+    # A Copilot CLI plugin install cannot set BRETHOF_BRAIN_HOOK_FLAT; Copilot
+    # marks every hook process with COPILOT_CLI and reads a flat answer.
+    import json as _json
+    from brethof_brain_client import hook
+    monkeypatch.delenv("BRETHOF_BRAIN_HOOK_FLAT", raising=False)
+    monkeypatch.setenv("COPILOT_CLI", "1")
+    hook._emit_context("SessionStart", "hello")
+    assert _json.loads(capsys.readouterr().out) == {"additionalContext": "hello"}
+    monkeypatch.delenv("COPILOT_CLI")
+    hook._emit_context("SessionStart", "hello")
+    assert "hookSpecificOutput" in _json.loads(capsys.readouterr().out)
