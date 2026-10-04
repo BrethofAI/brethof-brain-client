@@ -57,9 +57,17 @@ def test_manifests_parse_and_agree_on_the_version():
         f"says {plug['version']} — installs pin the marketplace entry")
 
 
+def test_hooks_load_from_the_standard_file_only():
+    # Claude Code always loads hooks/hooks.json; naming it again in the
+    # manifest makes the loader report a duplicate hooks file (Anthropic's
+    # directory validator, HOOKS_STANDARD_FILE_DUPLICATED, 2026-10-04).
+    assert "hooks" not in _json(PLUGIN), "plugin.json must not re-list hooks/hooks.json"
+    assert (REPO / "hooks" / "hooks.json").is_file()
+
+
 def test_every_path_the_manifest_names_exists():
     plug = _json(PLUGIN)
-    for key in ("hooks", "mcpServers"):
+    for key in ("mcpServers",):
         rel = plug.get(key)
         assert rel, f"plugin.json declares no {key}"
         # removeprefix, NOT lstrip: lstrip takes a CHARACTER SET, so

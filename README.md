@@ -246,7 +246,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.13
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.14
 ```
 
 (There is no PyPI package — the client is installed from source, so you get
