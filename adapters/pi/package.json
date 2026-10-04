@@ -1,0 +1,12 @@
+{
+  "name": "brethof-brain-pi",
+  "version": "0.1.0",
+  "description": "brethof-brain memory for Pi — a session brief, the records that bear on every prompt, and every run archived, as one Pi extension.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": ["pi-package", "pi", "pi-coding-agent", "memory", "brethof-brain", "ai", "agent"],
+  "homepage": "https://brethof.ai/brain/",
+  "repository": { "type": "git", "url": "git+https://github.com/BrethofAI/brethof-brain-client.git", "directory": "adapters/pi" },
+  "files": ["brethof-brain.ts", "README.md"],
+  "pi": { "extensions": ["./brethof-brain.ts"] }
+}

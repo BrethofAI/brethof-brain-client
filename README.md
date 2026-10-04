@@ -52,11 +52,11 @@ runs anywhere Python 3.9+ does.
 | **OpenCode** | [`adapters/opencode/`](adapters/opencode/) | Full: one native plugin — persisted brief + recall parts, `session.idle` archival (npm: `brethof-brain-opencode`) |
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
 | **GitHub Copilot CLI** | [`adapters/copilot/`](adapters/copilot/) | Full: user hooks (inject + recall + archive). Proven on Linux and Windows, including offline with your own model |
-| **Pi** | [`adapters/pi/`](adapters/pi/) | Full: one extension file — brief in the system prompt, recall before every prompt, every run archived. Proven on Linux and Windows |
-| **CodeBuddy Code** (Tencent) | [`adapters/codebuddy/`](adapters/codebuddy/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
+| **Pi** | [`adapters/pi/`](adapters/pi/) (npm: `brethof-brain-pi`) | Full: one extension — brief in the system prompt, recall before every prompt, every run archived. Proven on Linux and Windows |
+| **CodeBuddy Code** (Tencent) | the Claude Code plugin ([`adapters/codebuddy/`](adapters/codebuddy/)) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
 | **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
 | **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux and Windows (needs Microsoft's Visual C++ runtime there) |
-| **Gemini CLI** (Google) | [`adapters/gemini-cli/`](adapters/gemini-cli/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
+| **Gemini CLI** (Google) | Gemini CLI extension ([`adapters/gemini-cli/`](adapters/gemini-cli/)) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
 | **Antigravity CLI** (Google, `agy`) | [`adapters/antigravity/`](adapters/antigravity/) | Full: brief and recall on every model call, every turn archived. Proven on Linux and Windows |
 | **Amp** | [`adapters/amp/`](adapters/amp/) | Full: one plugin file — brief with a thread's first prompt, recall on every prompt, every turn archived. Proven on Linux |
 | **Qoder CLI** (Alibaba) | [`adapters/qoder/`](adapters/qoder/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
@@ -161,6 +161,40 @@ the turns. Drop the plugin file into `~/.config/opencode/plugins/`
 alike): from this repo, `adapters/opencode/lib/index.js`, or from npm —
 `npm pack brethof-brain-opencode` and take `package/lib/index.js`. See [`adapters/opencode/README.md`](adapters/opencode/README.md).
 
+### Gemini CLI
+
+Install as a Gemini CLI extension — the whole loop through the extension's own
+hooks (brief at session start, recall before every prompt, every turn archived):
+
+```bash
+gemini extensions install https://github.com/BrethofAI/brethof-brain-client
+```
+
+Then run `brethof-brain connect` once (see [Configuration](#configuration)).
+The older route, `python3 adapters/gemini-cli/setup.py` (hooks in
+`~/.gemini/settings.json`), still works.
+
+### Pi
+
+```bash
+pi install npm:brethof-brain-pi
+```
+
+One extension: the brief in the system prompt, recall before every prompt,
+every run archived. See [`adapters/pi/README.md`](adapters/pi/README.md).
+
+### CodeBuddy Code
+
+CodeBuddy installs the Claude Code plugin as it is:
+
+```bash
+codebuddy plugin marketplace add BrethofAI/brethof-brain-client
+codebuddy plugin install brethof-brain@brethof
+```
+
+Then run the plugin's `connect.py` once (as for Claude Code). The older route,
+`python3 adapters/codebuddy/setup.py`, still works.
+
 ### Other editors and MCP clients
 
 Any MCP-compatible client can use the memory **tools** on demand (search,
@@ -247,7 +281,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.16
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.17
 ```
 
 (There is no PyPI package — the client is installed from source, so you get

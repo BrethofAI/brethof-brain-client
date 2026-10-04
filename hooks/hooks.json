@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "name": "brethof-brain", "type": "command", "command": "node \"${extensionPath}${/}adapters${/}gemini-cli${/}run_hook.cjs\"", "timeout": 15000 } ] }
+    ],
+    "BeforeAgent": [
+      { "hooks": [ { "name": "brethof-brain", "type": "command", "command": "node \"${extensionPath}${/}adapters${/}gemini-cli${/}run_hook.cjs\"", "timeout": 15000 } ] }
+    ],
+    "AfterAgent": [
+      { "hooks": [ { "name": "brethof-brain", "type": "command", "command": "node \"${extensionPath}${/}adapters${/}gemini-cli${/}run_hook.cjs\"", "timeout": 30000 } ] }
+    ]
+  }
+}

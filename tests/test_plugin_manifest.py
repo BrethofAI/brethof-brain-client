@@ -162,3 +162,18 @@ def test_the_bundle_ships_nothing_but_the_plugin():
     # edition's installer, the CI file and the other adapters stay out.
     for name in ("adapters", "local", ".github", "tests", "test-container", "pyproject.toml"):
         assert not (BUNDLE / name).exists(), f"plugin/{name} would ship with the plugin"
+
+
+def test_the_gemini_extension_is_whole_and_versioned_with_the_plugin():
+    # Gemini's gallery reads gemini-extension.json at the repo ROOT and the
+    # extension's hooks from hooks/hooks.json beside it (2026-10-04).
+    ext = _json(REPO / "gemini-extension.json")
+    assert ext["name"] == "brethof-brain" and ext["version"] == _json(PLUGIN)["version"], (
+        "gemini-extension.json must carry the plugin's version")
+    hooks = _json(REPO / "hooks" / "hooks.json")["hooks"]
+    assert set(hooks) == {"SessionStart", "BeforeAgent", "AfterAgent"}
+    for entries in hooks.values():
+        for h in entries[0]["hooks"]:
+            assert "${extensionPath}" in h["command"] and h["timeout"] >= 1000   # milliseconds
+            rel = h["command"].split("${extensionPath}")[1].strip('"').replace("${/}", "/")
+            assert (REPO / rel.lstrip("/")).is_file(), f"{rel} is not in the repo"
