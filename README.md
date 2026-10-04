@@ -55,8 +55,8 @@ runs anywhere Python 3.9+ does.
 | **CodeBuddy Code** (Tencent) | [`adapters/codebuddy/`](adapters/codebuddy/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
 | **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
 | **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux and Windows (needs Microsoft's Visual C++ runtime there) |
-| **Gemini CLI** (Google) | [`adapters/gemini-cli/`](adapters/gemini-cli/) | Full: hooks (inject + recall + archive). Proven on Linux |
-| **Antigravity CLI** (Google, `agy`) | [`adapters/antigravity/`](adapters/antigravity/) | Full: brief and recall on every model call, every turn archived. Proven on Linux |
+| **Gemini CLI** (Google) | [`adapters/gemini-cli/`](adapters/gemini-cli/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
+| **Antigravity CLI** (Google, `agy`) | [`adapters/antigravity/`](adapters/antigravity/) | Full: brief and recall on every model call, every turn archived. Proven on Linux and Windows |
 | **Amp** | [`adapters/amp/`](adapters/amp/) | Full: one plugin file — brief with a thread's first prompt, recall on every prompt, every turn archived. Proven on Linux |
 | **Qoder CLI** (Alibaba) | [`adapters/qoder/`](adapters/qoder/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
 | **goose** | [`adapters/goose/`](adapters/goose/) | Full: plugin hooks write the memory into the file goose reads every turn; every turn archived. Proven on Linux and Windows (needs the Visual C++ runtime and Git Bash there) |
@@ -246,7 +246,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.1
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.13
 ```
 
 (There is no PyPI package — the client is installed from source, so you get
