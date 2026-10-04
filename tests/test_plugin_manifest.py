@@ -177,3 +177,15 @@ def test_the_gemini_extension_is_whole_and_versioned_with_the_plugin():
             assert "${extensionPath}" in h["command"] and h["timeout"] >= 1000   # milliseconds
             rel = h["command"].split("${extensionPath}")[1].strip('"').replace("${/}", "/")
             assert (REPO / rel.lstrip("/")).is_file(), f"{rel} is not in the repo"
+
+
+def test_the_plugin_never_edits_claudes_own_files():
+    # Anthropic's directory scan failed v1.2.15 with "weakens permission or
+    # sandbox controls" (2026-10-04): the bundle carried code that writes
+    # ~/.claude/settings.json and ~/.claude/CLAUDE.md. None of it may ship.
+    assert not (BUNDLE / "brethof_brain_client" / "claude_files.py").exists()
+    for f in BUNDLE.rglob("*"):
+        if f.is_file() and f.suffix in (".py", ".sh", ".json"):
+            text = f.read_text(encoding="utf-8", errors="replace")
+            for needle in ('expanduser("~/.claude', "settings.json", "CLAUDE.md"):
+                assert needle not in text, f"{f.relative_to(REPO)} mentions {needle}"

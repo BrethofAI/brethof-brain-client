@@ -79,11 +79,19 @@ only Python 3.9+ on your PATH.
 /plugin install brethof-brain@brethof
 ```
 
-You'll be prompted for your **API key** (from
-[brethof.ai/account](https://brethof.ai) → brethof-brain tab); Claude Code stores
-it as plugin config (sensitive values go to your OS keychain where available)
-and passes it to the hooks via the environment — never on a command line.
-Restart Claude Code and memory is live. Commands are namespaced:
+Then connect it to your memory: run the plugin's `connect.py` (your agent can
+run it for you) — a window on your own screen takes your API key and, for a
+hosted memory, its passphrase; your agent never sees them. The hooks and the
+memory tools load at the next session start.
+
+**One manual step, recommended:** Claude Code keeps its own file memory and
+files "remember this" there unless told otherwise. The plugin does not edit
+your Claude Code files, so add the memory block from
+[`plugin/README.md`](plugin/README.md#recommended-tell-claude-code-where-memory-lives-one-manual-step)
+to your `~/.claude/CLAUDE.md` yourself (or ask your agent to). The pip install's
+`brethof-brain install-hooks` writes that block for you.
+
+Commands are namespaced:
 `/brethof-brain:recall`, `/brethof-brain:curate`, `/brethof-brain:onboard`.
 `/curate` closes a session: it files what was found and leaves the handover
 note. Curation, consolidation and healing of the memory itself are the
@@ -280,7 +288,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.17
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.18
 ```
 
 (There is no PyPI package — the client is installed from source, so you get

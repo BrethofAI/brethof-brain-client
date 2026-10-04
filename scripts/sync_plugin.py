@@ -25,18 +25,22 @@ REPO = Path(__file__).resolve().parent.parent
 PLUGIN = REPO / "plugin"
 SHARED_FILES = ("hook_entry.py", "connect.py", "hooks/run_hook.sh", "LICENSE")
 SHARED_PACKAGE = "brethof_brain_client"
+# Never in the plugin: the code that edits Claude Code's own settings and
+# CLAUDE.md (claude_files.py says why — Anthropic's directory scan).
+NOT_IN_PLUGIN = {"claude_files.py"}
 
 
 def pairs() -> list[tuple[Path, Path]]:
     out = [(REPO / f, PLUGIN / f) for f in SHARED_FILES]
-    out += [(p, PLUGIN / SHARED_PACKAGE / p.name) for p in sorted((REPO / SHARED_PACKAGE).glob("*.py"))]
+    out += [(p, PLUGIN / SHARED_PACKAGE / p.name) for p in sorted((REPO / SHARED_PACKAGE).glob("*.py"))
+            if p.name not in NOT_IN_PLUGIN]
     return out
 
 
 def drift() -> list[str]:
     bad = [str(dst.relative_to(REPO)) for src, dst in pairs()
            if not dst.is_file() or not filecmp.cmp(src, dst, shallow=False)]
-    want = {p.name for p in (REPO / SHARED_PACKAGE).glob("*.py")}
+    want = {p.name for p in (REPO / SHARED_PACKAGE).glob("*.py")} - NOT_IN_PLUGIN
     bad += [str(p.relative_to(REPO)) + " (stale)" for p in (PLUGIN / SHARED_PACKAGE).glob("*.py")
             if p.name not in want]
     return bad

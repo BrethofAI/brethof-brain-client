@@ -3,12 +3,12 @@ Claude Code (2026-09-29): Claude Code's own auto memory otherwise takes
 "remember X" — measured on the rig (claude-code-mem@lin)."""
 from __future__ import annotations
 
-from brethof_brain_client import cli, hook
+from brethof_brain_client import claude_files, hook
 
 
 def _run(tmp_path, monkeypatch, env: dict, inp: dict | None = None):
     md = tmp_path / "CLAUDE.md"
-    monkeypatch.setattr(cli, "CLAUDE_USER_MD", str(md))
+    monkeypatch.setattr(claude_files, "CLAUDE_USER_MD", str(md))
     for k in ("CLAUDE_PLUGIN_ROOT", "CLAUDECODE", "BRETHOF_BRAIN_NO_CLAUDE_MD"):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
@@ -17,8 +17,14 @@ def _run(tmp_path, monkeypatch, env: dict, inp: dict | None = None):
     return md
 
 
+def test_a_plugin_install_never_writes_it(tmp_path, monkeypatch):
+    # Anthropic's directory flags a plugin that edits Claude's own files
+    # (2026-10-04): under the plugin the block is a manual README step.
+    assert not _run(tmp_path, monkeypatch, {"CLAUDE_PLUGIN_ROOT": "/x", "CLAUDECODE": "1"}).exists()
+
+
 def test_written_under_claude_code_once_and_idempotent(tmp_path, monkeypatch):
-    md = _run(tmp_path, monkeypatch, {"CLAUDE_PLUGIN_ROOT": "/x"})
+    md = _run(tmp_path, monkeypatch, {"CLAUDECODE": "1"})
     text = md.read_text()
     assert text.count("Memory provider: the Brain") == 1 and "auto memory" in text
     assert "`graph`" not in text

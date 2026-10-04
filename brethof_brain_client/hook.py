@@ -193,24 +193,28 @@ RESUME_CHECK = (
 
 
 def _claude_block(inp: dict) -> None:
-    """THE MANAGED BLOCK FOR EVERY CLAUDE CODE INSTALL (2026-09-29). Claude
-    Code ships its own file memory (auto memory, on by default) and files
-    "remember X" there; the rig measured it (claude-code-mem@lin): without our
-    block in ~/.claude/CLAUDE.md all four facts went to Claude Code's local
-    MEMORY.md and the Brain kept one; with it, none went local and the Brain
-    kept all four. Only `install-hooks` wrote the block, so the plugin install
-    — the common one — lacked it. The session-start hook now writes it too,
-    idempotently, only under Claude Code; BRETHOF_BRAIN_NO_CLAUDE_MD=1 opts
-    out. Never the session's failure: said on stderr and moved on."""
-    if os.environ.get("BRETHOF_BRAIN_NO_CLAUDE_MD") == "1":
+    """THE MANAGED BLOCK, KEPT FRESH FOR A PIP INSTALL (2026-09-29, narrowed
+    2026-10-04). Claude Code ships its own file memory (auto memory) and files
+    "remember X" there; the rig measured it (claude-code-mem@lin): with our
+    block in the user's instruction file the Brain kept all four facts, without it
+    one. `install-hooks` writes the block; this keeps it current on every
+    Claude Code session of a pip install. A PLUGIN install never writes it:
+    the plugin ships without claude_files.py (Anthropic's directory flags a
+    plugin that edits Claude's own files), and its README gives the block as
+    a manual step. BRETHOF_BRAIN_NO_CLAUDE_MD=1 opts out. Never the session's
+    failure: said on stderr and moved on."""
+    if os.environ.get("BRETHOF_BRAIN_NO_CLAUDE_MD") == "1" or os.environ.get("CLAUDE_PLUGIN_ROOT"):
         return
-    under_claude = (os.environ.get("CLAUDE_PLUGIN_ROOT") or os.environ.get("CLAUDECODE")
+    under_claude = (os.environ.get("CLAUDECODE")
                     or "/.claude/" in str(inp.get("transcript_path") or "").replace("\\", "/"))
     if not under_claude:
         return
     try:
-        from .cli import _install_provider_block
-        got = _install_provider_block()
+        from . import claude_files
+    except ImportError:
+        return
+    try:
+        got = claude_files._install_provider_block()
         if got.startswith("FAILED"):
             print(f"brethof-brain: the memory-provider block could not be written: {got}", file=sys.stderr)
     except Exception as e:                                   # noqa: BLE001

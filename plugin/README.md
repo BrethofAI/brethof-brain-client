@@ -30,6 +30,41 @@ recovered). The window checks both with your memory and saves them in
 `~/.brethof-brain/config.json`. Your agent never sees either. The hooks and the
 memory tools load at the next session start.
 
+## Recommended: tell Claude Code where memory lives (one manual step)
+
+Claude Code has its own built-in file memory, and without a word from you it
+files "remember this" there instead of in your Brain (measured on our test rig:
+1 fact in 4 reached the Brain without this step, 4 in 4 with it). The plugin
+does not edit your Claude Code files, so add this block yourself to your
+user-level `~/.claude/CLAUDE.md` — or ask your agent: *"add the brethof-brain
+memory block from the plugin's README to my ~/.claude/CLAUDE.md"*:
+
+```markdown
+## Memory provider: the Brain
+
+Long-term memory on this machine is the BRAIN (the `brain` MCP server).
+It is shared across sessions, projects and agents, curated automatically,
+and survives every restart, reboot and compact. The session-start and
+prompt hooks put the rules, each project's purpose, the last sessions'
+notes and the matching records in front of you — if that block is
+missing, the memory stack is broken; fix it first.
+
+- Four doors, nothing else writes: `save_project` / `save_general` (a
+  fact, a decision, a measurement — the Brain decides what becomes a
+  record), `save_note` (where your work stands, before you stop),
+  `save_playbook` (how a thing is done), `save_rule` (a standing
+  convention). Unsure: save it.
+- To recall: `search_brain` first (the current truth, with the history
+  of decisions under it), then `search_history` (everything said, raw),
+  `get_record` — BEFORE saying you don't remember something, and before
+  diagnosing anything.
+- Do NOT keep long-term memory in local files (CLAUDE.md, MEMORY.md,
+  Claude Code's auto memory, notes): files are per-machine and
+  unsearchable — a fact filed there is invisible to every other session
+  and agent. When asked to remember something, save it to the Brain.
+  Files are for code and config; memory belongs in the Brain.
+```
+
 ## What it does
 
 - **Hooks** (`hooks/hooks.json`): at session start the brief, on every prompt
