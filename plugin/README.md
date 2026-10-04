@@ -39,6 +39,19 @@ memory tools load at the next session start.
   memory, run locally over stdio by `mcp_bridge.py`.
 - **Commands**: `/recall`, `/curate`, `/onboard`.
 
+## Claude Code and Cowork
+
+**Claude Code** gets all of it: the brief at session start, the matching
+records on every prompt, every exchange archived, and the memory tools.
+
+**Cowork** gets the memory tools only. Cowork does not run plugin hooks, so
+there is no brief at session start, no records arriving with your prompts,
+and Cowork conversations are not archived into your memory. What does work:
+your agent can search and read the memory your Claude Code sessions built,
+and save facts, notes and playbooks into it. Ask it to check the memory when
+you start, and to save what matters before you stop. Connect the computer
+once first (`connect.py`, above) — Cowork does not ask for plugin settings.
+
 ## Where your data goes
 
 The hooks and tools talk to your own memory: `127.0.0.1:8610` for a memory on

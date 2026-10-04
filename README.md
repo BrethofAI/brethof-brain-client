@@ -42,6 +42,7 @@ runs anywhere Python 3.9+ does.
 | Agent | Adapter | What you get |
 |---|---|---|
 | **Claude Code** | built-in | Full: session memory injected, ambient recall every prompt, every turn archived, memory tools |
+| **Claude Cowork** | the Claude Code plugin | Memory tools only — search, read and save into the memory; Cowork runs no plugin hooks, so no automatic brief or recall and Cowork conversations are not archived. Not part of the full-support list |
 | **DeepSeek Harness (dsh)** | [`adapters/dsh/`](adapters/dsh/) | Full: native cordis plugin on dsh's typed extension points — injection, ambient recall, archival (npm: `brethof-brain-dsh`) |
 | **Qwen Code** | [`adapters/qwen-code/`](adapters/qwen-code/) | Full: hooks (inject + recall + archive) + MCP tools |
 | **Codex** (OpenAI) | [`adapters/codex/`](adapters/codex/) | Full: hooks (inject + recall) + archival via `notify` + MCP tools. One manual step: codex requires you to trust new hooks once — run `/hooks` and trust the brethof-brain entries |
