@@ -53,7 +53,7 @@ runs anywhere Python 3.9+ does.
 | **Kilo Code** | [`adapters/opencode/`](adapters/opencode/) | Full: the same plugin file, dropped into `~/.config/kilo/plugin/` — covers Kilo's CLI, VS Code and JetBrains |
 | **GitHub Copilot CLI** | [`adapters/copilot/`](adapters/copilot/) | Full: user hooks (inject + recall + archive). Proven on Linux and Windows, including offline with your own model |
 | **Pi** | [`adapters/pi/`](adapters/pi/) (npm: `brethof-brain-pi`) | Full: one extension — brief in the system prompt, recall before every prompt, every run archived. Proven on Linux and Windows |
-| **CodeBuddy Code** (Tencent) | the Claude Code plugin ([`adapters/codebuddy/`](adapters/codebuddy/)) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
+| **CodeBuddy Code** (Tencent) | [`adapters/codebuddy/`](adapters/codebuddy/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
 | **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
 | **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux and Windows (needs Microsoft's Visual C++ runtime there) |
 | **Gemini CLI** (Google) | Gemini CLI extension ([`adapters/gemini-cli/`](adapters/gemini-cli/)) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
@@ -185,15 +185,14 @@ every run archived. See [`adapters/pi/README.md`](adapters/pi/README.md).
 
 ### CodeBuddy Code
 
-CodeBuddy installs the Claude Code plugin as it is:
-
 ```bash
-codebuddy plugin marketplace add BrethofAI/brethof-brain-client
-codebuddy plugin install brethof-brain@brethof
+python3 adapters/codebuddy/setup.py
 ```
 
-Then run the plugin's `connect.py` once (as for Claude Code). The older route,
-`python3 adapters/codebuddy/setup.py`, still works.
+Hooks in `~/.codebuddy/settings.json` (Linux, macOS, and Windows with Git
+Bash). CodeBuddy can also install the Claude Code plugin through its own
+plugin commands, but that route is not proven yet (per-prompt recall missed in
+3 of 4 rig runs, 2026-10-04) — use the setup script.
 
 ### Other editors and MCP clients
 
