@@ -13,11 +13,31 @@ whole ambient contract:
 Stdlib only; nothing to pip-install. Every path is fail-open: memory can never
 block or break a run.
 
+## What it sends
+
+- Every prompt you type, and each turn's user and assistant text, go with
+  your API key to the brethof-brain server you configure: your own box at
+  `127.0.0.1:8610` by default, or the hosted one at `memory.brethof.cloud`.
+- A hosted memory also gets your unlock passphrase, to the same server.
+- The server's briefing and recall text are put into the system prompt and
+  into each turn.
+- It reads `BRETHOF_BRAIN_*` from `$HERMES_HOME/.env` and
+  `~/.brethof-brain/config.json`. Nothing else leaves the machine; no
+  telemetry.
+
 ## Install
+
+From the Hermes plugin catalog:
+
+```bash
+hermes plugins install brethof-brain --no-enable
+hermes config set memory.provider brethof-brain
+```
+
+or straight from this repo:
 
 ```bash
 hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes --no-enable
-hermes config set memory.provider brethof-brain
 ```
 
 (`--no-enable` only skips the general plugin prompt — memory providers are
