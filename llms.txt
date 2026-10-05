@@ -1,0 +1,9 @@
+# brethof-brain client
+
+> A thin Python client providing persistent, searchable long-term memory for AI coding agents across multiple supported platforms.
+
+Written in pure Python 3.9+ with no third-party dependencies, it forwards hook events to a cloud service and wires an MCP endpoint for on-demand memory tools. Installation varies by agent, such as using a plugin for Claude Code or setup scripts for Codex and Qwen Code.
+
+## Docs
+
+- [brethof-brain client](https://raw.githubusercontent.com/BrethofAI/brethof-brain-client/main/README.md): Persistent memory client for AI agents, supported platforms, and how the thin client forwards hook events.
