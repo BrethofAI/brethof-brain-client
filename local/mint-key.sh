@@ -1,6 +1,9 @@
 #!/bin/bash
 # Create the key your agent uses to reach YOUR memory. Run once, before the
-# first `docker compose up`.
+# first `docker compose up` (install.sh does). `--rotate` (what rotate-key.sh
+# runs) replaces it in one step: the new key goes into this stack's key file
+# and your agents' config, the old one stops working at once, and the running
+# memory and agents pick up the new one by themselves — no restart.
 #
 # The key is shown ONCE and never stored: this stack keeps only its SHA-256
 # hash, so nobody -- including us -- can read it back out of your files. Lose
@@ -16,10 +19,16 @@ cd "$(dirname "$0")"
 KEYDIR=${BRAIN_KEY_DIR:-./keys}
 KEYFILE=$KEYDIR/v2keys
 TENANT=${BRAIN_TENANT:-memory}
+ROTATE=""
+[ "${1:-}" = "--rotate" ] && ROTATE=1
 
-if [ -e "$KEYFILE" ]; then
-  echo "$KEYFILE already exists. Delete it to mint a new key -- and update" >&2
-  echo "your agent's config when you do, because the old one stops working." >&2
+if [ -n "$ROTATE" ]; then
+  [ -s "$KEYFILE" ] || { echo "no key to rotate in $KEYFILE -- run install.sh first" >&2; exit 1; }
+  # the memory's name stays: it is the database the key opens
+  TENANT=$(head -n1 "$KEYFILE" | cut -d: -f2)
+elif [ -e "$KEYFILE" ]; then
+  echo "$KEYFILE already exists. To replace the key, run ./rotate-key.sh --" >&2
+  echo "it updates your agents' config in the same step." >&2
   exit 1
 fi
 
@@ -33,7 +42,10 @@ HASH=$(printf '%s' "$KEY" | sha256sum | cut -d' ' -f1)
 mkdir -p "$KEYDIR"
 # ':customer' = the tool tier. The product speaks the brain vocabulary
 # (search_brain, save_general, ...) — the same names every guide teaches.
-printf '%s:%s:customer\n' "$HASH" "$TENANT" > "$KEYFILE"
+# written beside and renamed over: the running memory sees a whole file or the
+# old one, never half of one (it re-reads the file when it changes)
+printf '%s:%s:customer\n' "$HASH" "$TENANT" > "$KEYFILE.tmp"
+mv -f "$KEYFILE.tmp" "$KEYFILE"
 # 0644 DELIBERATELY, and it is not a loosened secret: this file holds a
 # SHA-256 hash and a database name, never the key. The key is 192 bits of
 # randomness, so the hash is not attackable the way a password hash is -- and
@@ -42,6 +54,7 @@ printf '%s:%s:customer\n' "$HASH" "$TENANT" > "$KEYFILE"
 # making each customer debug a uid mismatch to protect a value that is public
 # by construction.
 chmod 644 "$KEYFILE"
+[ -n "$ROTATE" ] && echo "rotated: the old key stopped working just now"
 
 # THE KEY GOES STRAIGHT INTO THE CLIENT'S CONFIG (2026-10-04): an agent runs
 # this install, and a key printed here lands in its chat — so it is written to
@@ -75,7 +88,9 @@ if [ -n "$SAVED" ]; then
 
   Your memory key is saved for your agents: $SAVED
   (readable by you only; it is not shown here). The brethof-brain hooks and
-  plugins read it from there.
+  plugins read it from there$( [ -n "$ROTATE" ] && printf '%s' " -- on their next call, no restart.
+  A tool you wired by hand with the old key needs the new one:
+  BRAIN_SHOW_KEY=1 ./rotate-key.sh rotates again and shows it" ).
 
   Stored on the memory side: $KEYFILE (the hash only)
 

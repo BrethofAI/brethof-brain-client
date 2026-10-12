@@ -7,8 +7,11 @@
 #      one-time, resumable) and verifies its sha256
 #   3. downloads the container images bundle and verifies its sha256
 #   4. loads the images and pins the version into .env
-#   5. mints your memory key (shown once) if you don't have one
-#   6. starts the stack and waits for it to answer
+#   5. mints your memory key — written into your agents' config, never shown
+#   6. connects the memory to your brethof.ai account so it learns: a link and
+#      a code to approve in your browser; the hub key comes back into .env
+#      by itself (./login.sh — skip with BRAIN_SKIP_LOGIN=1)
+#   7. starts the stack and waits for it to answer
 #
 # Nothing here needs sudo, phones home, or writes outside this directory.
 # Re-running is safe: finished steps are skipped, and running it with a
@@ -98,6 +101,15 @@ else
     bash mint-key.sh
 fi
 
+say "learning: connect this memory to your brethof.ai account"
+if grep -qE '^BRAIN_HUB_KEY=.+' .env; then
+    echo "hub key already in .env — skipped"
+elif [ "${BRAIN_SKIP_LOGIN:-0}" = "1" ]; then
+    echo "skipped (BRAIN_SKIP_LOGIN=1) — run ./login.sh any time to turn learning on"
+else
+    bash login.sh || echo "not connected — your memory still records everything and your agents' search works; run ./login.sh any time to turn learning on"
+fi
+
 say "starting the stack"
 $COMPOSE up -d || fail "compose up"
 for i in $(seq 1 60); do
@@ -107,5 +119,5 @@ for i in $(seq 1 60); do
 done
 
 say "DONE — your memory answers on http://127.0.0.1:8610/v1/mcp"
-echo "   (add BRAIN_HUB_KEY from your account panel to .env to turn on"
-echo "    learning — recall and archiving work without it)"
+grep -qE '^BRAIN_HUB_KEY=.+' .env || echo "   learning is off until ./login.sh connects it — recall and archiving work without it"
+echo "   replace your memory key any time with ./rotate-key.sh"

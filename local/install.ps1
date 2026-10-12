@@ -95,6 +95,16 @@ if (Test-Path "keys/v2keys") {
     if ($LASTEXITCODE -ne 0) { Fail "mint-key.ps1" }
 }
 
+Say "learning: connect this memory to your brethof.ai account"
+if ((Get-Content .env -Raw) -match "(?m)^BRAIN_HUB_KEY=.+") {
+    Write-Host "hub key already in .env - skipped"
+} elseif ($env:BRAIN_SKIP_LOGIN -eq "1") {
+    Write-Host "skipped (BRAIN_SKIP_LOGIN=1) - run login.ps1 any time to turn learning on"
+} else {
+    Native { powershell -ExecutionPolicy Bypass -File login.ps1 }
+    if ($LASTEXITCODE -ne 0) { Write-Host "not connected - your memory still records everything and your agents' search works; run login.ps1 any time to turn learning on" }
+}
+
 Say "starting the stack"
 Native { docker compose up -d }
 if ($LASTEXITCODE -ne 0) { Fail "compose up" }
@@ -108,5 +118,5 @@ for ($i = 0; $i -lt 60; $i++) {
 if (-not $healthy) { Native { docker logs brain-api 2>&1 | Select-Object -Last 20 }; Fail "stack never became healthy" }
 
 Say "DONE - your memory answers on http://127.0.0.1:8610/v1/mcp"
-Write-Host "   (add BRAIN_HUB_KEY from your account panel to .env to turn on"
-Write-Host "    learning - recall and archiving work without it)"
+if ((Get-Content .env -Raw) -notmatch "(?m)^BRAIN_HUB_KEY=.+") { Write-Host "   learning is off until login.ps1 connects it - recall and archiving work without it" }
+Write-Host "   replace your memory key any time with rotate-key.ps1"

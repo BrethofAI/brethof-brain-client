@@ -8,6 +8,12 @@
 # The key is shown ONCE and never stored: this stack keeps only its SHA-256
 # hash, so nobody -- including us -- can read it back out of your files. Lose
 # it and you mint another; there is no recovery and none is needed.
+#
+# -Rotate (what rotate-key.ps1 runs) replaces it in one step: the new key goes
+# into this stack's key file and your agents' config, the old one stops
+# working at once, and the running memory and agents pick up the new one by
+# themselves -- no restart.
+param([switch]$Rotate)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
@@ -16,10 +22,15 @@ $KeyFile = Join-Path $KeyDir 'v2keys'
 $Tenant  = if ($env:BRAIN_TENANT)   { $env:BRAIN_TENANT }   else { 'memory' }
 $Port    = if ($env:BRAIN_API_PORT) { $env:BRAIN_API_PORT } else { '8610' }
 
-if (Test-Path $KeyFile) {
-    Write-Error ("$KeyFile already exists. Delete it to mint a new key -- and " +
-                 "update your agent's config when you do, because the old one " +
-                 "stops working.")
+if ($Rotate) {
+    if (-not (Test-Path $KeyFile) -or -not (Get-Content $KeyFile -TotalCount 1)) {
+        Write-Error "no key to rotate in $KeyFile -- run install.ps1 first"
+    }
+    # the memory's name stays: it is the database the key opens
+    $Tenant = ((Get-Content $KeyFile -TotalCount 1) -split ':')[1]
+} elseif (Test-Path $KeyFile) {
+    Write-Error ("$KeyFile already exists. To replace the key, run rotate-key.ps1 -- " +
+                 "it updates your agents' config in the same step.")
 }
 if ($Tenant -notmatch '^[a-z0-9_]{3,40}$') {
     Write-Error 'BRAIN_TENANT must be 3-40 chars of a-z, 0-9, _'
@@ -38,7 +49,11 @@ New-Item -ItemType Directory -Force -Path $KeyDir | Out-Null
 # (search_brain, save_general, ...) -- the same names every guide teaches.
 # The file holds a hash and a name, never the key -- see mint-key.sh for why
 # its permissions are deliberately ordinary.
-Set-Content -NoNewline -Path $KeyFile -Value "${Hash}:${Tenant}:customer`n"
+# written beside and moved over: the running memory sees a whole file or the
+# old one, never half of one (it re-reads the file when it changes)
+Set-Content -NoNewline -Path "$KeyFile.tmp" -Value "${Hash}:${Tenant}:customer`n"
+Move-Item -Force "$KeyFile.tmp" $KeyFile
+if ($Rotate) { Write-Output 'rotated: the old key stopped working just now' }
 
 # THE KEY GOES STRAIGHT INTO THE CLIENT'S CONFIG (2026-10-04): an agent runs
 # this install, and a key printed here lands in its chat -- so it is written to
@@ -69,6 +84,10 @@ if ($Saved) {
     Write-Output ''
     Write-Output "  Your memory key is saved for your agents: $Saved"
     Write-Output '  (it is not shown here). The brethof-brain hooks and plugins read it from there.'
+    if ($Rotate) {
+        Write-Output '  They use the new key on their next call, no restart. A tool you wired by'
+        Write-Output '  hand with the old key needs the new one: set BRAIN_SHOW_KEY=1 and rotate again.'
+    }
     Write-Output ''
     Write-Output "  Stored on the memory side: $KeyFile (the hash only)"
     Write-Output ''
