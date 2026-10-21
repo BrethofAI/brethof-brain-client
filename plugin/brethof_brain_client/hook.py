@@ -363,6 +363,42 @@ def _from_hooks(inp: dict) -> bool:
 REPLY_FIELDS = ("last_assistant_message", "assistant_response", "prompt_response")
 
 
+def _kiro_v3_reply(session_id: str) -> str:
+    """KIRO CLI V3 (the default from CLI 3.0, end of October 2026) gives Stop
+    only {session_id, hook_event_name, cwd} — no reply. It keeps each session
+    at <KIRO_HOME or ~/.kiro>/sessions/<workspace>/<session_id>/messages.jsonl,
+    one event per line; the reply is the "assistant" events of operationType
+    "Say" after the last "user" event (measured on kiro-cli 2.33.0 --v3,
+    2026-10-21). Waits up to two seconds for the turn to be written."""
+    import glob
+    import time
+    if not session_id.startswith("sess_") or "/" in session_id or "\\" in session_id:
+        return ""
+    home = os.environ.get("KIRO_HOME") or os.path.join(os.path.expanduser("~"), ".kiro")
+    for _ in range(5):
+        for path in glob.glob(os.path.join(home, "sessions", "*", session_id, "messages.jsonl")):
+            said: list[str] = []
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        try:
+                            p = json.loads(line).get("payload") or {}
+                        except ValueError:
+                            continue
+                        if p.get("type") == "user":
+                            said = []
+                        elif (p.get("type") == "assistant" and p.get("operationType") == "Say"
+                              and isinstance(p.get("content"), str)):
+                            said.append(p["content"])
+            except OSError:
+                continue
+            text = "\n".join(s for s in said if s.strip()).strip()
+            if text:
+                return text
+        time.sleep(0.4)
+    return ""
+
+
 def _stop_from_payload(cfg: Config, inp: dict, session_id: str) -> None:
     """A TURN BUILT FROM THE HOOKS (2026-10-03): a harness that passes no
     transcript gives the user's prompt at prompt-submit (kept by then) and
@@ -371,6 +407,8 @@ def _stop_from_payload(cfg: Config, inp: dict, session_id: str) -> None:
     cleared only when the server confirmed it."""
     reply = next((str(inp[k]).strip() for k in REPLY_FIELDS
                   if isinstance(inp.get(k), str) and inp[k].strip()), "")
+    if not reply and inp.get("hook_event_name") == "Stop":
+        reply = _kiro_v3_reply(session_id)
     prompt = (inp.get("prompt") if isinstance(inp.get("prompt"), str) else "") \
         or transcript.load_pending_prompt(session_id)
     if not reply and not prompt:

@@ -138,6 +138,42 @@ def test_a_harness_without_a_transcript_archives_the_turn_from_its_hooks(tmp_pat
     assert [t["index"] for t in stop["turns"]] == [2, 3] and stop["turns"][0]["text"] == "and Y?"
 
 
+def test_kiro_v3_stop_reads_the_reply_from_its_session_file(tmp_path, fake_client, monkeypatch):
+    # Kiro CLI V3 (2026-10-21, kiro-cli 2.33.0 --v3): Stop carries only
+    # session_id, hook_event_name and cwd; the reply is in the session's own
+    # messages.jsonl — the "assistant" Say events after the last "user" event
+    monkeypatch.setenv("KIRO_HOME", str(tmp_path / "kiro"))
+    sid = "sess_95e83fa2-5b11-4089-b039-cd18dc07793f"
+    d = tmp_path / "kiro" / "sessions" / "7caf67e728b46fbb" / sid
+    d.mkdir(parents=True)
+    ev = lambda **p: json.dumps({"id": "x", "payload": p})
+    (d / "messages.jsonl").write_text("\n".join([
+        ev(type="user", content="an older prompt"),
+        ev(type="assistant", content="an older reply", operationType="Say"),
+        ev(type="user", content="what is X?"),
+        ev(type="turn_start", executionId="e"),
+        ev(type="assistant", content="X is 7.", operationType="Say"),
+        ev(type="assistant", content="...", operationType="Reasoning"),
+        ev(type="turn_end", stopReason="end_turn"),
+    ]) + "\n", encoding="utf-8")
+    base = {"cwd": str(tmp_path), "session_id": sid}
+    assert _run("prompt-submit", {**base, "hook_event_name": "UserPromptSubmit", "prompt": "what is X?"}) == 0
+    assert _run("stop", {**base, "hook_event_name": "Stop"}) == 0
+    stop = [c for c in fake_client.calls if "turns" in c][-1]
+    assert [(t["line_type"], t["text"]) for t in stop["turns"]] == \
+        [("user", "what is X?"), ("assistant", "X is 7.")]
+
+
+def test_a_stop_without_a_reply_or_session_file_archives_the_prompt_alone(tmp_path, fake_client, monkeypatch):
+    monkeypatch.setenv("KIRO_HOME", str(tmp_path / "nokiro"))
+    monkeypatch.setattr(hook, "_kiro_v3_reply", lambda sid: "")
+    base = {"cwd": str(tmp_path), "session_id": "sess_none"}
+    _run("prompt-submit", {**base, "prompt": "lonely"})
+    _run("stop", {**base, "hook_event_name": "Stop"})
+    stop = [c for c in fake_client.calls if "turns" in c][-1]
+    assert [t["line_type"] for t in stop["turns"]] == ["user"]
+
+
 def test_a_deferred_payload_archive_keeps_the_prompt_for_the_next_try(tmp_path, fake_client):
     sid = "nots-deferred"
     base = {"cwd": str(tmp_path), "session_id": sid}

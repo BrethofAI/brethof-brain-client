@@ -12,6 +12,12 @@ like Kiro's default — with three hooks, and makes it your default agent:
 
 Every hook is fail-open: if the Brain is unreachable, Kiro just runs.
 
+**Kiro CLI V3** (the default from CLI 3.0): Kiro's own migration
+(`/upgrade-agent`, or `kiro-cli agent upgrade ~/.kiro/agents`) carries the
+three hooks over as they are. V3's `Stop` passes no reply, so the archive
+reads it from V3's own session file (`~/.kiro/sessions/…/messages.jsonl`,
+or under `KIRO_HOME`). Nothing to do on your side.
+
 ## Install
 
 ```bash
