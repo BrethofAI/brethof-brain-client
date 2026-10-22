@@ -222,3 +222,11 @@ def test_the_archive_mode_can_come_on_the_command_line(tmp_path, fake_client, mo
         sys.stdin = sys.__stdin__
     stop = [c for c in fake_client.calls if "turns" in c][-1]
     assert [t["text"] for t in stop["turns"]] == ["hi", "hello"]
+
+
+def test_a_projects_thread_recalls_on_the_human_words(tmp_path, fake_client):
+    wake = ('<wake reason="mention"><project id="c"><thread ts="t"><message trigger="true" from="human" '
+            'author="P">what is DEEPCANARY?</message></thread></project><system-note>x</system-note></wake>')
+    _run("prompt-submit", {"cwd": str(tmp_path), "session_id": "proj-recall", "prompt": wake})
+    sent = [c for c in fake_client.calls if "prompt" in c][-1]
+    assert sent["prompt"] == "what is DEEPCANARY?"

@@ -271,6 +271,11 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     project = _project(cfg, inp)
     msg = inp.get("message") if isinstance(inp.get("message"), str) else ""    # goose
     prompt = (inp.get("prompt") or msg or os.environ.get("USER_PROMPT") or "").strip()
+    # a Claude Code Projects thread: recall on the human's words, never on
+    # the platform's <wake> envelope (transcript._projects_user_text)
+    words = transcript._projects_user_text(prompt)
+    if words is not None:
+        prompt = words.strip()
     session_id = inp.get("session_id") or ""
     if not prompt or not session_id:
         return

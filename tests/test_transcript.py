@@ -92,3 +92,38 @@ def test_state_roundtrip():
     assert s["offset"] == 123 and s["next_index"] == 5
     # a never-seen session has a clean zero state
     assert transcript.load_state("sess-never")["offset"] == 0
+
+
+def test_a_claude_code_projects_thread_archives_the_words_not_the_framing(tmp_path):
+    # Claude Code Projects (beta) cloud thread, shapes measured 2026-10-22: the
+    # platform's <session-context> line is dropped, the <wake> envelope gives
+    # up only the human's words (HTML-unescaped), the answer posted through
+    # hearthbot post_message is the assistant's text, and the other hearthbot
+    # tools leave no marker.
+    wake = ('<wake reason="mention" current-time="2026-10-22T21:33:06Z">\n  <project id="chan_x" type="project">\n'
+            '    <thread ts="cmsg_1">\n      <message trigger="true" from="human" trust="principal" author="P" '
+            'id="cmsg_2" sent-at="2026-10-22T21:33:02Z" mention="true">What is &#34;RIGCANARY&#34;?</message>\n'
+            '    </thread>\n  </project>\n  <system-note>You are the session for this thread.</system-note>\n</wake>\n')
+    lines = [
+        {"type": "user", "message": {"role": "user", "content":
+            '<session-context nonce="abc">\nGitHub login: `someone`\n# PR attribution (required)\n</session-context>'}},
+        {"type": "user", "message": {"role": "user", "content": wake}},
+        {"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "name": "mcp__hearthbot__post_message", "input": {"text": "0e72ecfa"}}]}},
+        {"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "name": "mcp__hearthbot__no_reply_needed", "input": {"reason": "done"}}]}},
+        {"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "text", "text": "posted"}, {"type": "tool_use", "name": "Bash", "input": {}}]}},
+    ]
+    turns, _, _ = transcript.read_new_turns(_write(tmp_path, lines), "sess-projects")
+    assert [(t["line_type"], t["text"]) for t in turns] == [
+        ("user", 'What is "RIGCANARY"?'),
+        ("assistant", "0e72ecfa"),
+        ("assistant", "posted\n[tool_use: Bash]")]
+    assert all("session-context" not in t["text"] and "system-note" not in t["text"] for t in turns)
+
+
+def test_ordinary_user_text_that_mentions_wake_is_kept_as_is(tmp_path):
+    lines = [{"type": "user", "message": {"role": "user", "content": "what does <wake> do in Projects?"}}]
+    turns, _, _ = transcript.read_new_turns(_write(tmp_path, lines), "sess-not-projects")
+    assert turns[0]["text"] == "what does <wake> do in Projects?"

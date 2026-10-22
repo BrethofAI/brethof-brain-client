@@ -126,6 +126,32 @@ def _parts_text(msg: dict) -> str:
                      if isinstance(p, dict) and p.get("text"))
 
 
+# CLAUDE CODE PROJECTS (beta) THREADS (2026-10-22, measured in a cloud
+# thread): the platform hands the thread a "<session-context nonce=…>" user
+# line (the project's wiring: GitHub login, PR rules — not the user's words),
+# wraps every user message in "<wake …><project><thread><message from=
+# "human" …>WORDS</message>…<system-note>…</wake>", and the thread answers
+# through its hearthbot tools — post_message / edit_message carry the reply
+# in "text"; the rest (no_reply_needed, react, update_progress_checklist …)
+# are plumbing.
+_PROJECTS_REPLY_TOOLS = ("mcp__hearthbot__post_message", "mcp__hearthbot__edit_message")
+
+
+def _projects_user_text(text: str) -> str | None:
+    """The user's own words from a Projects line, "" to drop the line, or
+    None when the line is not Projects' framing."""
+    import html
+    import re
+    s = text.lstrip()
+    if s.startswith("<session-context"):
+        return ""
+    if not s.startswith("<wake"):
+        return None
+    words = [html.unescape(m.group(1)).strip()
+             for m in re.finditer(r'<message\b[^>]*\bfrom="human"[^>]*>(.*?)</message>', s, re.S)]
+    return "\n\n".join(w for w in words if w)
+
+
 def _extract_text(d: dict):
     """Return (text, embed_flag). embed_flag True only for genuine dialogue."""
     t = d.get("type")
@@ -137,6 +163,9 @@ def _extract_text(d: dict):
     if t == "user" and msg:
         c = msg.get("content")
         if isinstance(c, str):
+            p = _projects_user_text(c)
+            if p is not None:
+                return p, bool(p)
             return c, True
         if isinstance(c, list):
             # List-form user content mixes genuine typed text blocks with
@@ -146,6 +175,9 @@ def _extract_text(d: dict):
             out = [b.get("text", "") for b in c
                    if isinstance(b, dict) and b.get("type") == "text"]
             text = "\n".join(s for s in out if s)
+            p = _projects_user_text(text)
+            if p is not None:
+                return p, bool(p)
             return text, bool(text)
     if t == "assistant" and msg:
         c = msg.get("content")
@@ -166,7 +198,13 @@ def _extract_text(d: dict):
                 elif bt == "thinking":
                     out.append(b.get("thinking", ""))
                 elif bt == "tool_use":
-                    out.append(f"[tool_use: {b.get('name', '?')}]")
+                    name = str(b.get("name", "?"))
+                    if name in _PROJECTS_REPLY_TOOLS:
+                        said = (b.get("input") or {}).get("text")
+                        if isinstance(said, str) and said.strip():
+                            out.append(said)
+                    elif not name.startswith("mcp__hearthbot__"):
+                        out.append(f"[tool_use: {name}]")
             return "\n".join(s for s in out if s), True
     return "", False
 
