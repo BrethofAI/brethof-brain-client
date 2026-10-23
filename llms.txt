@@ -1,15 +1,15 @@
 # brethof-brain client
 
-> A thin Python client providing persistent, searchable long-term memory for AI coding agents across multiple supported platforms.
+> A thin Python client that provides persistent, searchable long-term memory for AI coding agents by connecting them to the brethof-brain cloud service.
 
-Written in pure Python 3.9+ with no third-party dependencies, it forwards hook events to a cloud service and wires an MCP endpoint for on-demand memory tools. Installation varies by agent, such as using a plugin for Claude Code or setup scripts for Codex and Qwen Code.
+Written in pure Python 3.9+ with no third-party dependencies, it forwards hook events and exposes MCP tools for memory management. It supports numerous agents including Claude Code, Codex, and Gemini CLI, with installation instructions available in the adapters directory.
 
 ## Docs
 
-- [brethof-brain client](https://raw.githubusercontent.com/BrethofAI/brethof-brain-client/main/README.md): Persistent memory client for AI agents, supported platforms, and how the thin client forwards hook events.
+- [brethof-brain client](https://raw.githubusercontent.com/BrethofAI/brethof-brain-client/main/README.md): Persistent memory client for AI agents, supported platforms, and how the thin client architecture works.
 - [How it works](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#how-it-works): Client architecture, forwarded hook events, MCP memory tools, and the pure Python standard library dependency constraint.
 - [Supported agents](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#supported-agents): Supported agent adapters, Claude Code plugin setup, manual memory block configuration, and namespaced command usage details.
 - [What leaves your machine (read this)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#what-leaves-your-machine-read-this): Data sent to the service, client-side tool output filtering, local offset tracking, and local versus hosted endpoint behavior.
 - [Getting your memory (two shapes)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#getting-your-memory-two-shapes): Local versus hosted memory container setup, hub key minting, passphrase encryption, and client configuration requirements for both shapes.
-- [Install as a library / CLI (alternative)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#install-as-a-library--cli-alternative): Source installation steps, API key connection flow, SSH terminal fallback, hosted login, and passphrase irrecoverability warnings.
+- [Install as a library / CLI (alternative)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#install-as-a-library--cli-alternative): Installing from source, connecting to memory via API key, and handling local or hosted memory authentication.
 - [Configuration](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#configuration): Configuration resolution order, project partitioning rules, environment variable overrides, and corporate proxy support via standard environment variables.
