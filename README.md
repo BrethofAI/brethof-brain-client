@@ -8,7 +8,7 @@ context so you don't re-explain yourself every time.
 Fully supported: **Claude Code**, **Codex**, **Qwen Code**, **OpenClaw**, **Hermes Agent**,
 **DeepSeek Harness (dsh)**, **Cline**, **OpenCode** (1.x and 2.0), **Kilo Code**,
 **GitHub Copilot CLI**, **Pi**, **CodeBuddy Code**, **Devin CLI**, **Kiro CLI**,
-**Gemini CLI**, **Google Antigravity CLI**, **Amp**, **Qoder CLI**, **goose** and
+**Google Antigravity CLI**, **Amp**, **Qoder CLI**, **goose** and
 **MiniMax Code** — the table below says which are proven on Windows too —
 supported means the complete ambient loop (session brief, per-prompt
 recall, automatic archiving), proven by our test rig against the real
@@ -56,7 +56,6 @@ runs anywhere Python 3.9+ does.
 | **CodeBuddy Code** (Tencent) | [`adapters/codebuddy/`](adapters/codebuddy/) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
 | **Devin CLI** (Cognition) | [`adapters/devin/`](adapters/devin/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
 | **Kiro CLI** (AWS) | [`adapters/kiro/`](adapters/kiro/) | Full: a `brethof-brain` agent with hooks, set as your default. Proven on Linux and Windows (needs Microsoft's Visual C++ runtime there) |
-| **Gemini CLI** (Google) | Gemini CLI extension ([`adapters/gemini-cli/`](adapters/gemini-cli/)) | Full: hooks (inject + recall + archive). Proven on Linux and Windows |
 | **Antigravity CLI** (Google, `agy`) | [`adapters/antigravity/`](adapters/antigravity/) | Full: brief and recall on every model call, every turn archived. Proven on Linux and Windows |
 | **Amp** | [`adapters/amp/`](adapters/amp/) | Full: one plugin file — brief with a thread's first prompt, recall on every prompt, every turn archived. Proven on Linux |
 | **Qoder CLI** (Alibaba) | [`adapters/qoder/`](adapters/qoder/) | Full: hooks (inject + recall), each turn archived from the hooks. Proven on Linux and Windows |
@@ -168,19 +167,6 @@ the turns. Drop the plugin file into `~/.config/opencode/plugins/`
 (OpenCode) or `~/.config/kilo/plugin/` (Kilo — CLI, VS Code and JetBrains
 alike): from this repo, `adapters/opencode/lib/index.js`, or from npm —
 `npm pack brethof-brain-opencode` and take `package/lib/index.js`. See [`adapters/opencode/README.md`](adapters/opencode/README.md).
-
-### Gemini CLI
-
-Install as a Gemini CLI extension — the whole loop through the extension's own
-hooks (brief at session start, recall before every prompt, every turn archived):
-
-```bash
-gemini extensions install https://github.com/BrethofAI/brethof-brain-client
-```
-
-Then run `brethof-brain connect` once (see [Configuration](#configuration)).
-The older route, `python3 adapters/gemini-cli/setup.py` (hooks in
-`~/.gemini/settings.json`), still works.
 
 ### GitHub Copilot CLI
 
@@ -300,7 +286,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.22
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.23
 ```
 
 (There is no PyPI package — the client is installed from source, so you get
