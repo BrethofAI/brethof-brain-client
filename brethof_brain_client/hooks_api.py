@@ -103,16 +103,21 @@ class AgentHooks:
             self._write_spool(batch)  # over_cap/read_only: defer, don't drop
         return env
 
-    def end_session(self) -> dict:
+    def end_session(self, last_index: Optional[int] = None) -> dict:
         """The sitting is over: hand the memory the exchanges still waiting
         (it reads a session five exchanges at a time, so the last few of a
         sitting would otherwise wait until the next session starts). Also
-        checks the archive holds every turn this instance sent. Returns the
-        server envelope, or {} on failure."""
+        checks the archive holds every turn up to `last_index`.
+
+        `last_index` defaults to this instance's own count, which is right
+        only when ONE instance archived the whole sitting. An app that builds
+        a fresh AgentHooks per message (a gateway) must pass the sitting's
+        real last turn index. Returns the server envelope, or {} on failure."""
+        last = self._next_index - 1 if last_index is None else int(last_index)
         try:
             return self._http.post("/v1/hooks/pre-compact", {
                 "project": self.project, "session_id": self.session_id,
-                "last_index": self._next_index - 1})
+                "last_index": last})
         except ClientError:
             return {}
 

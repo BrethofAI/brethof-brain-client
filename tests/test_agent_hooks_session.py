@@ -49,3 +49,10 @@ def test_end_session_fails_open(monkeypatch):
         raise hooks_api.ClientError("down")
     h._http.post = boom
     assert h.end_session() == {}
+
+
+def test_end_session_takes_the_sitting_s_real_last_index(monkeypatch):
+    # a gateway builds a fresh instance per message: its own count is 0
+    h = _hooks(monkeypatch)
+    h.end_session(last_index=41)
+    assert h._http.calls[-1][1]["last_index"] == 41
