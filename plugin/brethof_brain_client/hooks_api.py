@@ -12,6 +12,12 @@ by calling these three hooks at its own lifecycle points:
     context = mem.before_prompt(user_message)      # before each model call
     ...
     mem.archive(user_message, assistant_reply)     # after each turn
+    ...
+    mem.end_session()                              # when the sitting is over
+
+Use ONE session_id per sitting (a conversation, a job run) and a new one for
+the next: the memory reads a session's exchanges together, five at a time,
+and end_session() hands it the ones still waiting.
 
 All three are FAIL-OPEN: if the service is unreachable they return empty / do
 nothing rather than raising, so wiring memory in can never break the agent.
@@ -48,7 +54,8 @@ class AgentHooks:
         """Memory to prepend to the system prompt (project index, rules, recent
         state). Empty string on any failure."""
         try:
-            env = self._http.post("/v1/hooks/session-start", {"project": self.project})
+            env = self._http.post("/v1/hooks/session-start", {
+                "project": self.project, "session_id": self.session_id})
         except ClientError:
             return ""
         return env.get("injection", "") or ""
@@ -95,6 +102,19 @@ class AgentHooks:
         else:
             self._write_spool(batch)  # over_cap/read_only: defer, don't drop
         return env
+
+    def end_session(self) -> dict:
+        """The sitting is over: hand the memory the exchanges still waiting
+        (it reads a session five exchanges at a time, so the last few of a
+        sitting would otherwise wait until the next session starts). Also
+        checks the archive holds every turn this instance sent. Returns the
+        server envelope, or {} on failure."""
+        try:
+            return self._http.post("/v1/hooks/pre-compact", {
+                "project": self.project, "session_id": self.session_id,
+                "last_index": self._next_index - 1})
+        except ClientError:
+            return {}
 
     # ── spool (fail-open persistence for archive) ───────────────────────────
 
