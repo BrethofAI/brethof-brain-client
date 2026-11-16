@@ -15,6 +15,7 @@ default ``Python-urllib`` UA would be challenged. We set our own.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -39,6 +40,19 @@ def _http_error_detail(e: urllib.error.HTTPError) -> str:
         return ""
 
 
+def _access_headers() -> dict:
+    """Cloudflare Access service-token headers, for a memory that sits behind
+    an Access app (an app reaching its own memory over a tunnel). Set both
+    BRETHOF_BRAIN_CF_ACCESS_ID and BRETHOF_BRAIN_CF_ACCESS_SECRET to send them
+    on every request to the endpoint, the unlock included; unset, nothing is
+    sent and nothing changes."""
+    cid = os.environ.get("BRETHOF_BRAIN_CF_ACCESS_ID", "")
+    sec = os.environ.get("BRETHOF_BRAIN_CF_ACCESS_SECRET", "")
+    if cid and sec:
+        return {"CF-Access-Client-Id": cid, "CF-Access-Client-Secret": sec}
+    return {}
+
+
 class Client:
     def __init__(self, cfg: Config, timeout: float = 10.0):
         self.cfg = cfg
@@ -51,6 +65,7 @@ class Client:
             "Accept": "application/json",
             "User-Agent": USER_AGENT,
             "X-BM-Client": __version__,
+            **_access_headers(),
         }
 
     def _unlock(self) -> bool:
@@ -69,7 +84,8 @@ class Client:
                 self.cfg.endpoint + "/unlock",
                 data=json.dumps(body).encode(),
                 headers={"Content-Type": "application/json",
-                         "User-Agent": USER_AGENT}, method="POST")
+                         "User-Agent": USER_AGENT, **_access_headers()},
+                method="POST")
             with urllib.request.urlopen(req, timeout=90) as r:
                 return 200 <= r.status < 300
         except Exception:
