@@ -440,6 +440,88 @@ def cmd_doctor(args) -> int:
     return 0 if ok else 1
 
 
+_PRIVATE_HOST = ("localhost", "127.0.0.1", "::1")
+
+
+def _hub_url(url: str) -> str:
+    """A hub address: https anywhere; http only on this machine or a private
+    network (the device key would cross the network in clear text)."""
+    import ipaddress
+    url = (url or "").strip().rstrip("/")
+    if "://" not in url:
+        url = "http://" + url if url.split(":")[0] in _PRIVATE_HOST else "https://" + url
+    p = urllib.parse.urlparse(url)
+    if p.scheme not in ("http", "https") or not p.hostname:
+        raise ValueError(f"not a hub address: {url!r}")
+    if p.scheme == "http":
+        private = p.hostname in _PRIVATE_HOST or p.hostname.endswith((".local", ".lan", ".internal"))
+        try:
+            private = private or ipaddress.ip_address(p.hostname).is_private
+        except ValueError:
+            pass
+        if not private:
+            raise ValueError("http:// would send this device's key in clear text over the internet — "
+                             "use the hub's https:// address")
+    return url
+
+
+def cmd_pair(args, sleep=None) -> int:
+    """PAIR THIS MACHINE WITH A HUB (2026-11-17, the local-first brain): the
+    hub shows the same code on its settings page; its owner approves it there
+    and this device's own key comes back here — written to the config file,
+    never printed. Removing the device on the settings page revokes the key."""
+    import secrets as _secrets
+    import socket
+    import time as _time
+    sleep = sleep or _time.sleep
+    try:
+        hub = _hub_url(args.hub)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    ensure_dirs()
+    data = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    # ONE ID PER INSTALL: pairing again from the same machine replaces this
+    # device's key on the hub instead of taking a second device.
+    client_id = data.get("device_id") or "dev_" + _secrets.token_hex(12)
+    name = (args.name or socket.gethostname())[:80]
+    st, got = _post_json(f"{hub}/pair/start", {"client_id": client_id, "name": name,
+                                                "memory": args.memory or ""})
+    if st != 200 or not got.get("pair"):
+        print(f"error: the hub did not start pairing ({st}: {got.get('why') or got.get('error_description') or 'no answer'})",
+              file=sys.stderr)
+        return 1
+    print(f"Approve this device on the hub's settings page:\n  {got.get('approve_at') or hub + '/settings'}")
+    print(f"It shows the code  {got['code']}  for '{name}'. Waiting…", flush=True)
+    deadline = _time.time() + int(got.get("expires_in") or 900)
+    while _time.time() < deadline:
+        sleep(3)
+        st, res = _post_json(f"{hub}/pair/poll", {"pair": got["pair"], "secret": got["secret"]})
+        state = res.get("state")
+        if state == "approved" and res.get("key"):
+            break
+        if state in ("denied", "expired", "unknown", "collected"):
+            print(f"error: pairing {state} — run pair again", file=sys.stderr)
+            return 1
+    else:
+        print("error: the code expired before it was approved — run pair again", file=sys.stderr)
+        return 1
+    mems = res.get("memories") or []
+    endpoint = hub + (f"/m/{args.memory}" if args.memory else "")
+    data.update({"api_key": res["key"], "endpoint": endpoint, "device_id": client_id})
+    data.setdefault("default_project", "global")
+    save_file(data)
+    print(f"Paired. This device reaches: {', '.join(mems) or 'its memory'}. "
+          f"The key is in {CONFIG_PATH} (not shown).")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="brethof-brain",
                                 description="brethof-brain cloud client")
@@ -467,6 +549,11 @@ def build_parser() -> argparse.ArgumentParser:
     lg.add_argument("--control", default="", help=argparse.SUPPRESS)
     lg.add_argument("--no-browser", action="store_true", help="print the links instead of opening a browser")
     lg.set_defaults(func=cmd_login)
+    pr = sub.add_parser("pair", help="pair this machine with your Brain hub; you approve it on the hub's settings page")
+    pr.add_argument("hub", help="the hub's address, e.g. http://127.0.0.1:8600 or https://brain.example.com")
+    pr.add_argument("--name", default="", help="how this device is listed (default: the machine's name)")
+    pr.add_argument("--memory", default="", help="which memory on the hub (default: the hub's first)")
+    pr.set_defaults(func=cmd_pair)
     sub.add_parser("status", help="show plan + usage").set_defaults(func=cmd_status)
     sub.add_parser("doctor", help="diagnose setup").set_defaults(func=cmd_doctor)
     return p
