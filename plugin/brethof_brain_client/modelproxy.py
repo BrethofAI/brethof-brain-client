@@ -206,12 +206,15 @@ class Memory:
                 continue
             k = self._key(conv, i, said)
             block = self.blocks.get(k)
-            if block is None and i == last and new_turn:
-                block = self._memory(conv, msgs, said)
-                with self.lock:
-                    if len(self.blocks) > CACHE_MAX:
-                        self.blocks.clear()
-                    self.blocks[k] = block
+            if i == last and new_turn:
+                if block is None:
+                    block = self._memory(conv, msgs, said)
+                    with self.lock:
+                        if len(self.blocks) > CACHE_MAX:
+                            self.blocks.clear()
+                        self.blocks[k] = block
+                # a RETRY of the same new message (the app re-sends after an
+                # error) reuses the block and must still archive its answer
                 pending = (conv, said, k)
             if block:
                 msgs[i] = dict(msgs[i], content=_with_block(msgs[i].get("content"), block))

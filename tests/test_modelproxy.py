@@ -189,3 +189,12 @@ def test_the_responses_format_gets_the_memory_and_is_archived(world):
     part = out["input"][2]["content"][0]
     assert part["type"] == "input_text" and "RECALL for which database?" in part["text"]
     assert out["input"][2]["content"][1]["text"].endswith("</user_query>") and pending[1] == "which database?"
+
+
+def test_a_retried_message_reuses_its_memory_and_is_still_archived(world):
+    msgs = grok_messages(world.folder, "retry me")
+    m = world.proxy.RequestHandlerClass.memory
+    _, first = m.prepare({"messages": json.loads(json.dumps(msgs))})      # sent, but the call failed
+    _, again = m.prepare({"messages": json.loads(json.dumps(msgs))})      # the app sends it again
+    assert first and again and first[2] == again[2]
+    assert len([p for p, _ in world.memory if p == "/v1/hooks/prompt-submit"]) == 7   # one recall, not two
