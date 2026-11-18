@@ -27,6 +27,7 @@ Service = "https://brethof.ai/brain"
 [project.scripts]
 brethof-brain = "brethof_brain_client.cli:main"
 brethof-brain-hook = "brethof_brain_client.hook:main"
+brethof-brain-acp = "brethof_brain_client.acp:main"
 
 [tool.setuptools]
 packages = ["brethof_brain_client"]

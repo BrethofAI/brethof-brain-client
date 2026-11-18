@@ -522,6 +522,19 @@ def cmd_pair(args, sleep=None) -> int:
     return 0
 
 
+
+def cmd_grok_app(args) -> int:
+    """Grok Build in Grok App with the memory in between (grok_app.py, which
+    the Claude Code plugin does not ship: it writes Grok App's settings)."""
+    try:
+        from . import grok_app
+    except ImportError:
+        print("error: this build has no Grok App installer — install the client with pip "
+              "(pip install brethof-brain-client)", file=sys.stderr)
+        return 1
+    return grok_app.cmd_grok_app(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="brethof-brain",
                                 description="brethof-brain cloud client")
@@ -554,6 +567,10 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--name", default="", help="how this device is listed (default: the machine's name)")
     pr.add_argument("--memory", default="", help="which memory on the hub (default: the hub's first)")
     pr.set_defaults(func=cmd_pair)
+    ga = sub.add_parser("grok-app", help="use Grok Build in Grok App with this memory in between")
+    ga.add_argument("--grok", default="", help="the real grok (found by itself)")
+    ga.add_argument("--undo", action="store_true", help="put Grok App back on Grok Build directly")
+    ga.set_defaults(func=cmd_grok_app)
     sub.add_parser("status", help="show plan + usage").set_defaults(func=cmd_status)
     sub.add_parser("doctor", help="diagnose setup").set_defaults(func=cmd_doctor)
     return p

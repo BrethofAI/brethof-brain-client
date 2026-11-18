@@ -28,7 +28,7 @@ SHARED_FILES = ("hook_entry.py", "connect.py", "hooks/run_hook.sh", "LICENSE")
 SHARED_PACKAGE = "brethof_brain_client"
 # Never in the plugin: the code that edits Claude Code's own settings and
 # CLAUDE.md (claude_files.py says why — Anthropic's directory scan).
-NOT_IN_PLUGIN = {"claude_files.py"}
+NOT_IN_PLUGIN = {"claude_files.py", "grok_app.py"}  # grok_app.py writes Grok App's settings
 
 
 # GitHub Copilot's marketplace checker (awesome-copilot intake) looks for the
