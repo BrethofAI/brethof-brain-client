@@ -15,6 +15,8 @@ def _run(monkeypatch, capsys, answers, hub="http://127.0.0.1:8600", memory=""):
         calls.append((url.rsplit("/", 1)[-1], body))
         return answers.pop(0)
     monkeypatch.setattr(cli, "_post_json", post)
+    got_back = []
+    monkeypatch.setattr(cli.Client, "get", lambda self, path: got_back.append(path) or {"plan": "local"})
     rc = cli.cmd_pair(types.SimpleNamespace(hub=hub, name="laptop", memory=memory), sleep=lambda s: None)
     return rc, calls, capsys.readouterr()
 
@@ -59,3 +61,23 @@ def test_hub_address_rule(url, ok):
     else:
         with pytest.raises(ValueError):
             cli._hub_url(url)
+
+
+def test_a_key_the_memory_refuses_is_not_called_paired(monkeypatch, capsys):
+    def refuse(self, path):
+        raise cli.ClientError("401 not paired")
+    calls = []
+    answers = [(200, {"pair": "p", "code": "C", "secret": "s"}),
+               (200, {"state": "approved", "key": "bd_x", "memories": ["main"]})]
+    monkeypatch.setattr(cli, "_post_json", lambda url, body, timeout=30.0: answers.pop(0))
+    monkeypatch.setattr(cli.Client, "get", refuse)
+    rc = cli.cmd_pair(types.SimpleNamespace(hub="http://127.0.0.1:8600", name="l", memory=""), sleep=lambda s: None)
+    out = capsys.readouterr()
+    assert rc == 1 and "did not answer" in out.err and "Paired." not in out.out
+
+
+def test_doctor_and_pair_agree_on_a_lan_hub():
+    assert cli._valid_endpoint("http://192.168.1.20:8600") == "http://192.168.1.20:8600"
+    assert cli._hub_url("http://192.168.1.20:8600") == "http://192.168.1.20:8600"
+    with pytest.raises(ValueError):
+        cli._valid_endpoint("http://example.com:8600")

@@ -43,6 +43,11 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit 6",
             "timeout": 12
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run_hook.sh\" prompt-submit 7",
+            "timeout": 12
           }
         ]
       }

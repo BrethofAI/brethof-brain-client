@@ -13,7 +13,7 @@ Contains no secrets: your API key lives in ``~/.brethof-brain/config.json`` (or
 
 __version__ = "1.2.26"
 
-DEFAULT_ENDPOINT = "http://127.0.0.1:8610"
+DEFAULT_ENDPOINT = "http://127.0.0.1:8600"   # the hub's front door (local-first, 2026-11-18; was the old per-memory port)
 USER_AGENT = f"brethof-brain-client/{__version__}"
 
 

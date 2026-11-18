@@ -31,12 +31,14 @@ from .config import (CONFIG_PATH, Config, ensure_dirs, save_file, valid_project)
 # briefing sections; same-event hooks run in parallel, so empty slots are
 # almost free.
 SESSION_START_PARTS = 12
-# UserPromptSubmit is registered once per ambient part: part 1 = rule
-# reminder + dead-end cards + top record, part 2 = the second strong match
-# alone. One record per hook keeps every injection WHOLE under the 10k
-# per-hook cap — a cut record misleads (the model uses cut text as if
-# complete), so nothing is ever trimmed to fit.
-PROMPT_SUBMIT_PARTS = 2
+# UserPromptSubmit is registered once per ambient part: part 1 = the rule
+# reminder or a record, part 2 = a playbook or a record, parts 3-6 = one
+# record each, part 7 = the history of decisions near the prompt (the same
+# seven the plugin registers; 2026-11-18 — this installer still had two, so a
+# pip install never received records 3-6 or the history). One record per hook
+# keeps every injection WHOLE under the 10k per-hook cap — a cut record
+# misleads, so nothing is ever trimmed to fit.
+PROMPT_SUBMIT_PARTS = 7
 HOOK_EVENTS = (
     [("SessionStart", f"session-start {i}")
      for i in range(1, SESSION_START_PARTS + 1)]
@@ -54,10 +56,23 @@ def _valid_endpoint(url: str) -> str:
     p = urllib.parse.urlparse(url)
     if p.scheme not in ("http", "https") or not p.netloc:
         raise ValueError(f"endpoint must be a full https:// URL, got {url!r}")
-    if p.scheme == "http" and p.hostname not in ("localhost", "127.0.0.1", "::1"):
+    if p.scheme == "http" and not _private_host(p.hostname or ""):
         raise ValueError("http:// endpoints would send your API key in cleartext — "
-                         "use https:// (http is allowed for localhost only)")
+                         "use https:// (http is allowed on this machine and a private network only)")
     return url
+
+
+def _private_host(host: str) -> bool:
+    """This machine or a private network: the one place a plain-http hub is
+    allowed (pair and doctor use the same test — doctor used to refuse a LAN
+    hub that pair had accepted, 2026-11-18)."""
+    import ipaddress
+    if host in ("localhost", "127.0.0.1", "::1") or host.endswith((".local", ".lan", ".internal")):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
 
 
 # ── commands ────────────────────────────────────────────────────────────────
@@ -454,12 +469,7 @@ def _hub_url(url: str) -> str:
     if p.scheme not in ("http", "https") or not p.hostname:
         raise ValueError(f"not a hub address: {url!r}")
     if p.scheme == "http":
-        private = p.hostname in _PRIVATE_HOST or p.hostname.endswith((".local", ".lan", ".internal"))
-        try:
-            private = private or ipaddress.ip_address(p.hostname).is_private
-        except ValueError:
-            pass
-        if not private:
+        if not _private_host(p.hostname):
             raise ValueError("http:// would send this device's key in clear text over the internet — "
                              "use the hub's https:// address")
     return url
@@ -517,6 +527,14 @@ def cmd_pair(args, sleep=None) -> int:
     data.update({"api_key": res["key"], "endpoint": endpoint, "device_id": client_id})
     data.setdefault("default_project", "global")
     save_file(data)
+    # READ BACK (2026-11-18): a saved key is not a working key — ask the
+    # memory through the hub with it before saying paired.
+    try:
+        Client(Config.load()).get("/v1/usage")
+    except ClientError as e:
+        print(f"warning: paired and saved, but the memory did not answer with the new key yet: {e}",
+              file=sys.stderr)
+        return 1
     print(f"Paired. This device reaches: {', '.join(mems) or 'its memory'}. "
           f"The key is in {CONFIG_PATH} (not shown).")
     return 0
