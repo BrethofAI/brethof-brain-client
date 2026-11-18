@@ -26,7 +26,7 @@ class FakeHooks:
         self.calls.append(("start",))
         return "BRIEF: the project's rules"
 
-    def before_prompt(self, text):
+    def before_prompt_parts(self, text):
         self.calls.append(("recall", text))
         return f"RECALL for {text}"
 
@@ -130,7 +130,8 @@ def test_end_to_end_through_real_pipes(tmp_path):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             hits.append((self.path, body))
             out = {"/v1/hooks/session-start": {"injection": "BRIEF-77"},
-                   "/v1/hooks/prompt-submit": {"injection": "RECALL-88"}}.get(self.path, {"status": "ok"})
+                   "/v1/hooks/prompt-submit": {"injection": f"RECALL-88 part {body.get('part')}"
+                                               if body.get("part") in (1, 7) else ""}}.get(self.path, {"status": "ok"})
             data = json.dumps(out).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -156,10 +157,12 @@ def test_end_to_end_through_real_pipes(tmp_path):
     srv.shutdown()
     out = [json.loads(x) for x in p.stdout.splitlines() if x.strip()]
     said = next(o for o in out if o.get("method") == "session/update")["params"]["update"]["content"]["text"]
-    assert "BRIEF-77" in said and "RECALL-88" in said and said.endswith("what did we decide?")
+    assert "BRIEF-77" in said and said.endswith("what did we decide?")
+    assert said.index("RECALL-88 part 1") < said.index("RECALL-88 part 7")   # every part, in order
+    assert sorted(b.get("part") for pth, b in hits if pth == "/v1/hooks/prompt-submit") == [1, 2, 3, 4, 5, 6, 7]
     assert any(o.get("id") == 3 and o["result"]["stopReason"] == "end_turn" for o in out)
     paths = [h[0] for h in hits]
-    assert paths[:2] == ["/v1/hooks/session-start", "/v1/hooks/prompt-submit"]
+    assert paths[0] == "/v1/hooks/session-start"
     stop = next(b for pth, b in hits if pth == "/v1/hooks/stop")
     assert stop["project"] == "proj" and stop["session_id"] == "sess-1"
     assert [t["text"] for t in stop["turns"]] == ["what did we decide?", "I saw: " + said[len("I saw: "):]]
@@ -185,3 +188,47 @@ def test_grok_app_installer_sets_the_cli_path_and_undo_restores(tmp_path, monkey
     assert grok_app.cmd_grok_app(types.SimpleNamespace(grok="", undo=True)) == 0
     data = json.loads(settings.read_text())
     assert "manualCliPath" not in data and data["theme"] == "dark" and not os.path.exists(launcher)
+
+
+def test_a_gui_closing_mid_archive_still_lands_the_turn(tmp_path):
+    """The GUI kills its agent the moment it has the answer: the archive in
+    flight finishes, the turn numbers are kept, the waiting turns go up."""
+    import time
+    hits = []
+
+    class SlowMemory(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.path == "/v1/hooks/stop":
+                time.sleep(1.5)                                             # still in flight when the kill comes
+            hits.append(self.path)
+            data = json.dumps({"status": "ok", "injection": ""}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), SlowMemory)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    agent = tmp_path / "agent.py"
+    agent.write_text(AGENT)
+    home = tmp_path / "home"
+    env = dict(os.environ, BRETHOF_BRAIN_API_KEY="bd_test", BRETHOF_BRAIN_PROJECT="proj", BRETHOF_BRAIN_HOME=str(home),
+               BRETHOF_BRAIN_ENDPOINT=f"http://127.0.0.1:{srv.server_port}", BRETHOF_BRAIN_ACP_ALWAYS="1",
+               PYTHONPATH=os.path.join(os.path.dirname(__file__), ".."))
+    p = subprocess.Popen([sys.executable, "-m", "brethof_brain_client.acp", "--real", sys.executable, "--", str(agent)],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env)
+    p.stdin.write(j({"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {"cwd": str(tmp_path)}}))
+    p.stdin.write(prompt(3, "sess-1", "remember this"))
+    p.stdin.flush()
+    while True:                                                             # wait for the answer, then kill at once
+        o = json.loads(p.stdout.readline())
+        if o.get("id") == 3:
+            break
+    p.terminate()
+    p.wait(timeout=30)
+    srv.shutdown()
+    assert "/v1/hooks/stop" in hits and "/v1/hooks/pre-compact" in hits
+    assert json.load(open(home / "state" / "acp-sess-1.json"))["next_index"] == 2

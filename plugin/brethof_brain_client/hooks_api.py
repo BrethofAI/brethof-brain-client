@@ -73,6 +73,34 @@ class AgentHooks:
             return ""
         return env.get("injection", "") or ""
 
+    def before_prompt_parts(self, prompt: str, parts: tuple = (1, 2, 3, 4, 5, 6, 7)) -> str:
+        """The FULL per-prompt memory, as Claude Code receives it: the server
+        composes it once per prompt and hands it out in numbered parts (the
+        rule and records in 1-6, the history of decisions near the prompt in
+        7). ``before_prompt`` asks for the legacy single part, which never
+        carries the history block (found 2026-11-18: a decided codename came
+        back in part 7 and nowhere in part 0). Parts are asked in parallel and
+        joined in order; any that fail are simply left out."""
+        if not (prompt or "").strip():
+            return ""
+        import threading
+        got: dict = {}
+
+        def one(n: int) -> None:
+            try:
+                env = self._http.post("/v1/hooks/prompt-submit", {
+                    "project": self.project, "prompt": prompt,
+                    "session_id": self.session_id, "part": n})
+                got[n] = env.get("injection", "") or ""
+            except ClientError:
+                got[n] = ""
+        threads = [threading.Thread(target=one, args=(n,), daemon=True) for n in parts]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return "\n\n".join(got[n].strip() for n in parts if got.get(n, "").strip())
+
     def archive(self, user_text: str = "", assistant_text: str = "") -> dict:
         """Archive a turn pair into the chat memory. Returns the server envelope
         ({status, archived, ...}) or {} on failure. Indices auto-increment per

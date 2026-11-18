@@ -95,6 +95,7 @@ class Middle:
         self.sessions: dict[str, _Session] = {}
         self.pending: dict = {}           # client request id -> what it was
         self.lock = threading.Lock()
+        self.archiving: list[threading.Thread] = []
 
     # ── the session's memory hooks, one AgentHooks per ACP session ──────
     def _session(self, sid: str, cwd: str = "") -> _Session:
@@ -150,7 +151,7 @@ class Middle:
             brief = s.hooks.session_start()
             if brief.strip():
                 parts.append(brief.strip())
-        recall = s.hooks.before_prompt(said) if said else ""
+        recall = s.hooks.before_prompt_parts(said) if said else ""
         if recall.strip():
             parts.append(recall.strip())
         if not parts:
@@ -187,14 +188,25 @@ class Middle:
                 s = self._session(sid)
                 reply, s.chunks = "".join(s.chunks).strip(), []
                 if s.hooks is not None and (said or reply):
-                    threading.Thread(target=self._archive, args=(sid, s, said, reply), daemon=True).start()
+                    t = threading.Thread(target=self._archive, args=(sid, s, said, reply), daemon=True)
+                    t.start()
+                    self.archiving.append(t)
         except Exception as e:                                      # noqa: BLE001
             _log(f"could not read an agent message ({type(e).__name__}: {e})")
 
     def _archive(self, sid: str, s: _Session, said: str, reply: str) -> None:
         with s.lock:                      # never the shared lock: a slow memory must not stall the stream
+            # the turn numbers are reserved on disk FIRST: a GUI that closes
+            # mid-call must not leave a resumed session reusing them
+            _save_index(sid, s.hooks._next_index + bool(said.strip()) + bool(reply.strip()))
             s.hooks.archive(said, reply)
-            _save_index(sid, s.hooks._next_index)
+
+    def drain(self, timeout: float = 15.0) -> None:
+        """Let the archives in flight finish before the program leaves."""
+        import time
+        end = time.time() + timeout
+        for t in list(self.archiving):
+            t.join(timeout=max(0.0, end - time.time()))
 
     def close(self) -> None:
         """The GUI went away: hand the memory every session's waiting turns."""
@@ -252,15 +264,35 @@ def run(real: str, args: list[str]) -> int:
                 pass
 
     threading.Thread(target=up, daemon=True).start()
+
+    # A GUI closes its agent with a signal: finish what is in flight, hand
+    # the memory the waiting turns, then go — the agent goes with us.
+    import signal
+
+    def leave(signum, _frame):
+        try:
+            child.terminate()
+        except OSError:
+            pass
+        mid.drain()
+        mid.close()
+        os._exit(0)
+    for sig in (signal.SIGTERM, signal.SIGINT, getattr(signal, "SIGHUP", None)):
+        if sig is not None:
+            try:
+                signal.signal(sig, leave)
+            except (ValueError, OSError):
+                pass
     out = sys.stdout.buffer
     try:
         for line in child.stdout:
+            mid.from_agent(line)          # noted FIRST: a GUI may close the moment it has the answer
             out.write(line)               # the agent's bytes, untouched
             out.flush()
-            mid.from_agent(line)
     except (BrokenPipeError, OSError):
         pass
     code = child.wait()
+    mid.drain()
     mid.close()
     return code
 
