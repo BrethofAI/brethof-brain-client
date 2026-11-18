@@ -26,7 +26,7 @@ of its first user message and system prompt.
 FAIL-OPEN: no key, the memory down, a body we cannot read — the request goes
 through untouched. Stdlib only.
 
-    brethof-brain-model-proxy --upstream http://127.0.0.1:11434/v1 --port 8270
+    brethof-brain-model-proxy --upstream http://127.0.0.1:11434/v1 --port 8281
 """
 from __future__ import annotations
 
@@ -325,7 +325,7 @@ def _read_piece(line: bytes, stream: bool, answer: list, final):
     return final
 
 
-def serve(upstream: str, host: str = "127.0.0.1", port: int = 8270, memory: Optional[Memory] = None):
+def serve(upstream: str, host: str = "127.0.0.1", port: int = 8281, memory: Optional[Memory] = None):
     Handler.upstream = upstream
     Handler.memory = memory or Memory()
     srv = ThreadingHTTPServer((host, port), Handler)
@@ -337,7 +337,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="brethof-brain-model-proxy")
     ap.add_argument("--upstream", default=os.environ.get("BRETHOF_BRAIN_UPSTREAM", "http://127.0.0.1:11434/v1"))
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=int(os.environ.get("BRETHOF_BRAIN_PROXY_PORT", "8270")))
+    ap.add_argument("--port", type=int, default=int(os.environ.get("BRETHOF_BRAIN_PROXY_PORT", "8281")))
     a = ap.parse_args(argv)
     srv = serve(a.upstream, a.host, a.port)
     print(f"brethof-brain model proxy on http://{a.host}:{a.port}/v1 -> {a.upstream}", flush=True)

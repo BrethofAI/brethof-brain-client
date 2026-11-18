@@ -54,9 +54,15 @@ def is_session(args: list[str]) -> bool:
         return True
     if not args:
         return False
-    if args[0] == "agent" and "stdio" in args[1:]:
+    # Anywhere in the argv, not first: Grok App puts ~230 global options
+    # BEFORE `agent ... stdio` (found live 2026-11-18 — the session went
+    # straight to grok, untouched). Exact elements only: a --rules value is
+    # one argv element, so a word inside it never matches.
+    if "agent" in args and "stdio" in args[args.index("agent") + 1:]:
         return True
-    return args[0] == "acp" or args[:2] == ["agent", "acp"]
+    if args[0] == "acp":
+        return True
+    return any(args[i:i + 2] == ["agent", "acp"] for i in range(len(args) - 1))
 
 
 def _log(msg: str) -> None:

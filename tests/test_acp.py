@@ -54,6 +54,12 @@ def test_which_arguments_start_a_session():
     assert acp.is_session(["acp"]) and acp.is_session(["agent", "acp"])
     assert not acp.is_session(["--version"]) and not acp.is_session(["login"])
     assert not acp.is_session(["agent", "--help"]) and not acp.is_session([])
+    # Grok App's real shape: global options first, a --rules text that
+    # mentions the words, then the subcommand
+    app = ["--no-auto-update", "--trust", "--rules", "Use the agent over stdio for tools", "agent",
+           "--model", "glm", "stdio"]
+    assert acp.is_session(app)
+    assert not acp.is_session(["--rules", "agent stdio talk", "--version"])
 
 
 def test_the_brief_on_the_first_prompt_and_recall_on_every_one():
