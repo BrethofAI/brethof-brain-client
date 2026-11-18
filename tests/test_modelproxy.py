@@ -162,3 +162,30 @@ def test_memory_off_passes_everything_through():
     m = modelproxy.Memory(types.SimpleNamespace(configured=lambda: False))
     body = {"messages": [{"role": "user", "content": "hi"}]}
     assert m.prepare(json.loads(json.dumps(body)))[0] == body and m.on is False
+
+
+def test_a_reminder_after_the_query_is_not_the_persons_words(world):
+    msgs = grok_messages(world.folder, "which database do we use?") + [
+        {"role": "user", "content": "<system-reminder>\nMCP servers currently connecting\n</system-reminder>"}]
+    chat(world, msgs)
+    recall = [b for p, b in world.memory if p == "/v1/hooks/prompt-submit"]
+    assert recall and {b["prompt"] for b in recall} == {"which database do we use?"}
+    sent = world.seen[-1]["messages"]
+    assert "RECALL for which database" in sent[3]["content"] and "RECALL" not in sent[4]["content"]
+    assert wait_for(lambda: any(p == "/v1/hooks/stop" for p, _ in world.memory))
+    stop = next(b for p, b in world.memory if p == "/v1/hooks/stop")
+    assert stop["turns"][0]["text"] == "which database do we use?"
+
+
+def test_the_responses_format_gets_the_memory_and_is_archived(world):
+    import urllib.request
+    body = {"model": "m", "stream": False, "store": False, "input": [
+        {"type": "message", "role": "system", "content": "You are Grok."},
+        {"type": "message", "role": "user", "content": f"<user_info>\nWorkspace Path: {world.folder}\n</user_info>"},
+        {"type": "message", "role": "user", "content": [{"type": "input_text",
+                                                         "text": "<user_query>\nwhich database?\n</user_query>"}]}]}
+    m = modelproxy.Memory.__new__(modelproxy.Memory)
+    out, pending = world.proxy.RequestHandlerClass.memory.prepare_responses(json.loads(json.dumps(body)))
+    part = out["input"][2]["content"][0]
+    assert part["type"] == "input_text" and "RECALL for which database?" in part["text"]
+    assert out["input"][2]["content"][1]["text"].endswith("</user_query>") and pending[1] == "which database?"

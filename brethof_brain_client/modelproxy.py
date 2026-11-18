@@ -72,7 +72,9 @@ def _with_block(content, block: str):
     if isinstance(content, str):
         return block + "\n\n" + content
     if isinstance(content, list):
-        return [{"type": "text", "text": block}] + content
+        kind = next((p.get("type") for p in content if isinstance(p, dict)
+                     and p.get("type") in ("text", "input_text")), "text")
+        return [{"type": kind, "text": block}] + content
     return content
 
 
@@ -182,11 +184,21 @@ class Memory:
             return body, None
         conv = self.conversation(msgs)
         users = [i for i, m in enumerate(msgs) if isinstance(m, dict) and m.get("role") == "user"]
+        # WHERE THE APP MARKS THE PERSON'S WORDS (Grok: <user_query>), only
+        # those messages are theirs — the app's own <user_info> and
+        # <system-reminder> messages, even one sent AFTER the query, are not
+        # (2026-11-18: a trailing "MCP servers connecting" reminder was
+        # searched with and archived as the person's words)
+        marked = [i for i in users if _QUERY.search(_text(msgs[i].get("content")))]
+        if marked:
+            users = marked
         if not users:
             return body, None
         last = users[-1]
         last_said = said_of(_text(msgs[last].get("content")))
-        new_turn = msgs[-1].get("role") == "user"
+        # a new turn: nothing but more user messages (reminders) after it —
+        # no assistant reply, no tool result
+        new_turn = all(m.get("role") == "user" for m in msgs[last + 1:]) if isinstance(msgs[-1], dict) else False
         pending = None
         for i in users:
             said = said_of(_text(msgs[i].get("content")))
@@ -206,6 +218,31 @@ class Memory:
         if pending is None and not new_turn and last_said.strip() and not last_said.startswith(MARK):
             # a tool-loop call: the answer that ends the turn is archived then
             pending = (conv, last_said, self._key(conv, last, last_said))
+        return body, pending
+
+    def prepare_responses(self, body: dict) -> tuple[dict, Optional[tuple]]:
+        """OpenAI's Responses format (Grok's subscription route, 2026-11-18):
+        `input` is a list of items — messages, tool calls, tool outputs — and
+        the whole history is resent each call (store: false). Viewed as chat
+        messages (a tool item counts as a non-user turn), handled by prepare(),
+        and the user messages' content written back."""
+        items = body.get("input")
+        if not isinstance(items, list):
+            return body, None
+        view = []
+        for it in items:
+            if isinstance(it, dict) and it.get("type", "message") == "message":
+                view.append({"role": it.get("role"), "content": it.get("content")})
+            else:
+                view.append({"role": "tool", "content": ""})
+        if isinstance(body.get("instructions"), str) and body["instructions"]:
+            view.insert(0, {"role": "system", "content": body["instructions"]})
+        shift = 1 if view and len(view) > len(items) else 0
+        _, pending = self.prepare({"messages": view})
+        for i, it in enumerate(items):
+            v = view[i + shift]
+            if isinstance(it, dict) and it.get("type", "message") == "message" and v.get("content") is not it.get("content"):
+                it["content"] = v["content"]
         return body, pending
 
     def _memory(self, conv: str, msgs: list, said: str) -> str:
@@ -247,12 +284,40 @@ class Handler(BaseHTTPRequestHandler):
     def _forward(self, method: str) -> None:
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else None
+        if os.environ.get("BRETHOF_BRAIN_DEBUG"):
+            # what an app sends, never a secret: header names, and the auth
+            # header's scheme and length only
+            auth = self.headers.get("Authorization") or ""
+            shown = (auth.split(" ", 1)[0] + f" <{len(auth)} chars>") if auth else "none"
+            _log(f"{method} {self.path} | auth {shown} | headers {sorted(k.lower() for k in self.headers.keys())}"
+                 f" | {len(raw or b'')} bytes")
+        dump = os.environ.get("BRETHOF_BRAIN_PROXY_DUMP_RESPONSES")
+        if dump and raw and self.path.rstrip("/").endswith("/responses"):
+            try:
+                with open(dump, "wb") as f:
+                    f.write(raw)
+            except OSError:
+                pass
+        # MODEL RENAME (tests): BRETHOF_BRAIN_MODEL_MAP="grok-4.7=glm-5.3-flash:cloud,*=glm-5.3-flash:cloud"
+        mmap = dict(x.split("=", 1) for x in os.environ.get("BRETHOF_BRAIN_MODEL_MAP", "").split(",") if "=" in x)
+        if mmap and raw and method == "POST":
+            try:
+                b = json.loads(raw)
+                if isinstance(b, dict) and b.get("model"):
+                    to = mmap.get(b["model"]) or mmap.get("*")
+                    if to:
+                        _log(f"model {b['model']} -> {to}")
+                        b["model"] = to
+                        raw = json.dumps(b, ensure_ascii=False).encode("utf-8")
+            except ValueError:
+                pass
         pending, is_chat, stream = None, False, False
-        if method == "POST" and self.path.rstrip("/").endswith("/chat/completions") and raw:
+        responses = self.path.split("?")[0].rstrip("/").endswith("/responses")
+        if method == "POST" and raw and (responses or self.path.split("?")[0].rstrip("/").endswith("/chat/completions")):
             try:
                 body = json.loads(raw)
                 is_chat, stream = True, bool(body.get("stream"))
-                body, pending = self.memory.prepare(body)
+                body, pending = (self.memory.prepare_responses(body) if responses else self.memory.prepare(body))
                 raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
             except Exception as e:                                  # noqa: BLE001 — fail open
                 _log(f"chat body passed through unread ({type(e).__name__}: {e})")
@@ -306,6 +371,8 @@ def _read_piece(line: bytes, stream: bool, answer: list, final):
     """Collect the answer's text and its finish reason from a response line
     (SSE chunk when streaming, the whole JSON otherwise)."""
     s = line.decode("utf-8", "replace").strip()
+    if '"response.' in s or '"output"' in s:
+        return _read_responses_piece(s, stream, answer, final)
     if stream:
         if not s.startswith("data:") or s == "data: [DONE]":
             return final
@@ -323,6 +390,35 @@ def _read_piece(line: bytes, stream: bool, answer: list, final):
         if c.get("finish_reason"):
             final = c["finish_reason"]
     return final
+
+
+def _read_responses_piece(s: str, stream: bool, answer: list, final):
+    """Responses format: output_text deltas while streaming, and the finished
+    response (its output items) at response.completed or as the whole body.
+    A turn is final when the response asks for no tool (no function_call)."""
+    if stream:
+        if not s.startswith("data:"):
+            return final
+        s = s[5:].strip()
+    try:
+        d = json.loads(s)
+    except ValueError:
+        return final
+    if d.get("type") == "response.output_text.delta" and isinstance(d.get("delta"), str):
+        answer.append(d["delta"])
+        return final
+    r = d.get("response") if d.get("type") in ("response.completed", "response.done") else (d if "output" in d else None)
+    if not isinstance(r, dict):
+        return final
+    out = r.get("output") or []
+    if not stream and not answer:
+        for it in out:
+            for c in (it.get("content") or []) if isinstance(it, dict) else []:
+                if isinstance(c, dict) and c.get("type") == "output_text":
+                    answer.append(str(c.get("text") or ""))
+    calls = any(isinstance(it, dict) and it.get("type") in ("function_call", "custom_tool_call", "local_shell_call")
+                for it in out)
+    return "tool_calls" if calls else "stop"
 
 
 def serve(upstream: str, host: str = "127.0.0.1", port: int = 8281, memory: Optional[Memory] = None):
