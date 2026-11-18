@@ -232,3 +232,18 @@ def test_a_gui_closing_mid_archive_still_lands_the_turn(tmp_path):
     srv.shutdown()
     assert "/v1/hooks/stop" in hits and "/v1/hooks/pre-compact" in hits
     assert json.load(open(home / "state" / "acp-sess-1.json"))["next_index"] == 2
+
+
+def test_the_launcher_keeps_a_separate_client_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("GROK_APP_HOME", str(tmp_path / "app"))
+    monkeypatch.setattr(grok_app, "LAUNCHER_DIR", str(tmp_path / "bin"))
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", str(tmp_path / "grok-home"))
+    grok = tmp_path / "grok"
+    grok.write_text("#!/bin/sh\necho \"home=$BRETHOF_BRAIN_HOME\"\n")
+    grok.chmod(0o755)
+    assert grok_app.cmd_grok_app(types.SimpleNamespace(grok=str(grok), undo=False)) == 0
+    launcher = str(tmp_path / "bin" / "grok-with-brain")
+    env = {k: v for k, v in os.environ.items() if k != "BRETHOF_BRAIN_HOME"}
+    env["PYTHONPATH"] = os.path.join(os.path.dirname(__file__), "..")
+    out = subprocess.run([launcher, "--version"], capture_output=True, text=True, env=env).stdout.strip()
+    assert out == f"home={tmp_path / 'grok-home'}"                      # the GUI's own env does not carry it

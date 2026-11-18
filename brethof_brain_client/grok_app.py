@@ -75,10 +75,17 @@ def cmd_grok_app(args) -> int:
               "Grok App will work, without memory, until it is.", file=sys.stderr)
     os.makedirs(LAUNCHER_DIR, exist_ok=True)
     py = sys.executable
+    # A SEPARATE CLIENT HOME, KEPT (2026-11-18): set BRETHOF_BRAIN_HOME when
+    # installing and Grok App uses that folder's key and memory — never the
+    # one this machine's other agents use. Grok App starts the launcher with
+    # its own environment, so the launcher carries the setting itself.
+    home = os.environ.get("BRETHOF_BRAIN_HOME", "")
     if os.name == "nt":
-        body = f'@echo off\r\n"{py}" -m brethof_brain_client.acp --real "{grok}" -- %*\r\n'
+        env = f'set "BRETHOF_BRAIN_HOME={home}"\r\n' if home else ""
+        body = f'@echo off\r\n{env}"{py}" -m brethof_brain_client.acp --real "{grok}" -- %*\r\n'
     else:
-        body = f'#!/bin/sh\nexec "{py}" -m brethof_brain_client.acp --real "{grok}" -- "$@"\n'
+        env = f"export BRETHOF_BRAIN_HOME='{home}'\n" if home else ""
+        body = f'#!/bin/sh\n{env}exec "{py}" -m brethof_brain_client.acp --real "{grok}" -- "$@"\n'
     with open(launcher, "w", encoding="utf-8", newline="") as f:
         f.write(body)
     if os.name != "nt":
