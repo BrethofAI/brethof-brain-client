@@ -261,16 +261,25 @@ browser and it is fixed for good).
 
 ## Getting your memory (two shapes)
 
-Your memory lives in a container. Where that container runs is the one choice
-you make, once, in the [account panel](https://brethof.ai/account/):
+**On your machine or your own server (local).** The Brain runs as three
+containers: the hub, storage and the embedder. One command installs them:
 
-**On your machine (local).** The panel mints your **hub key** (shown once) —
-it goes into the container's configuration and is how your memory reaches the
-thinking service. You run the container yourself (install guide:
-[brethof.ai/guides](https://brethof.ai/guides/)), mint your **memory key**
-during its setup, and you're done — the client's default endpoint
-(`http://127.0.0.1:8610`) already points at it. Your conversations never
-leave your hardware; only the pieces being curated transit the hub.
+```bash
+curl -fsSL https://downloads.brethof.ai/brain/local3/get.sh | bash
+```
+
+The installer connects the hub to your Brethof account once (5 devices are
+free) and prints the settings page's address and password. Then connect each
+machine, once:
+
+```bash
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git
+brethof-brain pair http://127.0.0.1:8600      # or your hub's address on your network
+```
+
+`pair` shows a code; approve the same code on the hub's settings page and the
+machine gets its own key. Your memory, its passwords and its encryption stay
+on your machine; the account only counts devices.
 
 **On our cloud (hosted).** The panel creates your container, encrypted under
 a **passphrase only you hold**, and shows your endpoint
@@ -286,7 +295,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.2.26
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.3.0
 ```
 
 (There is no PyPI package — the client is installed from source, so you get
@@ -360,6 +369,7 @@ Code holds the key instead and the config file isn't needed.
 
 | Command | Does |
 |---|---|
+| `brethof-brain pair <hub>` | Connect this machine to your Brain hub; approve its code on the hub's settings page |
 | `brethof-brain setup` | Save credentials, verify connectivity |
 | `brethof-brain install-hooks` | Add the hooks to `~/.claude/settings.json` (idempotent, backs up first) |
 | `brethof-brain uninstall-hooks` | Remove them |
