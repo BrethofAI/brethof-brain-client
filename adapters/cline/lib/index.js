@@ -185,15 +185,24 @@ export default {
                            dbg(`session-start: status=${env?.status} brief=${s.brief.length}ch`) })
             .catch(e => { dbg(`session-start: THREW ${e?.message}`) })
         }
-        await s.briefP
         const prompt = lastUserText(ctx.request.messages)
         dbg(`beforeModel: msgs=${ctx.request.messages.length} prompt=${prompt.length}ch `
           + `new=${prompt !== s.lastPrompt} head="${prompt.slice(0, 60)}"`)
+        // the brief and the prompt's parts are asked AT ONCE: Cline gives a
+        // hook only so long before the model call goes out without it (rig
+        // 2026-11-20: asked one after the other, a slow hub missed the call)
+        let recallP = null
         if (prompt && prompt !== s.lastPrompt) {
           s.lastPrompt = prompt
           s.recall = ''
-          s.recall = await promptContext(
-            { project, prompt, session_id: convOf(ctx.snapshot) }, 12_000)
+          // ephemeral: the overlay rides the REQUEST only, never the stored
+          // conversation, so a record served on an earlier prompt must be
+          // served again (no record cooldown) or the model loses it
+          recallP = promptContext({ project, prompt, session_id: convOf(ctx.snapshot), ephemeral: true }, 12_000)
+        }
+        await s.briefP
+        if (recallP) {
+          s.recall = await recallP
           dbg(`prompt-submit: parts 1-7 recall=${s.recall.length}ch`)
         }
         const text = [s.brief, s.recall].filter(Boolean).join('\n\n')

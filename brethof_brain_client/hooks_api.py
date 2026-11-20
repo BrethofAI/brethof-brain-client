@@ -40,7 +40,8 @@ SPOOL_CAP_BYTES = 1_000_000  # per-session spool bound; oldest turns drop past i
 
 class AgentHooks:
     def __init__(self, project: Optional[str] = None, session_id: str = "default",
-                 config: Optional[Config] = None, timeout: float = 15.0):
+                 config: Optional[Config] = None, timeout: float = 15.0,
+                 ephemeral: bool = False):
         self.cfg = config or Config.load()
         if not self.cfg.configured():
             raise ClientError("not paired with a hub (run: brethof-brain pair <hub address>, "
@@ -48,6 +49,13 @@ class AgentHooks:
         self._http = Client(self.cfg, timeout=timeout)
         self.project = project or self.cfg.default_project or "global"
         self.session_id = session_id or "default"
+        # EPHEMERAL: the caller hands the prompt context to ONE model call and
+        # never keeps it in the conversation (a per-call overlay). The memory
+        # then serves a record again on a later prompt instead of holding it
+        # back as already seen this session (the record cooldown) — without
+        # it, the second prompt of a sitting got nothing (rig 2026-11-20,
+        # openclaw-lib: parts 1-7 served the record on prompt one).
+        self.ephemeral = bool(ephemeral)
         self._next_index = 0
 
     def session_start(self) -> str:
@@ -83,9 +91,11 @@ class AgentHooks:
 
         def one(n: int) -> None:
             try:
-                env = self._http.post("/v1/hooks/prompt-submit", {
-                    "project": self.project, "prompt": prompt,
-                    "session_id": self.session_id, "part": n})
+                body = {"project": self.project, "prompt": prompt,
+                        "session_id": self.session_id, "part": n}
+                if self.ephemeral:
+                    body["ephemeral"] = True
+                env = self._http.post("/v1/hooks/prompt-submit", body)
                 got[n] = env.get("injection", "") or ""
             except ClientError:
                 got[n] = ""

@@ -1,4 +1,4 @@
-"""OpenClaw memory hooks — give an OpenClaw agent brethof-brain cloud memory.
+"""OpenClaw memory hooks — give an OpenClaw agent Brethof Brain memory.
 
 OpenClaw has no native memory/hook system (unlike Claude Code's hooks or Hermes's
 memory provider), so we add one: wrap the agent's run loop with ``MemorySession``,
@@ -30,8 +30,15 @@ from brethof_brain_client.client import Client
 class MemorySession:
     """A thin memory wrapper for one OpenClaw agent session."""
 
-    def __init__(self, project: str, session_id: str, base_system_prompt: str = ""):
-        self.hooks = AgentHooks(project=project, session_id=session_id)
+    def __init__(self, project: str, session_id: str, base_system_prompt: str = "",
+                 context_in_history: bool = False):
+        # build_context() is made for ONE model call (the usage above passes it
+        # beside the message, never into the stored conversation), so it asks
+        # as an ephemeral overlay — a record is served again on a later turn.
+        # An integrator that stores the context in its history passes
+        # context_in_history=True and gets each record once per session.
+        self.hooks = AgentHooks(project=project, session_id=session_id,
+                                ephemeral=not context_in_history)
         self.base_system_prompt = base_system_prompt
         self._memory_block = ""
         self._http = Client(self.hooks.cfg, timeout=20.0)
@@ -172,7 +179,7 @@ class MemorySession:
 
 
 def demo(call_model=None) -> bool:
-    """Run a tiny two-turn session end-to-end against the cloud, using a stub
+    """Run a tiny two-turn session end-to-end against your hub, using a stub
     model unless one is supplied. Returns True if the hooks all fired. Used by
     the test container to prove the OpenClaw hook path."""
     if call_model is None:

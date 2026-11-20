@@ -179,3 +179,21 @@ def test_agent_hooks_before_prompt_is_the_full_memory(hub):
 def test_default_endpoint_is_the_hub():
     from brethof_brain_client import DEFAULT_ENDPOINT
     assert DEFAULT_ENDPOINT == "http://127.0.0.1:8600"
+
+
+def test_a_per_call_overlay_asks_ephemeral(hub):
+    """A caller that hands the context to one model call only (MemorySession,
+    the documented library usage) asks ephemerally, so the memory serves a
+    record again on the next prompt instead of holding it back as seen."""
+    import importlib.util
+    from brethof_brain_client.hooks_api import AgentHooks
+    AgentHooks(project="contract", session_id="s", ephemeral=True).before_prompt("q")
+    assert [r["body"].get("ephemeral") for r in hub.seen] == [True] * 7
+    hub.seen.clear()
+    AgentHooks(project="contract", session_id="s").before_prompt("q")
+    assert not any(r["body"].get("ephemeral") for r in hub.seen)
+    spec = importlib.util.spec_from_file_location("ochooks", ADAPTERS / "openclaw" / "openclaw_hooks.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    assert m.MemorySession(project="contract", session_id="s").hooks.ephemeral is True
+    assert m.MemorySession(project="contract", session_id="s", context_in_history=True).hooks.ephemeral is False
