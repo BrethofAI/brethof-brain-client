@@ -1,4 +1,4 @@
-# brethof-brain cloud + Qwen Code
+# brethof-brain + Qwen Code
 
 Qwen Code ships a full hook system (well beyond its Gemini-CLI ancestry) —
 so it gets the **complete** brethof-brain contract:
@@ -9,22 +9,28 @@ so it gets the **complete** brethof-brain contract:
 | `UserPromptSubmit` | every prompt | ambient recall relevant to what you asked |
 | `Stop` | end of each reply | the turn archived into long-term memory |
 
-Plus the Brain's MCP tools via Qwen Code's native `httpUrl` MCP support and
+Plus the Brain's MCP tools via Qwen Code's MCP support and
 a short memory section in `~/.qwen/QWEN.md`.
 
 ## Install
 
 ```bash
-export BRETHOF_BRAIN_API_KEY=bmv2_...   # your key
-python3 setup.py                            # from this directory
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # your hub; or https://<your hub>
+python3 setup.py                           # from this directory
 ```
+
+`pair` shows a code; approve it on the hub's settings page, and the device
+key lands in `~/.brethof-brain/config.json` (never printed).
 
 The setup script merges hooks + the `brethof-brain` MCP server into
 `~/.qwen/settings.json` (existing settings kept) and appends the memory
 section to `~/.qwen/QWEN.md` (marker-guarded, idempotent).
 
-Keep `BRETHOF_BRAIN_API_KEY` exported wherever you run `qwen` — the hooks
-read it from the environment; the MCP header carries it for the tools.
+The MCP server is a stdio entry running `plugin/mcp_bridge.py`, which reads
+the hub and key from `config.json` on every request — no key sits in
+`settings.json`. The hooks read the same file; `BRETHOF_BRAIN_*` environment
+variables override it.
 
 ## Uninstall
 

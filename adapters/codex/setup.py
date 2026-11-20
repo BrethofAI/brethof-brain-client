@@ -1,29 +1,43 @@
 #!/usr/bin/env python3
-"""Wire OpenAI Codex CLI to brethof-brain cloud.
+"""Wire OpenAI Codex CLI to your Brain hub.
 
 Codex (v0.124+) hooks share Claude Code's shape — JSON on stdin with
 session_id / cwd / prompt / transcript_path, stdout injected as context —
 so the plugin's own hook entry drives all three lifecycle points directly:
 
 1. ~/.codex/hooks.json      — SessionStart / UserPromptSubmit / Stop hooks
-2. ~/.codex/config.toml     — brethof-brain HTTP MCP server (bearer via env)
+2. ~/.codex/config.toml     — the memory tools over stdio (plugin/mcp_bridge.py,
+                               which reads the paired hub and key on every call)
 3. ~/.codex/AGENTS.md       — short memory section (marker-guarded)
 
 Run from this directory:  python3 setup.py
-Environment:              BRETHOF_BRAIN_API_KEY (exported wherever codex runs)
+Connect first:            brethof-brain pair <hub address>  (writes ~/.brethof-brain/config.json)
 Stdlib only, Python 3.9+. Idempotent — safe to re-run after updates.
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent   # plugin repo root
 CODEX = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-ENDPOINT = os.environ.get("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:8610")
 MARK_A, MARK_B = "<!-- brethof-brain:start -->", "<!-- brethof-brain:end -->"
+BRIDGE = ROOT / "plugin" / "mcp_bridge.py"
+
+
+def _paired() -> bool:
+    """This machine is paired with a hub: `brethof-brain pair` wrote the
+    config file, or the key is in the environment."""
+    if os.environ.get("BRETHOF_BRAIN_API_KEY"):
+        return True
+    home = os.environ.get("BRETHOF_BRAIN_HOME") or str(Path.home() / ".brethof-brain")
+    try:
+        return bool(json.loads((Path(home) / "config.json").read_text()).get("api_key"))
+    except (OSError, ValueError):
+        return False
 
 AGENTS_SECTION = f"""{MARK_A}
 ## Long-term memory (brethof-brain)
@@ -85,12 +99,19 @@ def install_mcp() -> None:
     path = CODEX / "config.toml"
     text = path.read_text() if path.exists() else ""
     changed = False
-    if "mcp_servers.brethof-brain" not in text \
-            and "mcp_servers.brethof_brain" not in text:
-        text += (f'\n[mcp_servers.brethof-brain]\n'
-                 f'url = "{ENDPOINT}/v1/mcp"\n'
-                 f'bearer_token_env_var = "BRETHOF_BRAIN_API_KEY"\n')
-        changed = True
+    # THE TOOLS OVER STDIO (local-first, 2026-11-20): the bridge reads the
+    # hub and the device key `pair` saved on every request, so no key sits in
+    # this file or in an exported variable, and re-pairing needs no re-run.
+    # An older install's HTTP block (an endpoint + a key from the environment)
+    # is replaced.
+    py = sys.executable if os.name == "nt" else "python3"
+    block = (f'[mcp_servers.brethof-brain]\n'
+             f'command = {json.dumps(py)}\n'
+             f'args = [{json.dumps(str(BRIDGE))}]\n')
+    text, n = re.subn(r'(?ms)^\[mcp_servers\.brethof[-_]brain\]\n.*?(?=^\[|\Z)', block + "\n", text)
+    if not n:
+        text += "\n" + block
+    changed = True
     # notify = the archival channel that actually fires in `codex exec`
     # (verified 0.147.0: hooks.json events do NOT fire headless; notify does,
     # with the full exchange). Never clobber an existing notify program.
@@ -136,9 +157,9 @@ def install_agents_md() -> None:
 
 
 def main() -> int:
-    if not os.environ.get("BRETHOF_BRAIN_API_KEY"):
-        print("  ! BRETHOF_BRAIN_API_KEY is not set — installing anyway; "
-              "export it wherever you run codex or the hooks stay silent.")
+    if not _paired():
+        print("  ! this machine is not paired with a hub yet — installing anyway; "
+              "run `brethof-brain pair <hub address>` or the hooks stay silent.")
     install_hooks()
     install_mcp()
     install_agents_md()

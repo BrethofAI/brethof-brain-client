@@ -152,10 +152,10 @@ def _pre_invocation(cfg: Config, payload: dict) -> None:
     if prompt:
         sig = hashlib.sha1(prompt.encode()).hexdigest()
         if sig != st.get("prompt_sig"):
-            env = Client(cfg).post("/v1/hooks/prompt-submit",
-                                   {"project": project, "prompt": prompt,
-                                    "session_id": conv, "ephemeral": True})
-            st["prompt_sig"], st["recall_text"] = sig, cc_hook._injection_from_envelope(env)
+            # parts 1-7 joined, in parallel (the history of decisions is part 7)
+            st["prompt_sig"], st["recall_text"] = sig, cc_hook.prompt_context(
+                cfg, {"project": project, "prompt": prompt,
+                      "session_id": conv, "ephemeral": True})
     _agstate_save(conv, st)
     pieces = [p for p in (st.get("brief"), st.get("recall_text") if prompt else "") if p]
     _dbg(f"agy pre-invocation {conv} #{payload.get('invocationNum')} "

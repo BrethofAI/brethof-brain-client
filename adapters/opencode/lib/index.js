@@ -47,14 +47,10 @@ function config(options = {}) {
   const f = fileConfig()
   _cfg = {
     endpoint: (options.endpoint || process.env.BRETHOF_BRAIN_ENDPOINT
-      || f.endpoint || 'http://127.0.0.1:8610').replace(/\/+$/, ''),
+      || f.endpoint || 'http://127.0.0.1:8600').replace(/\/+$/, ''),
     apiKey: options.apiKey || process.env.BRETHOF_BRAIN_API_KEY || f.api_key || '',
     project: options.project || process.env.BRETHOF_BRAIN_PROJECT
       || f.default_project || 'global',
-    unlockPassphrase: process.env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE
-      || f.unlock_passphrase || '',
-    lockAfterMinutes: parseInt(process.env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES
-      || f.lock_after_minutes || 0, 10) || 0,
   }
   if (!_cfg.apiKey) {
     console.warn('brethof-brain: no API key (env or ~/.brethof-brain/'
@@ -64,31 +60,11 @@ function config(options = {}) {
 }
 
 
-// A HOSTED memory locks itself after idle minutes (the customer's own
-// policy) and answers 423 until the passphrase opens it again. The Python
-// client has presented it automatically since 08-30; the JS adapters did
-// not, so a hosted customer on this harness lost memory after the first
-// idle stretch (found 2026-09-04 provisioning OpenClaw). Same contract:
-// POST <endpoint>/unlock {passphrase, idle_seconds?}, unauthenticated —
-// the passphrase IS the authentication — then the original call retried
-// ONCE. Unset passphrase: a locked memory is reported, never opened.
-async function unlock() {
-  const { endpoint, unlockPassphrase, lockAfterMinutes } = config()
-  if (!unlockPassphrase) return false
-  const body = { passphrase: unlockPassphrase }
-  if (lockAfterMinutes) body.idle_seconds = lockAfterMinutes * 60
-  try {
-    const res = await fetch(endpoint + '/unlock', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(90_000),
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-async function call(path, body, timeoutMs, retried = false) {
+// THE HUB'S FRONT DOOR (local-first, 2026-11-20): the endpoint is the hub
+// `brethof-brain pair` wrote into config.json (or <hub>/m/<memory>), and
+// the device key goes as a Bearer token — the hub refuses any other header.
+// The memory never locks any more: a refusal is just a failure.
+async function call(path, body, timeoutMs) {
   const { endpoint, apiKey } = config()
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -100,9 +76,6 @@ async function call(path, body, timeoutMs, retried = false) {
       body: JSON.stringify(body),
       signal: ctrl.signal,
     })
-    if (res.status === 423 && !retried && await unlock()) {
-      return call(path, body, timeoutMs, true)
-    }
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -110,6 +83,20 @@ async function call(path, body, timeoutMs, retried = false) {
   } finally {
     clearTimeout(t)
   }
+}
+
+// PROMPT CONTEXT IN PARTS 1-7, as the Claude Code plugin and the Python
+// client's before_prompt_parts receive it: the memory composes it once per
+// prompt and hands it out in numbered parts — records and rules in 1-6, the
+// history of decisions near the prompt in 7. No part at all is the legacy
+// single blob, which never carries that history. Asked in parallel (one
+// round trip of wall time, inside the same timeout) and joined in order;
+// a part that fails is simply left out.
+const PROMPT_PARTS = [1, 2, 3, 4, 5, 6, 7]
+async function promptContext(body, timeoutMs) {
+  const envs = await Promise.all(PROMPT_PARTS.map(part =>
+    call('/v1/hooks/prompt-submit', { ...body, part }, timeoutMs)))
+  return envs.map((env) => String(env?.injection || '').trim()).filter(Boolean).join('\n\n')
 }
 
 // Per-session bookkeeping: brief fetched once, archive index monotonic (the
@@ -215,9 +202,8 @@ export default {
         if (prompt) {
           // V2's context hook adds our text to one model call only, never to
           // history — "ephemeral" lifts the record cooldown (2026-10-03)
-          const env = await call('/v1/hooks/prompt-submit',
+          s.recall = await promptContext(
             { project, prompt, session_id: sessionID, ephemeral: true }, 12_000)
-          s.recall = env?.injection || ''
         }
         dbg('v2 prompt', sessionID, prompt.length, 'chars, recall', s.recall.length)
       } catch (e) { dbg('v2 prompt failed', String(e)) }
@@ -268,9 +254,8 @@ export default {
           const prompt = textOf(output.parts).trim()
           let recall = ''
           if (prompt) {
-            const env = await call('/v1/hooks/prompt-submit',
+            recall = await promptContext(
               { project, prompt, session_id: sessionID }, 12_000)
-            recall = env?.injection || ''
           }
           // The brief rides the FIRST message only — parts are persisted,
           // so unlike a request overlay it stays in history for the whole

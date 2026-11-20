@@ -15,13 +15,12 @@ registered here: point Hermes's native MCP client at the same endpoint
 code. Stdlib only, so it drops into ~/.hermes/plugins/ without dependencies.
 
 Config, env first, then $HERMES_HOME/.env, then ~/.brethof-brain/config.json:
-  BRETHOF_BRAIN_API_KEY            your key (required)
-  BRETHOF_BRAIN_ENDPOINT           your box (default http://127.0.0.1:8610;
+  BRETHOF_BRAIN_API_KEY            this device's key (bd_..., required)
+  BRETHOF_BRAIN_ENDPOINT           your hub (default http://127.0.0.1:8600;
                                    or https://<your hub's address>)
   BRETHOF_BRAIN_PROJECT            the project this agent reads and archives to
-  BRETHOF_BRAIN_UNLOCK_PASSPHRASE  hosted memory only: presented when the
-                                   memory has locked after idle (423)
-  BRETHOF_BRAIN_LOCK_AFTER_MINUTES hosted: idle minutes before it locks (5-60)
+`brethof-brain pair <hub address>` writes the endpoint and the key into
+~/.brethof-brain/config.json; nothing else needs setting.
 
 Every path is fail-open: memory can never block or break a run.
 """
@@ -42,10 +41,10 @@ logger = logging.getLogger(__name__)
 
 VERSION = "1.0.0"
 USER_AGENT = f"brethof-brain-hermes/{VERSION}"
-DEFAULT_ENDPOINT = "http://127.0.0.1:8610"
+DEFAULT_ENDPOINT = "http://127.0.0.1:8600"   # the hub's front door
 HOOK_TIMEOUT = 12.0          # session-start / prompt-submit
 ARCHIVE_TIMEOUT = 20.0       # stop
-UNLOCK_TIMEOUT = 90.0        # a mount + a Postgres start
+PROMPT_PARTS = (1, 2, 3, 4, 5, 6, 7)
 
 
 # ---------------------------------------------------------------- config --
@@ -100,20 +99,12 @@ def load_config() -> Dict[str, Any]:
         v = f.get(file_key) if file_key else None
         return str(v).strip() if v else default
 
-    try:
-        lock_after = int(pick("BRETHOF_BRAIN_LOCK_AFTER_MINUTES",
-                              file_key="lock_after_minutes", default="0") or 0)
-    except ValueError:
-        lock_after = 0
     return {
         "endpoint": pick("BRETHOF_BRAIN_ENDPOINT", file_key="endpoint",
                          default=DEFAULT_ENDPOINT).rstrip("/"),
         "api_key": pick("BRETHOF_BRAIN_API_KEY", file_key="api_key"),
         "project": pick("BRETHOF_BRAIN_PROJECT", "HERMES_MEMORY_PROJECT",
                         file_key="default_project", default="global"),
-        "unlock_passphrase": pick("BRETHOF_BRAIN_UNLOCK_PASSPHRASE",
-                                  file_key="unlock_passphrase"),
-        "lock_after_minutes": lock_after,
     }
 
 
@@ -140,54 +131,28 @@ class BrethofBrainProvider(MemoryProvider):
         return bool(self._cfg["api_key"])
 
     def unavailable_reason(self) -> str:
-        return ("set BRETHOF_BRAIN_API_KEY in ~/.hermes/.env (or api_key in "
-                "~/.brethof-brain/config.json) — run `hermes memory setup`")
+        return ("pair this machine with your hub: `brethof-brain pair <hub address>` "
+                "(or set BRETHOF_BRAIN_API_KEY in ~/.hermes/.env)")
 
     def get_config_schema(self) -> List[Dict[str, Any]]:
         return [
-            {"key": "api_key", "description": "Your brethof-brain API key",
+            {"key": "api_key", "description":
+                "This device's key (bd_...) — `brethof-brain pair` saves it for you",
              "secret": True, "required": True, "env_var": "BRETHOF_BRAIN_API_KEY",
              "url": "https://brethof.ai/brain"},
             {"key": "endpoint", "description":
-                "Your box: http://127.0.0.1:8610 for a local install, "
+                "Your hub: http://127.0.0.1:8600 on this machine, "
                 "https://<your hub's address> for a hub on another machine",
              "default": DEFAULT_ENDPOINT, "env_var": "BRETHOF_BRAIN_ENDPOINT"},
             {"key": "project", "description":
                 "The project this agent reads from and archives to",
              "default": "global", "env_var": "BRETHOF_BRAIN_PROJECT"},
-            {"key": "unlock_passphrase", "description":
-                "Hosted memory only: the passphrase that unlocks it after idle",
-             "secret": True, "env_var": "BRETHOF_BRAIN_UNLOCK_PASSPHRASE"},
-            {"key": "lock_after_minutes", "description":
-                "Hosted memory only: idle minutes before it locks (5-60)",
-             "type": "integer", "minimum": 5, "maximum": 60,
-             "env_var": "BRETHOF_BRAIN_LOCK_AFTER_MINUTES"},
         ]
 
     # -- HTTP (stdlib) -------------------------------------------------
-    def _unlock(self) -> bool:
-        """A hosted memory locks after idle and answers 423; the passphrase
-        is the whole authentication. Unset passphrase: reported, never opened."""
-        pw = self._cfg["unlock_passphrase"]
-        if not pw:
-            return False
-        body: Dict[str, Any] = {"passphrase": pw}
-        if self._cfg["lock_after_minutes"]:
-            body["idle_seconds"] = self._cfg["lock_after_minutes"] * 60
-        try:
-            req = urllib.request.Request(
-                self._cfg["endpoint"] + "/unlock",
-                data=json.dumps(body).encode("utf-8"),
-                headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
-                method="POST")
-            with urllib.request.urlopen(req, timeout=UNLOCK_TIMEOUT) as r:
-                return 200 <= r.status < 300
-        except Exception as e:  # noqa: BLE001
-            logger.debug("brethof-brain: unlock failed: %s", e)
-            return False
-
-    def _post(self, path: str, payload: Dict[str, Any], timeout: float,
-              _retried: bool = False) -> Optional[Dict[str, Any]]:
+    def _post(self, path: str, payload: Dict[str, Any],
+              timeout: float) -> Optional[Dict[str, Any]]:
+        # The hub's front door takes the device key as a Bearer token only.
         req = urllib.request.Request(
             self._cfg["endpoint"] + path,
             data=json.dumps(payload).encode("utf-8"),
@@ -200,8 +165,6 @@ class BrethofBrainProvider(MemoryProvider):
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
-            if e.code == 423 and not _retried and self._unlock():
-                return self._post(path, payload, timeout, _retried=True)
             logger.debug("brethof-brain: %s -> %s", path, e.code)
             return None
         except Exception as e:  # noqa: BLE001
@@ -234,10 +197,23 @@ class BrethofBrainProvider(MemoryProvider):
         q = (query or "").strip()
         if not q:
             return ""
-        env = self._post("/v1/hooks/prompt-submit",
-                         {"project": self._cfg["project"], "prompt": q,
-                          "session_id": session_id or self._session_id}, HOOK_TIMEOUT)
-        return (env or {}).get("injection") or ""
+        # PARTS 1-7, as Claude Code receives them: records and rules in 1-6,
+        # the history of decisions near the prompt in 7 (no part = the legacy
+        # blob, which never carries that history). In parallel, so the wall
+        # time stays one request's HOOK_TIMEOUT; a failed part is left out.
+        body = {"project": self._cfg["project"], "prompt": q,
+                "session_id": session_id or self._session_id}
+        got: Dict[int, str] = {}
+
+        def one(n: int) -> None:
+            env = self._post("/v1/hooks/prompt-submit", {**body, "part": n}, HOOK_TIMEOUT)
+            got[n] = str((env or {}).get("injection") or "").strip()
+        threads = [threading.Thread(target=one, args=(n,), daemon=True) for n in PROMPT_PARTS]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(HOOK_TIMEOUT + 1)
+        return "\n\n".join(got[n] for n in PROMPT_PARTS if got.get(n))
 
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         return None  # prefetch() runs at turn start

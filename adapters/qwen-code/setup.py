@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wire Qwen Code to brethof-brain cloud.
+"""Wire Qwen Code to your Brain hub.
 
 Qwen Code's hooks share the Claude/Codex shape — JSON on stdin, stdout
 injected as context — so the plugin's own hook entry drives all three
@@ -7,7 +7,7 @@ lifecycle points. Everything lands in ~/.qwen/settings.json (merged, never
 clobbered) plus a memory section in ~/.qwen/QWEN.md.
 
 Run from this directory:  python3 setup.py
-Environment:              BRETHOF_BRAIN_API_KEY (exported wherever qwen runs)
+Connect first:            brethof-brain pair <hub address>  (writes ~/.brethof-brain/config.json)
 Stdlib only, Python 3.9+. Idempotent — safe to re-run after updates.
 """
 from __future__ import annotations
@@ -19,8 +19,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent   # plugin repo root
 QWEN = Path.home() / ".qwen"
-ENDPOINT = os.environ.get("BRETHOF_BRAIN_ENDPOINT", "http://127.0.0.1:8610")
 MARK_A, MARK_B = "<!-- brethof-brain:start -->", "<!-- brethof-brain:end -->"
+BRIDGE = ROOT / "plugin" / "mcp_bridge.py"
+
+
+def _paired() -> bool:
+    """This machine is paired with a hub: `brethof-brain pair` wrote the
+    config file, or the key is in the environment."""
+    if os.environ.get("BRETHOF_BRAIN_API_KEY"):
+        return True
+    home = os.environ.get("BRETHOF_BRAIN_HOME") or str(Path.home() / ".brethof-brain")
+    try:
+        return bool(json.loads((Path(home) / "config.json").read_text()).get("api_key"))
+    except (OSError, ValueError):
+        return False
 
 QWEN_SECTION = f"""{MARK_A}
 ## Long-term memory (brethof-brain)
@@ -50,9 +62,9 @@ def _hook(*args: str, timeout_s: int = 12) -> dict:
 
 
 def main() -> int:
-    if not os.environ.get("BRETHOF_BRAIN_API_KEY"):
-        print("  ! BRETHOF_BRAIN_API_KEY is not set — installing anyway; "
-              "export it wherever you run qwen or the hooks stay silent.")
+    if not _paired():
+        print("  ! this machine is not paired with a hub yet — installing anyway; "
+              "run `brethof-brain pair <hub address>` or the hooks stay silent.")
     QWEN.mkdir(parents=True, exist_ok=True)
     spath = QWEN / "settings.json"
     settings = {}
@@ -73,10 +85,12 @@ def main() -> int:
                    for e in existing for h in e.get("hooks", [])):
             existing.append(entry)
 
-    key = os.environ.get("BRETHOF_BRAIN_API_KEY", "")
+    # THE TOOLS OVER STDIO (local-first, 2026-11-20): the bridge reads the
+    # hub and the device key `pair` saved on every request — no key in this
+    # file, and an older install's HTTP entry is replaced.
     settings.setdefault("mcpServers", {})["brethof-brain"] = {
-        "httpUrl": f"{ENDPOINT}/v1/mcp",
-        "headers": {"Authorization": f"Bearer {key}"} if key else {},
+        "command": sys.executable if os.name == "nt" else "python3",
+        "args": [str(BRIDGE)],
         "timeout": 20000,
     }
     spath.write_text(json.dumps(settings, indent=2) + "\n")

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Connect this computer to your brethof-brain memory — the plugin's way to
-run `brethof-brain connect` with no pip install: a window on your screen takes
-the API key (and a hosted memory's passphrase), checks them with your memory
-and saves them; an agent running this never sees them.
+"""Connect this computer to your Brain hub — the plugin's way to run
+`brethof-brain connect` with no pip install: it pairs with the hub on this
+machine (or the one named with --endpoint), the hub's owner approves the code
+on the hub's settings page, and the device key is saved without being shown;
+an agent running this never sees it.
 
-    python3 connect.py
+    python3 connect.py [--endpoint https://your-hub]
 """
 import os
 import sys

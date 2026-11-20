@@ -1,6 +1,6 @@
 # OpenClaw-style test container: a headless, non-Claude-Code agent exercising
-# brethof-brain cloud end-to-end. Run:
-#   BRETHOF_BRAIN_API_KEY=bm_test_xxx docker compose -f test-container/docker-compose.yml up --build
+# brethof-brain end-to-end through a Brain hub. Run:
+#   BRETHOF_BRAIN_API_KEY=bd_xxx docker compose -f test-container/docker-compose.yml up --build
 # Exit code reflects the smoke test (0 = all passed).
 services:
   brethof-brain-smoke:
@@ -18,5 +18,5 @@ services:
       - 1.1.1.1
     environment:
       BRETHOF_BRAIN_API_KEY: ${BRETHOF_BRAIN_API_KEY:?set BRETHOF_BRAIN_API_KEY}
-      BRETHOF_BRAIN_ENDPOINT: ${BRETHOF_BRAIN_ENDPOINT:-http://127.0.0.1:8610}
+      BRETHOF_BRAIN_ENDPOINT: ${BRETHOF_BRAIN_ENDPOINT:-http://127.0.0.1:8600}
       BRETHOF_BRAIN_PROJECT: ${BRETHOF_BRAIN_PROJECT:-global}

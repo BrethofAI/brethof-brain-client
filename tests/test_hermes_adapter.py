@@ -29,10 +29,9 @@ def provider_module(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "agent.memory_provider", mp)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setenv("BRETHOF_BRAIN_HOME", str(tmp_path / "nohome"))
-    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bmv2_test")
-    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://box.test:8610/")
+    monkeypatch.setenv("BRETHOF_BRAIN_API_KEY", "bd_test")
+    monkeypatch.setenv("BRETHOF_BRAIN_ENDPOINT", "http://hub.test:8600/")
     monkeypatch.setenv("BRETHOF_BRAIN_PROJECT", "rigproj")
-    monkeypatch.delenv("BRETHOF_BRAIN_UNLOCK_PASSPHRASE", raising=False)
     spec = importlib.util.spec_from_file_location("brethof_hermes", ADAPTER)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -55,10 +54,17 @@ class _Resp:
 
 
 def _fake_urlopen(calls, answers):
-    """answers: list of (status, body) consumed per call; 423 raises HTTPError."""
+    """answers: a list of (status, body) consumed per call, or a function of
+    the request body (the prompt parts are asked in parallel, so their order
+    is not fixed); status >= 400 raises HTTPError."""
+    import threading
+    lock = threading.Lock()
+
     def urlopen(req, timeout=None):
-        calls.append((req.full_url, json.loads(req.data.decode()), dict(req.headers), timeout))
-        status, body = answers.pop(0)
+        body_in = json.loads(req.data.decode())
+        with lock:
+            calls.append((req.full_url, body_in, dict(req.headers), timeout))
+            status, body = answers(req.full_url, body_in) if callable(answers) else answers.pop(0)
         if status >= 400:
             raise urllib.error.HTTPError(req.full_url, status, "x", {}, None)
         return _Resp(body, status)
@@ -66,40 +72,59 @@ def _fake_urlopen(calls, answers):
 
 
 def test_config_precedence_env_then_hermes_env_file_then_client_file(provider_module, monkeypatch, tmp_path):
-    (tmp_path / ".env").write_text("BRETHOF_BRAIN_LOCK_AFTER_MINUTES=30\nBRETHOF_BRAIN_PROJECT=fromfile\n")
+    (tmp_path / ".env").write_text("BRETHOF_BRAIN_PROJECT=fromfile\n")
     cfg = provider_module.load_config()
     assert cfg["project"] == "rigproj"          # env wins over the .env file
-    assert cfg["lock_after_minutes"] == 30       # the .env file fills what env lacks
-    assert cfg["endpoint"] == "http://box.test:8610"   # trailing slash stripped
+    assert cfg["endpoint"] == "http://hub.test:8600"   # trailing slash stripped
     monkeypatch.delenv("BRETHOF_BRAIN_PROJECT")
     assert provider_module.load_config()["project"] == "fromfile"
 
 
-def test_default_endpoint_is_the_customers_box(provider_module, monkeypatch):
+def test_default_endpoint_is_the_hubs_front_door(provider_module, monkeypatch):
     monkeypatch.delenv("BRETHOF_BRAIN_ENDPOINT")
-    assert provider_module.load_config()["endpoint"] == "http://127.0.0.1:8610"
+    assert provider_module.load_config()["endpoint"] == "http://127.0.0.1:8600"
+
+
+def test_the_paired_config_file_is_read(provider_module, monkeypatch, tmp_path):
+    for v in ("BRETHOF_BRAIN_ENDPOINT", "BRETHOF_BRAIN_API_KEY"):
+        monkeypatch.delenv(v)
+    home = tmp_path / "paired"
+    home.mkdir()
+    (home / "config.json").write_text(json.dumps({"endpoint": "https://hub.example/m/main",
+                                                  "api_key": "bd_paired"}))
+    monkeypatch.setenv("BRETHOF_BRAIN_HOME", str(home))
+    cfg = provider_module.load_config()
+    assert cfg["endpoint"] == "https://hub.example/m/main" and cfg["api_key"] == "bd_paired"
     assert ("api.brethof" + ".cloud") not in ADAPTER.read_text()   # the retired plane, spelled apart so the guards do not trip on this test
 
 
 def test_lifecycle_maps_onto_the_three_hooks(provider_module, monkeypatch):
-    calls, answers = [], [(200, {"status": "ok", "injection": "BRIEF"}),
-                          (200, {"status": "ok", "injection": "RECALL"}),
-                          (200, {"status": "ok"})]
+    def answers(url, body):
+        if url.endswith("/session-start"):
+            return 200, {"status": "ok", "injection": "BRIEF"}
+        if url.endswith("/prompt-submit"):
+            return 200, {"status": "ok", "injection": f"PART{body['part']}" if body["part"] in (1, 7) else ""}
+        return 200, {"status": "ok"}
+    calls = []
     monkeypatch.setattr(provider_module.urllib.request, "urlopen", _fake_urlopen(calls, answers))
     p = provider_module.BrethofBrainProvider()
     assert p.is_available()
     p.initialize("sess-1", hermes_home="/x", platform="cli", agent_context="primary")
     assert p.system_prompt_block() == "BRIEF"
-    assert p.prefetch("what is the hub?") == "RECALL"
+    # parts 1-7, joined in order (part 7 = the history of decisions)
+    assert p.prefetch("what is the hub?") == "PART1\n\nPART7"
     p.sync_turn("hello", "hi there", session_id="sess-1")
     paths = [c[0].rsplit("/", 2)[-1] for c in calls]
-    assert paths == ["session-start", "prompt-submit", "stop"]
+    assert paths == ["session-start"] + ["prompt-submit"] * 7 + ["stop"]
     assert calls[0][1] == {"project": "rigproj", "source": "startup", "session_id": "sess-1"}
-    assert calls[1][1]["prompt"] == "what is the hub?" and calls[1][1]["session_id"] == "sess-1"
-    turns = calls[2][1]["turns"]
+    asked = sorted(c[1]["part"] for c in calls[1:8])
+    assert asked == [1, 2, 3, 4, 5, 6, 7]
+    assert all(c[1]["prompt"] == "what is the hub?" and c[1]["session_id"] == "sess-1" for c in calls[1:8])
+    turns = calls[8][1]["turns"]
     assert [t["line_type"] for t in turns] == ["user", "assistant"]
     assert [t["index"] for t in turns] == [0, 1] and all(t["embed"] for t in turns)
-    assert calls[0][2]["Authorization"] == "Bearer bmv2_test"
+    assert all(c[2]["Authorization"] == "Bearer bd_test" for c in calls)
+    assert not any("X-api-key" in c[2] or "X-API-Key" in c[2] for c in calls)
     assert p.get_tool_schemas() == []            # tools ride Hermes's MCP client
 
 
@@ -112,26 +137,14 @@ def test_non_primary_contexts_never_write(provider_module, monkeypatch):
     assert len(calls) == 1                       # session-start only, no archive
 
 
-def test_locked_hosted_memory_is_unlocked_once_and_retried(provider_module, monkeypatch):
-    monkeypatch.setenv("BRETHOF_BRAIN_UNLOCK_PASSPHRASE", "open-sesame")
-    monkeypatch.setenv("BRETHOF_BRAIN_LOCK_AFTER_MINUTES", "60")
-    calls, answers = [], [(423, {}), (200, {"ok": True}), (200, {"injection": "BRIEF"})]
-    monkeypatch.setattr(provider_module.urllib.request, "urlopen", _fake_urlopen(calls, answers))
-    p = provider_module.BrethofBrainProvider()
-    p.initialize("s", agent_context="primary")
-    assert p.system_prompt_block() == "BRIEF"
-    assert calls[1][0].endswith("/unlock")
-    assert calls[1][1] == {"passphrase": "open-sesame", "idle_seconds": 3600}
-    assert "Authorization" not in calls[1][2]    # the passphrase IS the authentication
-    assert calls[2][0].endswith("/session-start")
-
-
-def test_without_a_passphrase_a_locked_memory_is_reported_not_opened(provider_module, monkeypatch):
+def test_no_unlock_remnant_a_refusal_is_just_a_failure(provider_module, monkeypatch):
     calls, answers = [], [(423, {})]
     monkeypatch.setattr(provider_module.urllib.request, "urlopen", _fake_urlopen(calls, answers))
     p = provider_module.BrethofBrainProvider()
     p.initialize("s")
     assert p.system_prompt_block() == "" and len(calls) == 1
+    text = ADAPTER.read_text()
+    assert "/unlock" not in text and "passphrase" not in text.lower()
 
 
 def test_fail_open_on_any_box_error(provider_module, monkeypatch):

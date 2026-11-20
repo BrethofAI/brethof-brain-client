@@ -28,9 +28,9 @@ jobs:
       - name: Run unit tests
         run: pytest -q
 
-  # Full end-to-end against the customer's box (127.0.0.1:8610) on all 3 OSes — the real macOS
-  # proof. Runs only when the BRETHOF_BRAIN_API_KEY secret is present (a bm_test_
-  # key), so forks/PRs without it don't fail.
+  # Full end-to-end against a Brain hub (default 127.0.0.1:8600) on all 3 OSes — the real macOS
+  # proof. Runs only when the BRETHOF_BRAIN_API_KEY secret is present (a hub device
+  # key, bd_...), so forks/PRs without it don't fail.
   live-smoke:
     needs: client-tests
     strategy:

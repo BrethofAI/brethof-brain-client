@@ -136,7 +136,7 @@ def main() -> int:
     except ClientError as e:
         if getattr(e, "status_code", None) in (401, 403):
             sys.stderr.write("brethof-brain: API key rejected — archiving is "
-                             "OFF. Run `brethof-brain setup`.\n")
+                             "OFF. Pair again: `brethof-brain pair <hub address>`.\n")
     except Exception:                                      # noqa: BLE001
         if os.environ.get("BRETHOF_BRAIN_HOOK_DEBUG"):
             import traceback

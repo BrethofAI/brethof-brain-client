@@ -17,8 +17,10 @@ def test_unconfigured_emits_nothing(monkeypatch, capsys):
     monkeypatch.delenv("BRETHOF_BRAIN_API_KEY", raising=False)
     monkeypatch.setattr(sys, "stdin",
                         io.StringIO(json.dumps({"cwd": ".", "session_id": "s"})))
-    assert hook.main(["session-start"]) == 0
-    assert capsys.readouterr().out == ""      # no key → inject nothing, no crash
+    # no key → no crash, and nothing injected beyond the first part's one
+    # "how to connect" line (test_device_login pins that line)
+    assert hook.main(["session-start", "2"]) == 0
+    assert capsys.readouterr().out == ""
 
 
 def test_unreachable_endpoint_fails_open(monkeypatch, capsys):

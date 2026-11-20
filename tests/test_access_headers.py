@@ -1,6 +1,6 @@
 """Cloudflare Access headers (1.2.26): an app whose memory sits behind a
 Cloudflare Access app sets BRETHOF_BRAIN_CF_ACCESS_ID/_SECRET and every
-request, the unlock included, carries them; unset, nothing changes."""
+request carries them; unset, nothing changes."""
 import json
 
 from brethof_brain_client import client as C
@@ -34,17 +34,15 @@ def test_one_half_alone_sends_nothing(monkeypatch):
     assert "CF-Access-Client-Id" not in C.Client(_cfg())._headers()
 
 
-def test_set_every_request_and_the_unlock_carry_them(monkeypatch):
+def test_set_every_request_carries_them(monkeypatch):
     monkeypatch.setenv("BRETHOF_BRAIN_CF_ACCESS_ID", "id.access")
     monkeypatch.setenv("BRETHOF_BRAIN_CF_ACCESS_SECRET", "sec")
     seen = []
     monkeypatch.setattr(C.urllib.request, "urlopen",
                         lambda req, timeout=0: (seen.append(dict(req.header_items())), _Resp())[1])
-    cfg = _cfg()
-    cfg.unlock_passphrase = "p"
-    cl = C.Client(cfg)
+    cl = C.Client(_cfg())
     cl._request("/v1/x", json.dumps({}).encode(), "POST", None)
-    cl._unlock()
+    cl._request("/v1/y", None, "GET", None)
     assert len(seen) == 2
     for h in seen:
         assert h["Cf-access-client-id"] == "id.access" and h["Cf-access-client-secret"] == "sec"

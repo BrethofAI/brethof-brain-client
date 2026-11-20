@@ -16,7 +16,7 @@ they extend it.
 
 ## Install
 
-1. `pip install git+https://github.com/BrethofAI/brethof-brain-client.git` (or run from a checkout — the hook
+1. `pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"` (or run from a checkout — the hook
    bootstraps its own `sys.path`).
 
 2. Merge into `~/.junie/config.json` (timeouts in seconds; Junie defaults
@@ -41,8 +41,10 @@ they extend it.
 }
 ```
 
-3. Key in `~/.brethof-brain/config.json` (`api_key`, `endpoint`,
-   `default_project`); env vars `BRETHOF_BRAIN_*` override.
+3. Connect to your hub: `brethof-brain pair http://127.0.0.1:8600` (or
+   `https://<your hub>`). `pair` shows a code; approve it on the hub's
+   settings page, and it writes `~/.brethof-brain/config.json` (`endpoint`,
+   device key `api_key`, never printed); env vars `BRETHOF_BRAIN_*` override.
 
 Rig status: adapter conformance-tested; the live rig row lands with a
 JetBrains account + the EAP install path.

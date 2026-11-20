@@ -1,4 +1,4 @@
-# brethof-brain cloud + Grok Build
+# brethof-brain + Grok Build
 
 Grok Build (xAI's open-source coding CLI) has its own `grok mcp` command for
 MCP servers and a native hook system under `~/.grok/hooks/`.
@@ -10,7 +10,7 @@ MCP servers and a native hook system under `~/.grok/hooks/`.
 > quoted commands. This adapter therefore uses grok's NATIVE hooks plus a
 > pull-model memory rule — not the Claude hook files.
 
-This adapter wires Grok Build to brethof-brain cloud: **the Brain's memory
+This adapter wires Grok Build to your Brain hub: **the Brain's memory
 tools on demand, pull-model recall taught by a global rule, and every turn
 archived via a native Stop hook**.
 
@@ -18,7 +18,7 @@ archived via a native Stop hook**.
 
 | Feature | How | Effect |
 |---|---|---|
-| **Memory tools** | `grok mcp add` → cloud MCP endpoint | The server lists the toolset your key is entitled to — `search_brain`, `search_history`, the save tools, `list_brain`, `get_record`, `delete_record`, `cleanup_history`, etc. |
+| **Memory tools** | `grok mcp add` → your hub's `/v1/mcp` | The server lists the toolset your key is entitled to — `search_brain`, `search_history`, the save tools, `list_brain`, `get_record`, `delete_record`, `cleanup_history`, etc. |
 | **Pull-model recall** | Global rule in `~/.grok/rules/` | Grok is taught to call `search_brain`/`search_history` itself (grok has no context-injection channel) |
 | **Turn archival** | Native Stop hook in `~/.grok/hooks/` | Each session's transcript archived to chat memory |
 | **`/recall` `/curate` `/onboard`** | Skills copied to `~/.grok/` | Slash commands for memory management |
@@ -28,9 +28,15 @@ archived via a native Stop hook**.
 ### Option A: Automated (recommended)
 
 ```bash
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # your hub; or https://<your hub>
 # From this adapter directory:
 python setup.py
 ```
+
+`pair` shows a code; approve it on the hub's settings page, and the device
+key lands in `~/.brethof-brain/config.json` (never printed) — the setup
+script and the Stop hook read it from there.
 
 The setup script:
 1. Adds the `brethof-brain` HTTP MCP server to `~/.grok/config.toml` via `grok mcp add`
@@ -38,22 +44,20 @@ The setup script:
    memory rule (`~/.grok/rules/brethof-brain-memory.md`)
 3. Copies the `/recall` `/curate` `/onboard` skills to `~/.grok/skills/`
 
-You'll need your **API key** from [brethof.ai/account](https://brethof.ai) →
-brethof-brain tab. Set it in the environment:
-
-```
-BRETHOF_BRAIN_API_KEY=bmv2_your_key
-BRETHOF_BRAIN_ENDPOINT=http://127.0.0.1:8610   # optional, this is the default
-```
+`BRETHOF_BRAIN_API_KEY` / `BRETHOF_BRAIN_ENDPOINT` in the environment
+override the file (the endpoint defaults to the hub, `http://127.0.0.1:8600`).
 
 ### Option B: Manual
 
 **1. Add the MCP server** (gives Grok the memory tools):
 
 ```bash
-grok mcp add --transport http brethof-brain http://127.0.0.1:8610/v1/mcp \
-  --header "Authorization: Bearer bmv2_YOUR_KEY"
+grok mcp add --transport http brethof-brain http://127.0.0.1:8600/v1/mcp \
+  --header "Authorization: Bearer bd_..."
 ```
+
+`brethof-brain mcp-command` prints the hub address and the saved device key
+in a ready-made line; the hub accepts the key only as `Authorization: Bearer`.
 
 **2. Install the native hooks + rule** (do NOT rely on `~/.claude/settings.json`
 — Claude-style hooks verifiably cannot fire in grok; see the note at the top).
@@ -91,8 +95,8 @@ Memory INJECTION is replaced by the PULL model: grok has no working
 context-injection channel, so a global rule (`~/.grok/rules/`) teaches the
 agent to call `search_brain`/`search_history` itself. Turn ARCHIVAL is a
 native grok Stop hook (`~/.grok/hooks/brethof-brain.json` → `grok_hook.py`)
-that ships grok's own `updates.jsonl` transcript to the cloud API with your
-key. On Windows the hook runs through a `.cmd` wrapper because grok's spawner
+that ships grok's own `updates.jsonl` transcript to your hub with this
+device's key. On Windows the hook runs through a `.cmd` wrapper because grok's spawner
 breaks on quoted inline commands.
 
 The MCP server is added separately via `grok mcp add` because Grok has its own
@@ -119,10 +123,11 @@ default = "glm-5.2-cloud"
 ## Notes
 
 - Grok Build's `grok mcp doctor` is the fastest way to verify connectivity.
-- The hooks are **fail-open**: if the cloud is unreachable, Grok continues
+- The hooks are **fail-open**: if the hub is unreachable, Grok continues
   normally without memory (no session blocking).
-- The `BRETHOF_BRAIN_API_KEY` environment variable is read by the Stop-hook
-  archiver; the MCP server uses the key embedded in the `grok mcp add` command.
+- The Stop-hook archiver reads `~/.brethof-brain/config.json` (or
+  `BRETHOF_BRAIN_API_KEY`); the MCP server uses the key embedded in the
+  `grok mcp add` command — re-run `python setup.py` after re-pairing.
 - If you also run Claude Code on the same machine, set
   `[compat.claude] hooks = false` in `~/.grok/config.toml` — the Claude-sourced
   hook entries fail inside grok and only add log noise. Both agents can still

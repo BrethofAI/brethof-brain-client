@@ -43,8 +43,8 @@ class AgentHooks:
                  config: Optional[Config] = None, timeout: float = 15.0):
         self.cfg = config or Config.load()
         if not self.cfg.configured():
-            raise ClientError("no API key configured (set BRETHOF_BRAIN_API_KEY "
-                              "or run: brethof-brain setup)")
+            raise ClientError("not paired with a hub (run: brethof-brain pair <hub address>, "
+                              "or set BRETHOF_BRAIN_ENDPOINT and BRETHOF_BRAIN_API_KEY)")
         self._http = Client(self.cfg, timeout=timeout)
         self.project = project or self.cfg.default_project or "global"
         self.session_id = session_id or "default"
@@ -61,25 +61,20 @@ class AgentHooks:
         return env.get("injection", "") or ""
 
     def before_prompt(self, prompt: str) -> str:
-        """Ambient recall relevant to ``prompt``, to inject as extra context.
-        Empty string when there's nothing to add or on failure."""
-        if not (prompt or "").strip():
-            return ""
-        try:
-            env = self._http.post("/v1/hooks/prompt-submit", {
-                "project": self.project, "prompt": prompt,
-                "session_id": self.session_id})
-        except ClientError:
-            return ""
-        return env.get("injection", "") or ""
+        """Ambient recall relevant to ``prompt``, to inject as extra context:
+        the full per-prompt memory, parts 1-7 (``before_prompt_parts``) — the
+        legacy single part never carried the history of decisions, so every
+        caller of this method now receives it too (2026-11-20). Empty string
+        when there's nothing to add or on failure."""
+        return self.before_prompt_parts(prompt)
 
     def before_prompt_parts(self, prompt: str, parts: tuple = (1, 2, 3, 4, 5, 6, 7)) -> str:
         """The FULL per-prompt memory, as Claude Code receives it: the server
         composes it once per prompt and hands it out in numbered parts (the
         rule and records in 1-6, the history of decisions near the prompt in
-        7). ``before_prompt`` asks for the legacy single part, which never
-        carries the history block (found 2026-11-18: a decided codename came
-        back in part 7 and nowhere in part 0). Parts are asked in parallel and
+        7). The legacy single part (no part, or 0) never carries the history
+        block (found 2026-11-18: a decided codename came back in part 7 and
+        nowhere in part 0). Parts are asked in parallel and
         joined in order; any that fail are simply left out."""
         if not (prompt or "").strip():
             return ""

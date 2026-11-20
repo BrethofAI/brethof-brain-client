@@ -7,8 +7,8 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "endpoint": { "type": "string", "description": "API endpoint (default http://127.0.0.1:8610)" },
-      "apiKey": { "type": "string", "description": "bmv2_... key (or set BRETHOF_BRAIN_API_KEY)" },
+      "endpoint": { "type": "string", "description": "your hub (default: the endpoint in ~/.brethof-brain/config.json, else http://127.0.0.1:8600)" },
+      "apiKey": { "type": "string", "description": "device key (default: the one brethof-brain pair saved, or BRETHOF_BRAIN_API_KEY)" },
       "project": { "type": "string", "description": "memory project name (or BRETHOF_BRAIN_PROJECT; default 'openclaw')" }
     }
   }

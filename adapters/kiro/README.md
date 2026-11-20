@@ -21,11 +21,16 @@ or under `KIRO_HOME`). Nothing to do on your side.
 ## Install
 
 ```bash
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # or https://<your hub>
 git clone https://github.com/BrethofAI/brethof-brain-client ~/brethof-brain-client
 python3 ~/brethof-brain-client/adapters/kiro/setup.py
 ```
 
-The key comes from `~/.brethof-brain/config.json` or `BRETHOF_BRAIN_API_KEY`.
+`pair` shows a code; approve it on the hub's settings page, and the device
+key lands in `~/.brethof-brain/config.json` (never printed) — the file the
+hooks read. `BRETHOF_BRAIN_*` environment variables override it.
+
 The agent is `~/.kiro/agents/brethof-brain.json`; the setup runs
 `kiro-cli agent set-default brethof-brain` for you. To use memory with
 another agent of yours, copy its `hooks` block into that agent. Re-running

@@ -1,4 +1,5 @@
-"""HTTP transport to the brethof-brain data plane.
+"""HTTP transport to the Brain hub's front door (the device key as a Bearer
+token — the hub refuses any other header — and /v1/* forwarded to the memory).
 
 Two methods — ``post`` and ``get`` — that speak the uniform response envelope
 (``{status, injection, notice, retry_after, ...}``). It is deliberately
@@ -44,7 +45,7 @@ def _access_headers() -> dict:
     """Cloudflare Access service-token headers, for a memory that sits behind
     an Access app (an app reaching its own memory over a tunnel). Set both
     BRETHOF_BRAIN_CF_ACCESS_ID and BRETHOF_BRAIN_CF_ACCESS_SECRET to send them
-    on every request to the endpoint, the unlock included; unset, nothing is
+    on every request to the endpoint; unset, nothing is
     sent and nothing changes."""
     cid = os.environ.get("BRETHOF_BRAIN_CF_ACCESS_ID", "")
     sec = os.environ.get("BRETHOF_BRAIN_CF_ACCESS_SECRET", "")
@@ -68,46 +69,16 @@ class Client:
             **_access_headers(),
         }
 
-    def _unlock(self) -> bool:
-        """Present the customer's passphrase to a locked hosted container.
-        423 is the container-host saying the encrypted memory is not mounted;
-        the passphrase is the whole authentication — a wrong one is refused
-        by gocryptfs itself. Generous timeout: an unlock is a filesystem
-        mount plus Postgres crash recovery plus the API's own start."""
-        if not self.cfg.unlock_passphrase:
-            return False
-        try:
-            body = {"passphrase": self.cfg.unlock_passphrase}
-            if self.cfg.lock_after_minutes:
-                body["idle_seconds"] = self.cfg.lock_after_minutes * 60
-            req = urllib.request.Request(
-                self.cfg.endpoint + "/unlock",
-                data=json.dumps(body).encode(),
-                headers={"Content-Type": "application/json",
-                         "User-Agent": USER_AGENT, **_access_headers()},
-                method="POST")
-            with urllib.request.urlopen(req, timeout=90) as r:
-                return 200 <= r.status < 300
-        except Exception:
-            return False
-
     def _request(self, path: str, data: bytes | None, method: str,
-                 timeout: float | None, _retried: bool = False) -> dict:
+                 timeout: float | None) -> dict:
         if not self.cfg.api_key:
-            raise ClientError("no API key configured (run: brethof-brain setup)")
+            raise ClientError("not paired (run: brethof-brain pair <hub address>)")
         try:
             req = urllib.request.Request(self.cfg.endpoint + path, data=data,
                                          headers=self._headers(), method=method)
             with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
                 body = r.read()
         except urllib.error.HTTPError as e:
-            # 423 = the hosted container's memory is locked. Session start,
-            # a prompt after an idle timeout — this is the auto-unlock: the
-            # passphrase from the customer's own config opens it and the
-            # original request is retried ONCE. Unset passphrase or a failed
-            # unlock falls through to the normal error.
-            if e.code == 423 and not _retried and self._unlock():
-                return self._request(path, data, method, timeout, _retried=True)
             raise ClientError(f"HTTP {e.code} on {path}: {_http_error_detail(e)}",
                               status_code=e.code)
         except urllib.error.URLError as e:

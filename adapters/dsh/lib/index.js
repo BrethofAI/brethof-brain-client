@@ -55,14 +55,10 @@ function textOf(blocks) {
 export function apply(ctx, config = {}) {
   const f = fileConfig()
   const endpoint = (config.endpoint || process.env.BRETHOF_BRAIN_ENDPOINT
-    || f.endpoint || 'http://127.0.0.1:8610').replace(/\/+$/, '')
+    || f.endpoint || 'http://127.0.0.1:8600').replace(/\/+$/, '')
   const apiKey = config.apiKey || process.env.BRETHOF_BRAIN_API_KEY || f.api_key || ''
   const project = config.project || process.env.BRETHOF_BRAIN_PROJECT
     || f.default_project || 'global'
-  const unlockPassphrase = config.unlockPassphrase
-    || process.env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE || f.unlock_passphrase || ''
-  const lockAfterMinutes = parseInt(config.lockAfterMinutes
-    || process.env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES || f.lock_after_minutes || 0, 10) || 0
   if (!apiKey) {
     ctx.logger?.warn?.('brethof-brain: no API key (config, env, or '
       + '~/.brethof-brain/config.json) — memory disabled for this run')
@@ -80,26 +76,10 @@ export function apply(ctx, config = {}) {
     return s
   }
 
-  // A HOSTED memory locks itself after idle minutes and answers 423 until
-  // the passphrase opens it again (the Python client has done this since
-  // 08-30; the JS adapters did not — found 2026-09-04). Unauthenticated —
-  // the passphrase IS the authentication — then the call retried ONCE.
-  async function unlock() {
-    if (!unlockPassphrase) return false
-    const body = { passphrase: unlockPassphrase }
-    if (lockAfterMinutes) body.idle_seconds = lockAfterMinutes * 60
-    try {
-      const res = await fetch(endpoint + '/unlock', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body), signal: AbortSignal.timeout(90_000),
-      })
-      return res.ok
-    } catch {
-      return false
-    }
-  }
-
-  async function call(path, body, timeoutMs, retried = false) {
+  // THE HUB'S FRONT DOOR (local-first, 2026-11-20): the endpoint `brethof-brain
+  // pair` wrote (the hub, or <hub>/m/<memory>), the device key as a Bearer
+  // token — the hub refuses any other header. The memory never locks, so a refusal is just a failure.
+  async function call(path, body, timeoutMs) {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
@@ -110,9 +90,6 @@ export function apply(ctx, config = {}) {
         body: JSON.stringify(body),
         signal: ctrl.signal,
       })
-      if (res.status === 423 && !retried && await unlock()) {
-        return call(path, body, timeoutMs, true)
-      }
       if (!res.ok) return null
       return await res.json()
     } catch {
@@ -120,6 +97,16 @@ export function apply(ctx, config = {}) {
     } finally {
       clearTimeout(t)
     }
+  }
+
+  // PROMPT CONTEXT IN PARTS 1-7, as the Claude Code plugin receives it:
+  // records and rules in 1-6, the history of decisions near the prompt in 7
+  // (no part = the legacy blob, which never carries that history). Asked in
+  // parallel inside one timeout, joined in order; a failed part is left out.
+  async function promptContext(body, timeoutMs) {
+    const envs = await Promise.all([1, 2, 3, 4, 5, 6, 7].map(part =>
+      call('/v1/hooks/prompt-submit', { ...body, part }, timeoutMs)))
+    return envs.map(env => String(env?.injection || '').trim()).filter(Boolean).join('\n\n')
   }
 
   const sessionIdOf = (agent) =>
@@ -153,9 +140,8 @@ export function apply(ctx, config = {}) {
         .filter(m => m?.source?.kind === 'user')        // never recurse on our own context
         .map(m => textOf(m.content)).join('\n').trim()
       if (prompt) {
-        const env = await call('/v1/hooks/prompt-submit',
+        extra = await promptContext(
           { project, prompt, session_id: sessionIdOf(agent) }, 12_000)
-        extra = env?.injection || ''
       }
     } catch { /* fail-open */ }
     const decision = await next()

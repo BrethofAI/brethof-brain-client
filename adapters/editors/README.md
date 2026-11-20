@@ -1,9 +1,22 @@
-# brethof-brain cloud in your editor (Cline · Windsurf/Cascade · Kimi)
+# brethof-brain in your editor (Cline · Windsurf/Cascade · Kimi)
 
 Editor agents speak MCP — one config block gives them the Brain's memory
 tools (`search_brain`, `search_history`, the save tools, `list_brain`, …).
 Three editors, three dialects of the same block; copy yours exactly —
 the field names differ on purpose.
+
+First connect this machine to your hub (once):
+
+```bash
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # or https://<your hub>
+```
+
+`pair` shows a code; approve it on the hub's settings page, and the device
+key lands in `~/.brethof-brain/config.json` (never printed). In the blocks
+below, `bd_...` stands for that key and `http://127.0.0.1:8600` for your hub
+(`https://<your hub>` on a server); `brethof-brain mcp-command` prints both in
+a ready-made line. The hub accepts the key only as `Authorization: Bearer`.
 
 ## Cline (VS Code + CLI) — full ambient contract available
 
@@ -27,8 +40,8 @@ For the MCP tool surface: Cline panel → MCP Servers → Configure
   "mcpServers": {
     "brethof-brain": {
       "type": "streamableHttp",
-      "url": "http://127.0.0.1:8610/v1/mcp",
-      "headers": { "Authorization": "Bearer bmv2_..." },
+      "url": "http://127.0.0.1:8600/v1/mcp",
+      "headers": { "Authorization": "Bearer bd_..." },
       "disabled": false,
       "autoApprove": []
     }
@@ -54,7 +67,7 @@ in your workspace (or globally under `Documents/Cline/Rules`):
 {
   "mcpServers": {
     "brethof-brain": {
-      "serverUrl": "http://127.0.0.1:8610/v1/mcp",
+      "serverUrl": "http://127.0.0.1:8600/v1/mcp",
       "headers": { "Authorization": "Bearer ${env:BRETHOF_BRAIN_API_KEY}" }
     }
   }
@@ -62,15 +75,34 @@ in your workspace (or globally under `Documents/Cline/Rules`):
 ```
 
 (The `${env:...}` interpolation keeps your key out of the file — export
-`BRETHOF_BRAIN_API_KEY` instead.) Teach it in
+`BRETHOF_BRAIN_API_KEY=bd_...` for Windsurf, or put the key in place of the
+interpolation.) Teach it in
 `~/.codeium/windsurf/memories/global_rules.md` with the same memory rule as
 above.
+
+## No key in the file: the stdio bridge (Cline, Windsurf)
+
+Both Cline and Windsurf also take a stdio server (`command` + `args` in the
+same `mcpServers` map). From a checkout of this repo, the bridge reads the hub
+and key from `~/.brethof-brain/config.json` on every request, so no key is
+pasted anywhere and re-pairing needs no edit:
+
+```json
+{
+  "mcpServers": {
+    "brethof-brain": {
+      "command": "python3",
+      "args": ["/ABSOLUTE/PATH/TO/brethof-brain-client/plugin/mcp_bridge.py"]
+    }
+  }
+}
+```
 
 ## Kimi (kimi-cli)
 
 ```bash
-kimi mcp add --transport http brethof-brain http://127.0.0.1:8610/v1/mcp \
-  --header "Authorization: Bearer bmv2_..."
+kimi mcp add --transport http brethof-brain http://127.0.0.1:8600/v1/mcp \
+  --header "Authorization: Bearer bd_..."
 ```
 
 (or `~/.kimi/mcp.json` with plain `url` + `headers`). Teach it in

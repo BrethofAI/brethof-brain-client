@@ -24,7 +24,7 @@ The client is deliberately tiny. All the real work — storage, embeddings,
 retrieval-augmented recall — happens on the brethof-brain service. The client
 only:
 
-1. forwards agent **hook events** to the service over HTTPS, and pastes back
+1. forwards agent **hook events** to your Brain hub, and pastes back
    the memory it returns, and
 2. wires the **MCP** endpoint so the memory tools are available on demand —
    search (`search_brain`, `search_history`, `get_record`) and the
@@ -78,10 +78,11 @@ only Python 3.9+ on your PATH.
 /plugin install brethof-brain@brethof
 ```
 
-Then connect it to your memory: run the plugin's `connect.py` (your agent can
-run it for you) — a window on your own screen takes your API key and, for a
-hosted memory, its passphrase; your agent never sees them. The hooks and the
-memory tools load at the next session start.
+Then connect it to your hub: run the plugin's `connect.py` (your agent can
+run it for you). It pairs with the hub on this machine (`--endpoint
+https://<your hub>` for another): it shows a code, you approve it on the hub's
+settings page, and the device key is saved without being shown — your agent
+never sees it. The hooks and the memory tools load at the next session start.
 
 **One manual step, recommended:** Claude Code keeps its own file memory and
 files "remember this" there unless told otherwise. The plugin does not edit
@@ -119,7 +120,7 @@ See [`adapters/openclaw-gateway/README.md`](adapters/openclaw-gateway/README.md)
 brethof-brain is a Hermes **memory provider** — the one plugin type Hermes
 selects for memory. Works wherever Hermes runs: Linux, macOS, and Windows on
 either of Hermes's two paths (the native PowerShell installer, or WSL2). Two
-commands, then your key:
+commands, then pair the machine with your hub (`brethof-brain pair`, below):
 
 ```bash
 hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes --no-enable
@@ -128,7 +129,6 @@ hermes config set memory.provider brethof-brain
 
 ```
 # ~/.hermes/.env
-BRETHOF_BRAIN_API_KEY=bmv2_...
 BRETHOF_BRAIN_PROJECT=my-agent
 ```
 
@@ -144,8 +144,9 @@ setup script wires hooks, MCP and `~/.qwen/QWEN.md`. See
 
 ### Codex
 
-`python3 adapters/codex/setup.py` registers the MCP server (bearer token
-via env, never in a file), installs the turn archiver on Codex's `notify`
+`python3 adapters/codex/setup.py` registers the memory tools as a stdio MCP
+server (the bridge reads the paired key on every call — no key in a file),
+installs the turn archiver on Codex's `notify`
 channel, and pre-wires `hooks.json` so context injection activates the
 moment Codex fires hooks in headless mode. See
 [`adapters/codex/README.md`](adapters/codex/README.md).
@@ -212,8 +213,8 @@ ambient memory loop above. Exact blocks and auth notes per editor:
 A **native cordis plugin** on dsh's own typed extension points — session
 injection, per-prompt ambient recall, per-turn archival, all fail-open.
 Install with `dsh plugin --profile <name> add brethof-brain-dsh` (or from
-this repo's checkout) and note the one dsh-specific rule: your API key goes
-in `~/.brethof-brain/config.json`, because dsh scrubs `*_API_KEY` from hook
+this repo's checkout) and note the one dsh-specific rule: your device key must
+be in `~/.brethof-brain/config.json` (where `brethof-brain pair` puts it), because dsh scrubs `*_API_KEY` from hook
 environments by design. Full details:
 [`adapters/dsh/README.md`](adapters/dsh/README.md).
 
@@ -238,12 +239,10 @@ The client is source-available precisely so you can verify this yourself — rea
   client-side**: the contents of files the assistant reads and the output of
   commands it runs never leave your machine. A local offset file
   (`~/.brethof-brain/state/`) ensures each line is sent once.
-- Every request is authenticated with **your API key** and goes only to **your
-  endpoint** — your own memory container. Where that is depends on the shape
-  you chose in the account panel:
-  - **Local** (the default endpoint, `http://127.0.0.1:8610`): the memory
-    container runs on your machine; conversations are archived there and
-    never stored by us.
+- Every request is authenticated with **this device's key** and goes only to
+  **your hub** — the front door of your own memory:
+  - **On this machine** (the default, `http://127.0.0.1:8600`): the memory
+    runs here; conversations are archived here and never stored by us.
   - **On another machine**: install the hub there and pair this machine
     with `brethof-brain pair https://<your hub's address>`.
 
@@ -251,14 +250,14 @@ Nothing else is collected. The client never sends files, environment variables,
 or anything outside the transcript text described above. If a hook can't reach
 the service it fails silent — your session is never blocked. Two exceptions to
 silence, both persistent conditions where staying quiet would lose history: a
-**rejected API key** shows a one-line notice at the next session start, and a
+**rejected device key** shows a one-line notice at the next session start, and a
 **TLS trust failure** prints one line to stderr (seen on brand-new Windows
 machines, which load root certificates lazily — open the endpoint once in a
 browser and it is fixed for good).
 
-## Getting your memory (two shapes)
+## Getting your memory
 
-**On your machine or your own server (local).** The Brain runs as three
+**On your machine.** The Brain runs as three
 containers: the hub, storage and the embedder. One command installs them:
 
 ```bash
@@ -270,12 +269,13 @@ free) and prints the settings page's address and password. Then connect each
 machine, once:
 
 ```bash
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
 brethof-brain pair http://127.0.0.1:8600      # or your hub's address on your network
 ```
 
 `pair` shows a code; approve the same code on the hub's settings page and the
-machine gets its own key. Your memory, its passwords and its encryption stay
+machine gets its own device key (saved in `~/.brethof-brain/config.json`,
+never printed). Your memory, its passwords and its encryption stay
 on your machine; the account only counts devices.
 
 **On a server of yours.** Install the hub there, put it behind HTTPS, and
@@ -286,35 +286,28 @@ pair each machine with `brethof-brain pair https://<your hub's address>`.
 For non-plugin use (scripting, other agents), install straight from the repo:
 
 ```bash
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.3.1
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git@v1.3.2"
 ```
 
 (There is no PyPI package — the client is installed from source, so you get
 exactly the code you can read here.)
 
-Then connect it to your memory — one command, which your agent can run for you:
+Then pair it with your hub — one command, which your agent can run for you:
 
 ```bash
-brethof-brain connect
+brethof-brain pair http://127.0.0.1:8600      # or https://<your hub's address>
 ```
 
-A window opens on your own screen and asks for your API key (and, for a hosted
-memory, its passphrase); it checks them with your memory and saves them in
-`~/.brethof-brain/config.json` (readable by you only). Your agent never sees
-them. A memory on this computer is found by itself, and its installer has
-already saved its key there — nothing to type. No screen (SSH)? It asks in the
-terminal instead. A hosted memory can also sign this machine in with
-`brethof-brain login` (you confirm a code at brethof.ai/account/device).
+`pair` shows a code; the hub's owner approves it on the hub's settings page,
+and the device key is saved in `~/.brethof-brain/config.json` (readable by you
+only) without being printed — your agent never sees it. `brethof-brain connect`
+does the same with the hub on this machine (or the one already in the config).
 
-**Your passphrase cannot be recovered.** If you forget it, your hosted memory
-can never be opened again — by you or by us.
-
-The older way still works:
+Then wire Claude Code:
 
 ```bash
-brethof-brain setup --api-key bmv2_xxxxxxxx
 brethof-brain install-hooks      # auto-load & archive memory in Claude Code
 brethof-brain mcp-command        # prints the `claude mcp add …` line to run
 ```
@@ -330,17 +323,16 @@ brethof-brain status
 ## Configuration
 
 Settings resolve from environment variables, then `~/.brethof-brain/config.json`,
-then defaults. With the **CLI install**, the config file is where your key is
-stored — `setup` creates it owner-readable-only (`0600`) on Linux/macOS; on
-Windows your user-profile ACLs protect it. With the **plugin install**, Claude
-Code holds the key instead and the config file isn't needed.
+then defaults. The config file is where your device key is stored — `pair`
+(and the plugin's `connect.py`) write it owner-readable-only (`0600`) on
+Linux/macOS; on Windows your user-profile ACLs protect it. `pair` writes
+`endpoint` (your hub, or `<hub>/m/<memory>`) and `api_key`; the rest is
+optional:
 
 ```json
 {
-  "endpoint": "http://127.0.0.1:8610",
-  "api_key": "bmv2_…",
-  "unlock_passphrase": "only for the hosted shape — unlocks your memory",
-  "lock_after_minutes": 15,
+  "endpoint": "http://127.0.0.1:8600",
+  "api_key": "bd_…",
   "default_project": "global",
   "projects": [
     { "path": "/home/me/work/acme", "key": "acme" },
@@ -363,6 +355,7 @@ Code holds the key instead and the config file isn't needed.
 | Command | Does |
 |---|---|
 | `brethof-brain pair <hub>` | Connect this machine to your Brain hub; approve its code on the hub's settings page |
+| `brethof-brain connect` | Pair with the hub on this machine (or the one already in the config) |
 | `brethof-brain setup` | Save credentials, verify connectivity |
 | `brethof-brain install-hooks` | Add the hooks to `~/.claude/settings.json` (idempotent, backs up first) |
 | `brethof-brain uninstall-hooks` | Remove them |

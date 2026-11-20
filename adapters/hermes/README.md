@@ -10,14 +10,14 @@ whole ambient contract:
 | `prefetch()` | ambient recall — the records that bear on this prompt | every turn |
 | `sync_turn()` | the turn archived into memory | after every turn |
 
-Stdlib only; nothing to pip-install. Every path is fail-open: memory can never
+Stdlib only — the provider itself needs no pip install. Every path is fail-open: memory can never
 block or break a run.
 
 ## What it sends
 
 - Every prompt you type, and each turn's user and assistant text, go with
-  your API key to the brethof-brain server you configure: your own box at
-  `127.0.0.1:8610` by default, or a hub you run on another machine.
+  this device's key to your Brain hub: `127.0.0.1:8600` by default, or a hub
+  you run on another machine.
 - The server's briefing and recall text are put into the system prompt and
   into each turn.
 - It reads `BRETHOF_BRAIN_*` from `$HERMES_HOME/.env` and
@@ -42,22 +42,25 @@ hermes plugins install BrethofAI/brethof-brain-client/adapters/hermes --no-enabl
 (`--no-enable` only skips the general plugin prompt — memory providers are
 activated by `memory.provider`, not by `plugins.enabled`.)
 
-Put your key in `~/.hermes/.env`:
+Connect this machine to your hub once:
+
+```bash
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # or https://<your hub's address>
+```
+
+`pair` shows a code; approve it on the hub's settings page, and it writes
+`~/.brethof-brain/config.json` (`endpoint`, the device key `api_key` — never
+printed), the file every brethof-brain adapter shares. Name the project this
+agent works in, and override the file if you need to, in `~/.hermes/.env`:
 
 ```
-BRETHOF_BRAIN_API_KEY=bmv2_...
-BRETHOF_BRAIN_ENDPOINT=http://127.0.0.1:8610      # your local box (default)
-# BRETHOF_BRAIN_ENDPOINT=https://<your hub's address>   # a hub on another machine
 BRETHOF_BRAIN_PROJECT=my-agent                     # the project this agent works in
-# hosted memory only — it locks after idle; the provider unlocks it itself:
-# BRETHOF_BRAIN_UNLOCK_PASSPHRASE=...
-# BRETHOF_BRAIN_LOCK_AFTER_MINUTES=30              # 5-60
+# BRETHOF_BRAIN_ENDPOINT=https://<your hub's address>   # overrides config.json
 ```
 
-`hermes memory setup` walks the same fields interactively. The provider also
-reads `~/.brethof-brain/config.json` (`api_key`, `endpoint`, `default_project`,
-`unlock_passphrase`), the file every brethof-brain adapter shares. Restart
-Hermes; `hermes memory status` shows `brethof-brain` active.
+`hermes memory setup` walks the same fields interactively. Restart Hermes;
+`hermes memory status` shows `brethof-brain` active.
 
 ## Explicit memory tools (recommended)
 
@@ -68,10 +71,14 @@ block in `~/.hermes/config.yaml`, the full customer toolset:
 ```yaml
 mcp_servers:
   brethof-brain:
-    url: "http://127.0.0.1:8610/v1/mcp"          # another machine: https://<your hub's address>/v1/mcp
+    url: "http://127.0.0.1:8600/v1/mcp"          # another machine: https://<your hub's address>/v1/mcp
     headers:
-      Authorization: "Bearer bmv2_..."
+      Authorization: "Bearer bd_..."
 ```
+
+`bd_...` is the device key `pair` saved; `brethof-brain mcp-command` prints the
+address and key in a ready-made line. The hub accepts the key only as
+`Authorization: Bearer`.
 
 `/reload-mcp` inside a session, or restart Hermes.
 

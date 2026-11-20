@@ -1,4 +1,4 @@
-# brethof-brain cloud + DeepSeek Harness (dsh)
+# brethof-brain + DeepSeek Harness (dsh)
 
 A **native cordis plugin** — the full brethof-brain contract on dsh's own
 typed extension points:
@@ -30,11 +30,11 @@ extension points. This plugin is that.
 ## Install
 
 ```sh
-# 1. Your key lives in the config FILE (the env var would be scrubbed):
-mkdir -p ~/.brethof-brain
-cat > ~/.brethof-brain/config.json <<EOF
-{"api_key": "bmv2_YOUR_KEY", "default_project": "myproject"}
-EOF
+# 1. Your key lives in the config FILE (the env var would be scrubbed).
+#    pair writes it — approve the code on the hub's settings page:
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # or https://<your hub>
+#    -> ~/.brethof-brain/config.json: {"endpoint": "http://127.0.0.1:8600", "api_key": "bd_..."}
 
 # 2. Install the plugin into your profile (from npm):
 dsh plugin --profile <name> add brethof-brain-dsh
@@ -56,7 +56,7 @@ Optional row config (all default from `~/.brethof-brain/config.json`):
     - id: brethof-brain
       name: brethof-brain-dsh
       config:
-        endpoint: http://127.0.0.1:8610
+        endpoint: http://127.0.0.1:8600
         project: myproject
 ```
 

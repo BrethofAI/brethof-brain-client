@@ -1,6 +1,6 @@
 # brethof-brain for Cursor
 
-Cloud memory for [Cursor](https://cursor.com) via its native hooks system:
+Memory for [Cursor](https://cursor.com) via its native hooks system:
 
 - **Session brief** — `sessionStart` injects your project's memory as
   `additional_context` before the first turn.
@@ -20,7 +20,7 @@ without memory.
 
 1. Get the client next to the hook (either works):
    ```bash
-   pip install git+https://github.com/BrethofAI/brethof-brain-client.git
+   pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
    ```
    or run straight from a checkout of this repo — the hook bootstraps its
    own `sys.path`.
@@ -29,16 +29,18 @@ without memory.
    `<repo>/.cursor/hooks.json` (one project), fixing the absolute path to
    `cursor_hook.py`.
 
-3. Configure the key — `~/.brethof-brain/config.json`:
-   ```json
-   {
-     "api_key": "bmv2_...",
-     "endpoint": "http://127.0.0.1:8610",
-     "default_project": "my-project"
-   }
+3. Connect this machine to your hub (the Brain on this machine:
+   `http://127.0.0.1:8600`; on a server: `https://<your hub>`):
+   ```bash
+   brethof-brain pair http://127.0.0.1:8600
    ```
-   Environment variables override the file: `BRETHOF_BRAIN_API_KEY`,
-   `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`.
+   `pair` shows a code; approve it on the hub's settings page. It then writes
+   `~/.brethof-brain/config.json` — the device key is never printed:
+   ```json
+   {"endpoint": "http://127.0.0.1:8600", "api_key": "bd_..."}
+   ```
+   Environment variables override the file: `BRETHOF_BRAIN_ENDPOINT`,
+   `BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_PROJECT`.
 
 Works in the Cursor IDE and the Cursor CLI (`agent`). Hooks load from
 user, project, team, and enterprise levels — this adapter rides the user

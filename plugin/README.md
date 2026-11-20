@@ -6,10 +6,9 @@ exchange is archived so it can be found again. The same memory serves every
 proven harness — the full list and the other installs are in the
 [client repository](https://github.com/BrethofAI/brethof-brain-client).
 
-You need a brethof-brain account: sign up at
-[brethof.ai/brain](https://brethof.ai/brain/), choose where your memory lives
-(on your own machine, or hosted by us, encrypted under your passphrase) and
-copy your API key from the panel.
+You need a Brain hub — on this machine or on a server of yours. Getting one:
+[brethof.ai/brain](https://brethof.ai/brain/) and the
+[client repository](https://github.com/BrethofAI/brethof-brain-client#getting-your-memory).
 
 ## Install
 
@@ -18,17 +17,18 @@ claude plugin marketplace add BrethofAI/brethof-brain-client
 claude plugin install brethof-brain@brethof
 ```
 
-Then connect this computer to your memory:
+Then connect this computer to your hub:
 
 ```
-python3 "<plugin folder>/connect.py"
+python3 "<plugin folder>/connect.py"                              # the hub on this machine
+python3 "<plugin folder>/connect.py" --endpoint https://your-hub  # a hub elsewhere
 ```
 
-A window opens on your own screen. Paste the API key and, for a hosted
-memory, your passphrase (twice — a forgotten passphrase can never be
-recovered). The window checks both with your memory and saves them in
-`~/.brethof-brain/config.json`. Your agent never sees either. The hooks and the
-memory tools load at the next session start.
+It pairs with the hub: it shows a code, you approve the same code on the hub's
+settings page, and the device key is saved in `~/.brethof-brain/config.json`
+without being shown — your agent never sees it. (With the pip install,
+`brethof-brain pair <hub address>` does the same.) The hooks and the memory
+tools load at the next session start.
 
 ## Recommended: tell Claude Code where memory lives (one manual step)
 
@@ -89,11 +89,11 @@ once first (`connect.py`, above) — Cowork does not ask for plugin settings.
 
 ## Where your data goes
 
-The hooks and tools talk to your own memory: `127.0.0.1:8610` for a memory on
+The hooks and tools talk only to your hub: `127.0.0.1:8600` for a hub on
 your machine, or the hub you run on another machine. Your hub sends what its
-model needs to read to the model you chose on its settings page. The API key is read from
+model needs to read to the model you chose on its settings page. The device key is read from
 `~/.brethof-brain/config.json` (or the `BRETHOF_BRAIN_API_KEY` variable) and is
-sent only to those brethof addresses. Details: the
+sent only to that hub. Details: the
 [privacy page](https://brethof.ai/brain/privacy/).
 
 Python 3.9+ on PATH is required; the plugin has no other dependencies.

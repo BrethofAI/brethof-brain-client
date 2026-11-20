@@ -1,7 +1,9 @@
 """``brethof-brain`` command-line tool: set up the client, wire Claude Code, and
 check status. Stdlib only.
 
-    brethof-brain setup --api-key bmv2_xxx [--endpoint URL] [--project KEY]
+    brethof-brain pair <hub address>  # connect this machine to your Brain hub
+    brethof-brain connect             # the same, with the hub on this machine found by itself
+    brethof-brain setup --api-key bd_xxx [--endpoint URL] [--project KEY]
     brethof-brain install-hooks     # wire the hooks into Claude Code (pip install only)
     brethof-brain mcp-command       # print the `claude mcp add` line to run
     brethof-brain status            # show plan + usage
@@ -83,13 +85,14 @@ def cmd_setup(args) -> int:
         if sys.stdin.isatty():
             # getpass: the key must not echo to the terminal or scrollback.
             api_key = getpass.getpass(
-                "brethof-brain API key (bmv2_... or bm_test_..., hidden): ").strip()
+                "this device's key (bd_..., hidden): ").strip()
         else:
             print("error: --api-key required (or run in an interactive terminal)",
                   file=sys.stderr)
             return 2
-    if not api_key.startswith(("bmv2_", "bm_test_")):
-        print("warning: key doesn't look like a brethof-brain key (bmv2_/bm_test_)",
+    if not api_key.startswith("bd_"):
+        print("warning: key doesn't look like a hub device key (bd_...) — "
+              "`brethof-brain pair <hub address>` fetches one for you",
               file=sys.stderr)
 
     ensure_dirs()
@@ -130,9 +133,6 @@ def cmd_setup(args) -> int:
     print("  brethof-brain install-hooks   # auto-load & archive memory in Claude Code")
     print("  brethof-brain mcp-command     # wire the memory tools (remote MCP)")
     return 0
-
-
-CONTROL_URL = os.environ.get("BRETHOF_BRAIN_CONTROL_URL", "https://api.brethof.ai").rstrip("/")
 
 
 def _post_json(url: str, body: dict, timeout: float = 30.0) -> tuple[int, dict]:
@@ -176,111 +176,23 @@ def _open_browser(url: str) -> bool:
         return False
 
 
-def cmd_login(args, sleep=None) -> int:
-    """DEVICE LOGIN (2026-10-04): this machine asks the control plane for a
-    code, the human approves it on brethof.ai/account/device while signed in
-    (2FA), and the key comes back to this process — written to the config
-    file and never printed, so an agent running the install never sees it.
-    Hosted memories only: a local memory mints its own key on its machine."""
-    import socket
-    import time as _time
-    sleep = sleep or _time.sleep
-    control = (args.control or CONTROL_URL).rstrip("/")
-    st, code = _post_json(f"{control}/v1/device/code",
-                          {"client_name": f"brethof-brain on {socket.gethostname()}"[:80]})
-    if st != 200 or not code.get("device_code"):
-        print(f"error: could not start the sign-in ({st}: "
-              f"{code.get('error_description') or code.get('error') or 'no answer'})", file=sys.stderr)
-        return 1
-    link = code.get("verification_uri_complete") or code.get("verification_uri") or ""
-    opened = (not getattr(args, "no_browser", False)) and _open_browser(link)
-    print("Opening your browser to confirm this machine…" if opened else
-          "To connect this machine to your memory, open this page while signed in:")
-    print(f"  {link}")
-    print(f"and confirm the code  {code.get('user_code', '')}", flush=True)
-    interval = max(1, int(code.get("interval") or 5))
-    deadline = _time.time() + int(code.get("expires_in") or 600)
-    while _time.time() < deadline:
-        sleep(interval)
-        st, tok = _post_json(f"{control}/v1/device/token", {"device_code": code["device_code"]})
-        if st == 200 and tok.get("api_key"):
-            break
-        err = tok.get("error", "")
-        if err == "authorization_pending":
-            continue
-        if err == "slow_down":
-            interval += 5
-            continue
-        print(f"error: {tok.get('error_description') or err or f'HTTP {st}'}", file=sys.stderr)
-        return 1
-    else:
-        print("error: the code expired before it was approved — run login again", file=sys.stderr)
-        return 1
-    try:
-        endpoint = _valid_endpoint(tok.get("endpoint") or "")
-    except ValueError as e:
-        print(f"error: the service answered an unusable endpoint: {e}", file=sys.stderr)
-        return 1
-    ensure_dirs()
-    data = {}
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            data = {}
-    data["api_key"], data["endpoint"] = tok["api_key"], endpoint
-    data.setdefault("default_project", "global")
-    save_file(data)                     # the key first: it is good on its own
-    if tok.get("needs_passphrase") and not data.get("unlock_passphrase"):
-        # THE HUMAN'S OWN SECRET, never through the agent: a one-shot page in
-        # their browser when one can open; a hidden prompt only on a real
-        # terminal; never a prompt that waits on nobody (no tty under an agent)
-        pp = ""
-        if not getattr(args, "no_browser", False) and _can_open_browser():
-            from . import connectpage
-            pp = connectpage.serve({"passphrase": ""}, f"brethof-brain-client/{__version__}",
-                                   _open_browser, endpoint=endpoint).get("passphrase", "")
-        elif sys.stdin.isatty():
-            print("WARNING: if you forget your passphrase, your memory can never be opened again — "
-                  "by you or by us. There is no way to recover it.", file=sys.stderr)
-            pp = getpass.getpass("Your memory's passphrase (hidden; it unlocks your hosted memory): ").strip()
-            if pp and getpass.getpass("Passphrase again: ").strip() != pp:
-                print("error: the two passphrases are not the same — not saved", file=sys.stderr)
-                pp = ""
-        if pp:
-            data["unlock_passphrase"] = pp
-            save_file(data)
-        else:
-            print("note: your hosted memory locks when idle and needs its passphrase — run "
-                  "`brethof-brain login` again on a machine with a browser or a terminal, or set "
-                  f"unlock_passphrase in {CONFIG_PATH}", file=sys.stderr)
-    print(f"OK: connected — key and endpoint saved to {CONFIG_PATH} (readable by you only)")
-    return 0
-
-
-LOCAL_ENDPOINT = "http://127.0.0.1:8610"
-
-
-def _local_memory_here() -> bool:
+def _local_hub_here() -> bool:
+    """A Brain hub answering on this machine's default front door."""
     import urllib.request
     try:
-        with urllib.request.urlopen(LOCAL_ENDPOINT + "/v1/health", timeout=3) as r:
+        with urllib.request.urlopen(DEFAULT_ENDPOINT + "/health", timeout=3) as r:
             return r.status == 200
     except Exception:  # noqa: BLE001
         return False
 
 
 def cmd_connect(args) -> int:
-    """THE INSTALL'S ONE STEP FOR THE HUMAN (founder 2026-10-04): the client
-    needs the API key and, for a hosted memory, the passphrase — and the agent
-    running the install must see neither. A window opens on the person's own
-    screen, takes them, checks them with the memory and saves them; the agent
-    only learns that it is connected. No screen: hidden prompts on a real
-    terminal. Neither: say so — never wait on nobody."""
-    from . import connectpage
-    ua = f"brethof-brain-client/{__version__}"
-    ensure_dirs()
+    """THE INSTALL'S ONE STEP FOR THE HUMAN, local-first (2026-11-20): connect
+    = pair. The hub is the one named (--endpoint), else the one this machine
+    is already paired with, else the hub on this machine's front door. Pairing
+    shows a code the hub's owner approves on its settings page (opened in a
+    browser when one can open); the device key comes back to the config file
+    and is never printed, so an agent running this never sees it."""
     data = {}
     if os.path.exists(CONFIG_PATH):
         try:
@@ -288,47 +200,19 @@ def cmd_connect(args) -> int:
                 data = json.load(f)
         except Exception:
             data = {}
-    endpoint = args.endpoint or data.get("endpoint") or ""
-    if not endpoint and _local_memory_here():
-        endpoint = LOCAL_ENDPOINT
-    got: dict = {}
-    if not args.no_browser and _can_open_browser():
-        got = connectpage.serve({"endpoint": endpoint, "key": "", "passphrase": ""}, ua, _open_browser)
-        if not got:
-            print("error: the window was not filled in before it timed out — run connect again", file=sys.stderr)
-            return 1
-    elif sys.stdin.isatty():
-        ep = input(f"Where your memory is [{endpoint or 'http://127.0.0.1:8600'}]: ").strip() or endpoint
-        key = getpass.getpass("API key (bmv2_…, hidden): ").strip()
-        pp = ""
-        if not connectpage._is_local(ep):
-            print("WARNING: if you forget your passphrase, your memory can never be opened again — "
-                  "by you or by us. There is no way to recover it.", file=sys.stderr)
-            pp = getpass.getpass("Passphrase (hosted memory; hidden, empty if none): ").strip()
-            if pp and getpass.getpass("Passphrase again: ").strip() != pp:
-                print("error: the two passphrases are not the same", file=sys.stderr)
-                return 1
-        why = connectpage.check(ep, key, pp, ua)
-        if why:
-            print(f"error: {why}", file=sys.stderr)
-            return 1
-        got = {"endpoint": ep.rstrip("/"), "key": key, "passphrase": pp}
-    else:
-        print("error: there is no screen and no terminal here to ask the person — they run "
-              "`brethof-brain connect` themselves on this computer", file=sys.stderr)
-        return 2
-    try:
-        data["endpoint"] = _valid_endpoint(got["endpoint"])
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    data["api_key"] = got["key"]
-    if got.get("passphrase"):
-        data["unlock_passphrase"] = got["passphrase"]
-    data.setdefault("default_project", "global")
-    save_file(data)
-    print(f"OK: connected to your memory — saved to {CONFIG_PATH} (readable by you only)")
-    return 0
+    hub = (args.endpoint or data.get("endpoint") or "").strip().rstrip("/")
+    memory = ""
+    if "/m/" in hub:                       # <hub>/m/<memory>, as pair writes it
+        hub, memory = hub.split("/m/", 1)
+        memory = memory.split("/", 1)[0]
+    if not hub:
+        if not _local_hub_here():
+            print("error: no Brain hub answers on this machine — run "
+                  "`brethof-brain pair <your hub's address>`", file=sys.stderr)
+            return 2
+        hub = DEFAULT_ENDPOINT
+    return cmd_pair(argparse.Namespace(hub=hub, name="", memory=memory,
+                                       no_browser=getattr(args, "no_browser", False)))
 
 
 def _claude_files():
@@ -361,7 +245,7 @@ def cmd_uninstall_hooks(args) -> int:
 
 def cmd_mcp_command(args) -> int:
     cfg = Config.load()
-    key = cfg.api_key or "bmv2_YOUR_KEY"
+    key = cfg.api_key or "bd_YOUR_DEVICE_KEY"
     url = cfg.endpoint + MCP_PATH
     print("Run this once to add the Brain to Claude Code:\n")
     # ONE line, no continuation characters — POSIX `\` breaks in PowerShell/cmd.
@@ -380,7 +264,7 @@ def cmd_mcp_command(args) -> int:
 def cmd_status(args) -> int:
     cfg = Config.load()
     if not cfg.configured():
-        print("not configured - run: brethof-brain setup --api-key ...", file=sys.stderr)
+        print("not paired - run: brethof-brain pair <hub address>", file=sys.stderr)
         return 2
     try:
         snap = Client(cfg).get("/v1/usage")
@@ -413,8 +297,8 @@ def cmd_doctor(args) -> int:
     print("brethof-brain client doctor")
     print(f"client version : {__version__}")
     check("config file", os.path.exists(CONFIG_PATH), CONFIG_PATH)
-    check("api key set", bool(cfg.api_key),
-          "run: brethof-brain setup" if not cfg.api_key else cfg.api_key[:12] + "...")
+    check("device key set", bool(cfg.api_key),
+          "run: brethof-brain pair <hub address>" if not cfg.api_key else cfg.api_key[:6] + "...")
     try:
         _valid_endpoint(cfg.endpoint)
         check("endpoint", True, cfg.endpoint)
@@ -507,7 +391,10 @@ def cmd_pair(args, sleep=None) -> int:
         print(f"error: the hub did not start pairing ({st}: {got.get('why') or got.get('error_description') or 'no answer'})",
               file=sys.stderr)
         return 1
-    print(f"Approve this device on the hub's settings page:\n  {got.get('approve_at') or hub + '/settings'}")
+    approve_at = got.get('approve_at') or hub + '/settings'
+    print(f"Approve this device on the hub's settings page:\n  {approve_at}")
+    if not getattr(args, "no_browser", True):
+        _open_browser(approve_at)
     print(f"It shows the code  {got['code']}  for '{name}'. Waiting…", flush=True)
     deadline = _time.time() + int(got.get("expires_in") or 900)
     while _time.time() < deadline:
@@ -555,13 +442,13 @@ def cmd_grok_app(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="brethof-brain",
-                                description="brethof-brain cloud client")
+                                description="brethof-brain client: connects your agents to your Brain hub")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("setup", help="save credentials and verify connectivity")
-    s.add_argument("--api-key", help="your brethof-brain API key")
-    s.add_argument("--endpoint", help=f"data-plane URL (default {DEFAULT_ENDPOINT})")
+    s.add_argument("--api-key", help="this device's key (bd_...; `pair` fetches one for you)")
+    s.add_argument("--endpoint", help=f"your hub (default {DEFAULT_ENDPOINT}), or <hub>/m/<memory>")
     s.add_argument("--project", help="default project key for this account")
     s.set_defaults(func=cmd_setup)
 
@@ -571,15 +458,11 @@ def build_parser() -> argparse.ArgumentParser:
                    ).set_defaults(func=cmd_uninstall_hooks)
     sub.add_parser("mcp-command", help="print the `claude mcp add` line"
                    ).set_defaults(func=cmd_mcp_command)
-    cn = sub.add_parser("connect", help="connect this computer to your memory: a window takes the key "
-                        "(and a hosted memory's passphrase) — the agent never sees them")
-    cn.add_argument("--endpoint", default="", help="where the memory is (found by itself for this computer)")
-    cn.add_argument("--no-browser", action="store_true", help="ask in the terminal instead of a window")
+    cn = sub.add_parser("connect", help="pair this computer with its Brain hub (the one on this machine, "
+                        "or the one it is paired with) — the agent never sees the key")
+    cn.add_argument("--endpoint", default="", help="the hub's address (found by itself on this computer)")
+    cn.add_argument("--no-browser", action="store_true", help="print the approval link instead of opening it")
     cn.set_defaults(func=cmd_connect)
-    lg = sub.add_parser("login", help="connect this machine to your hosted memory by approving a code on brethof.ai")
-    lg.add_argument("--control", default="", help=argparse.SUPPRESS)
-    lg.add_argument("--no-browser", action="store_true", help="print the links instead of opening a browser")
-    lg.set_defaults(func=cmd_login)
     pr = sub.add_parser("pair", help="pair this machine with your Brain hub; you approve it on the hub's settings page")
     pr.add_argument("hub", help="the hub's address, e.g. http://127.0.0.1:8600 or https://brain.example.com")
     pr.add_argument("--name", default="", help="how this device is listed (default: the machine's name)")

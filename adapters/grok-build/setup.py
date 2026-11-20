@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Setup script — wire Grok Build to brethof-brain cloud.
+"""Setup script — wire Grok Build to your Brain hub.
 
 Grok Build has its own `grok mcp` command for MCP servers and a native hook
 system under ~/.grok/hooks/ (Claude-style ~/.claude/settings.json hooks
@@ -12,9 +12,11 @@ verifiably CANNOT fire in grok — see install_hooks below). This script:
 Run from this directory:
     python setup.py
 
-Environment:
-    BRETHOF_BRAIN_API_KEY  — your brethof-brain API key (bmv2_... or bm_test_...)
-    BRETHOF_BRAIN_ENDPOINT — optional, defaults to http://127.0.0.1:8610
+Connect first:
+    brethof-brain pair <hub address>   — writes the hub and this device's key
+                                         to ~/.brethof-brain/config.json
+    (or BRETHOF_BRAIN_API_KEY / BRETHOF_BRAIN_ENDPOINT in the environment;
+     the endpoint defaults to the hub's front door, http://127.0.0.1:8600)
 
 Stdlib only — no pip install needed. Requires Python 3.9+.
 """
@@ -32,18 +34,27 @@ for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
         _s.reconfigure(encoding="utf-8", errors="replace")
 
-DEFAULT_ENDPOINT = "http://127.0.0.1:8610"
+DEFAULT_ENDPOINT = "http://127.0.0.1:8600"   # the hub's front door
+ROOT = Path(__file__).resolve().parent.parent.parent   # client repo root
 
 
 def get_env():
-    api_key = os.environ.get("BRETHOF_BRAIN_API_KEY", "")
-    endpoint = os.environ.get("BRETHOF_BRAIN_ENDPOINT", DEFAULT_ENDPOINT)
+    """The hub and the device key — the environment first, then the file
+    `brethof-brain pair` wrote (the client's own Config, the same order every
+    hook uses)."""
+    sys.path.insert(0, str(ROOT))
+    try:
+        from brethof_brain_client.config import Config
+        cfg = Config.load()
+        api_key, endpoint = cfg.api_key, cfg.endpoint
+    except Exception:  # noqa: BLE001 — a checkout without the package
+        api_key = os.environ.get("BRETHOF_BRAIN_API_KEY", "")
+        endpoint = os.environ.get("BRETHOF_BRAIN_ENDPOINT", DEFAULT_ENDPOINT)
     if not api_key:
-        print("ERROR: BRETHOF_BRAIN_API_KEY not set in environment.")
-        print("Get your key from https://brethof.ai/account -> brethof-brain tab.")
-        print("Then: export BRETHOF_BRAIN_API_KEY=bmv2_your_key")
+        print("ERROR: this machine is not paired with a Brain hub yet.")
+        print("Run: brethof-brain pair <hub address>   (e.g. http://127.0.0.1:8600)")
         sys.exit(1)
-    return api_key, endpoint
+    return api_key, endpoint.rstrip("/")
 
 
 def find_grok():

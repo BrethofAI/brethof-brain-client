@@ -1,15 +1,15 @@
 # brethof-brain client
 
-> A thin Python client that provides persistent, searchable long-term memory for AI coding agents by connecting them to the brethof-brain cloud service.
+> A thin Python client that provides persistent, searchable long-term memory for AI coding agents by connecting them to the brethof-brain hub the customer runs (on their own machine or server).
 
-The client uses only the Python 3.9+ standard library and forwards hook events to the service while wiring an MCP endpoint for on-demand memory tools. It supports numerous agents including Claude Code, Codex, and Cline, with specific adapters and setup scripts provided for each platform.
+The client uses only the Python 3.9+ standard library and forwards hook events to the hub while wiring an MCP endpoint for on-demand memory tools. It supports numerous agents including Claude Code, Codex, and Cline, with specific adapters and setup scripts provided for each platform.
 
 ## Docs
 
 - [brethof-brain client](https://raw.githubusercontent.com/BrethofAI/brethof-brain-client/main/README.md): Overview of the thin client, supported AI agents, and how it forwards hook events to the service.
 - [How it works](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#how-it-works): Client architecture, forwarded hook events, MCP memory tools, and the pure Python standard library dependency constraint.
 - [Supported agents](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#supported-agents): Installation steps for Claude Code and OpenClaw, including plugin setup, commands, and manual memory configuration.
-- [What leaves your machine (read this)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#what-leaves-your-machine-read-this): Data sent to the service, client-side tool output filtering, local offset tracking, and local versus hosted endpoint behavior.
-- [Getting your memory (two shapes)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#getting-your-memory-two-shapes): Local versus hosted memory container setup, hub key minting, passphrase encryption, and client configuration requirements for both shapes.
-- [Install as a library / CLI (alternative)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#install-as-a-library--cli-alternative): Source installation steps, API key configuration, passphrase warnings, and verification commands for non-plugin use.
+- [What leaves your machine (read this)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#what-leaves-your-machine-read-this): Data sent to the service, client-side tool output filtering, local offset tracking, and the hub on this machine versus on another machine.
+- [Getting your memory](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#getting-your-memory): Installing the hub (on your machine or a server of yours) and connecting each device with `brethof-brain pair <hub address>`.
+- [Install as a library / CLI (alternative)](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#install-as-a-library--cli-alternative): Source installation steps, pairing with the hub (`brethof-brain pair`), and verification commands for non-plugin use.
 - [Configuration](https://github.com/BrethofAI/brethof-brain-client/blob/main/README.md#configuration): Configuration resolution order, project partitioning rules, environment variable overrides, and corporate proxy support via standard environment variables.

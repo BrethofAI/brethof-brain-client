@@ -15,16 +15,15 @@ Fail-open: a memory that cannot be reached never blocks Pi.
 pi install npm:brethof-brain-pi
 ```
 
-Then connect this computer to your memory once — a window on your screen takes
-the API key (and a hosted memory's passphrase); your agent never sees them:
+Then connect this computer to your hub once — `pair` shows a code, you approve
+it on the hub's settings page, and the device key is saved without being shown;
+your agent never sees it:
 
 ```bash
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git
-brethof-brain connect
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # or https://<your hub>
 ```
 
 The key and address are read from `~/.brethof-brain/config.json` (what
-`connect` saves) or the environment (`BRETHOF_BRAIN_API_KEY`,
-`BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`,
-`BRETHOF_BRAIN_UNLOCK_PASSPHRASE`). Sign up at
-[brethof.ai/brain](https://brethof.ai/brain/).
+`pair` saves); the environment overrides it (`BRETHOF_BRAIN_API_KEY`,
+`BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`).

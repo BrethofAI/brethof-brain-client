@@ -123,12 +123,12 @@ def _emit_context(event_name: str, text: str) -> None:
 NOT_CONNECTED = (
     "[brethof-brain is installed but not connected to a memory yet. To finish the install, run "
     "this command and wait until it ends: {cmd} — it opens a window on the person's own screen "
-    "where they enter their API key (and, for a hosted memory, its passphrase). You never see "
-    "these and must not ask for them in the chat. If it reports no screen or terminal, ask the "
-    "person to run that command themselves.]")
+    "where they connect this computer to their Brain hub. You never see the key and must not "
+    "ask for it in the chat. If it reports no screen or terminal, ask the person to run "
+    "`brethof-brain pair <their hub address>` themselves.]")
 
-AUTH_NOTICE = ("[brethof-brain: API key rejected — memory and archiving are OFF. "
-               "Check brethof.ai/account, then run `brethof-brain setup`.]")
+AUTH_NOTICE = ("[brethof-brain: key rejected for this device — memory and archiving are OFF. "
+               "Pair it again: `brethof-brain pair <hub address>`.]")
 
 
 def _injection_from_envelope(env: dict) -> str:
@@ -148,6 +148,49 @@ def _injection_from_envelope(env: dict) -> str:
         return injection or (f"[brethof-brain: {tag}"
                              + (f" — {notice}" if notice else "") + "]")
     return injection  # server_error → transient, inject nothing extra
+
+
+PROMPT_PARTS = (1, 2, 3, 4, 5, 6, 7)
+# Per-part timeout for the joined ask: inside the tightest harness budget we
+# ship to (MiniMax drops a hook whose timeout exceeds 10 s), and the parts run
+# in parallel, so this is the wall time of the whole ask.
+PROMPT_PART_TIMEOUT = 8.0
+
+
+def prompt_context(cfg: Config, payload: dict, parts: tuple = PROMPT_PARTS,
+                   timeout: float = PROMPT_PART_TIMEOUT) -> str:
+    """The FULL per-prompt memory for a harness that registers ONE
+    prompt hook (every agent but Claude Code, which registers one hook per
+    part): parts 1-7 asked in parallel and joined in order — records and
+    rules in 1-6, the history of decisions near the prompt in 7. No part at
+    all is the legacy single blob, which never carries that history (found
+    2026-11-18). A part that fails is left out; when EVERY part fails, the
+    first error is raised so the caller's auth notice still fires."""
+    import threading
+    got: dict = {}
+    errors: list = []
+
+    def one(n: int) -> None:
+        try:
+            env = Client(cfg, timeout=timeout).post("/v1/hooks/prompt-submit", {**payload, "part": n})
+            got[n] = _injection_from_envelope(env).strip()
+        except ClientError as e:
+            errors.append(e)
+        except Exception as e:  # noqa: BLE001 — a thread must never die loud
+            errors.append(ClientError(f"prompt part {n}: {e}"))
+    threads = [threading.Thread(target=one, args=(n,), daemon=True) for n in parts]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout + 2)
+    if errors and not got:
+        raise errors[0]
+    out: list = []
+    for n in parts:
+        text = got.get(n, "")
+        if text and text not in out:       # one status notice, not seven
+            out.append(text)
+    return "\n\n".join(out)
 
 
 def _project(cfg: Config, inp: dict) -> str:
@@ -266,8 +309,9 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
     # Like session-start, the ambient payload is delivered as parts — one
     # registered hook per injected record, each under the harness's 10K
     # per-hook cap ("prompt-submit 1" = rule + dead-ends + record #1,
-    # "prompt-submit 2" = the second strong match alone). No part argument =
-    # the legacy single-blob shape; old registrations keep working.
+    # "prompt-submit 2" = the second strong match alone). No part argument
+    # (every other harness registers ONE prompt hook) = parts 1-7 joined, so
+    # they too receive the history of decisions — never the legacy blob.
     project = _project(cfg, inp)
     msg = inp.get("message") if isinstance(inp.get("message"), str) else ""    # goose
     prompt = (inp.get("prompt") or msg or os.environ.get("USER_PROMPT") or "").strip()
@@ -285,16 +329,21 @@ def _prompt_submit(cfg: Config, inp: dict, args: tuple = ()) -> None:
         # user's half is kept for it.
         transcript.save_pending_prompt(session_id, prompt)
     payload = {"project": project, "prompt": prompt, "session_id": session_id}
+    part = None
     if args:
         try:
-            payload["part"] = int(args[0])
+            part = int(args[0])
         except (TypeError, ValueError):
-            pass
-    env = Client(cfg).post("/v1/hooks/prompt-submit", payload)
+            part = None
+    if part is None:
+        text = prompt_context(cfg, payload)
+    else:
+        payload["part"] = part
+        text = _injection_from_envelope(Client(cfg).post("/v1/hooks/prompt-submit", payload))
     if TURN_FILE:
-        _write_turn_file(session_id, _injection_from_envelope(env))
+        _write_turn_file(session_id, text)
         return
-    _emit_context("UserPromptSubmit", _injection_from_envelope(env))
+    _emit_context("UserPromptSubmit", text)
 
 
 def _stop(cfg: Config, inp: dict, args: tuple = ()) -> None:
@@ -531,7 +580,7 @@ def main(argv=None) -> int:
         if not cfg.configured():
             # NOT CONNECTED YET (2026-10-04): the agent that just installed the
             # plugin is told the one command that finishes the job — a window
-            # on the person's screen takes the key (and a hosted passphrase),
+            # on the person's screen connects this computer to its hub,
             # so the agent never sees or asks for them. Session start only,
             # first part only; every other hook stays silent.
             if event == "session-start" and argv[1:2] in ([], ["1"]):

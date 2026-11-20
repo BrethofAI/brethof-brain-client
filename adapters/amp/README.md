@@ -20,7 +20,17 @@ curl -fsSL https://raw.githubusercontent.com/BrethofAI/brethof-brain-client/main
   -o ~/.config/amp/plugins/brethof-brain.ts
 ```
 
-On Windows the folder is `%USERPROFILE%\.config\amp\plugins\`. The key comes
-from `~/.brethof-brain/config.json` or `BRETHOF_BRAIN_API_KEY`. Plugins load by
+Then connect this machine to your hub once:
+
+```bash
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # or https://<your hub>
+```
+
+`pair` shows a code; approve it on the hub's settings page, and the device
+key lands in `~/.brethof-brain/config.json` (never printed) — the file the
+plugin reads. `BRETHOF_BRAIN_*` environment variables override it.
+
+On Windows the plugin folder is `%USERPROFILE%\.config\amp\plugins\`. Plugins load by
 themselves; in execute mode (`amp -x`) add `--plugin-ready-timeout 30` so the
 turn waits for the plugin.

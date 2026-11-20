@@ -6,9 +6,8 @@ worked and the tools did not, and the plugin demanded the key at install,
 which is exactly the step an agent cannot do for the person.
 
 This bridge is the plugin's MCP server: newline-delimited JSON-RPC on stdin,
-each request forwarded to <endpoint>/v1/mcp with the configured key (a locked
-hosted memory is opened with the configured passphrase, as every hook does),
-the answer written to stdout. The config is read on EVERY request, so the
+each request forwarded to <endpoint>/v1/mcp with the paired device key, the
+answer written to stdout. The config is read on EVERY request, so the
 tools work the moment `connect` finishes. Not connected yet: the handshake is
 answered here, the tool list is empty, and the instructions say how to
 connect.
@@ -24,8 +23,9 @@ from .config import Config
 
 MCP_PATH = "/v1/mcp"
 NOT_CONNECTED = ("brethof-brain is installed but not connected to a memory yet. To finish, run "
-                 "`brethof-brain connect` (plugin installs: python3 \"<plugin root>/connect.py\"): a window "
-                 "on the person's screen takes their API key and passphrase — never ask for them in chat. "
+                 "`brethof-brain pair <hub address>` (or `brethof-brain connect` for the hub on this machine; "
+                 "plugin installs: python3 \"<plugin root>/connect.py\"): the hub's owner approves the code on "
+                 "the hub's settings page and the key is saved without anyone seeing it — never ask for it in chat. "
                  "The memory tools appear in the next session.")
 
 

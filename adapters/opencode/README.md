@@ -39,20 +39,20 @@ and TUI — they are all clients of the same core.
 
 ## Configure
 
-`~/.brethof-brain/config.json` (the file every brethof-brain adapter reads):
+Connect this machine to your hub — that writes `~/.brethof-brain/config.json`
+(the file every brethof-brain adapter reads):
+
+```bash
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # your hub; or https://<your hub>
+```
+
+`pair` shows a code; approve it on the hub's settings page, and it writes the
+file (the device key is never printed):
 
 ```json
-{
-  "api_key": "bmv2_...",
-  "endpoint": "http://127.0.0.1:8610",
-  "default_project": "my-project"
-}
+{"endpoint": "http://127.0.0.1:8600", "api_key": "bd_..."}
 ```
 
 Environment variables override the file: `BRETHOF_BRAIN_API_KEY`,
-`BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`. Hosted memory: add
-`BRETHOF_BRAIN_UNLOCK_PASSPHRASE` (or `unlock_passphrase` in the config file)
-and the plugin unlocks your memory itself when it has locked after idle;
-`BRETHOF_BRAIN_LOCK_AFTER_MINUTES` sets that idle time (5-60).
-
-Get a key at [brethof.ai/account](https://brethof.ai/account/).
+`BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`.

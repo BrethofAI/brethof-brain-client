@@ -17,23 +17,25 @@ Every hook is fail-open: if the Brain is unreachable, Droid just runs.
 ## Install
 
 1. ```bash
-   pip install git+https://github.com/BrethofAI/brethof-brain-client.git
+   pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
    ```
 
 2. Copy `hooks.json.example` into `~/.factory/hooks.json` (all projects)
    or `<repo>/.factory/hooks.json` (one project). Timeouts are in
    **seconds** (Droid's convention; default 60).
 
-3. Configure the key — `~/.brethof-brain/config.json`:
-   ```json
-   {
-     "api_key": "bmv2_...",
-     "endpoint": "http://127.0.0.1:8610",
-     "default_project": "my-project"
-   }
+3. Connect this machine to your hub (the Brain on this machine:
+   `http://127.0.0.1:8600`; on a server: `https://<your hub>`):
+   ```bash
+   brethof-brain pair http://127.0.0.1:8600
    ```
-   Environment variables override the file: `BRETHOF_BRAIN_API_KEY`,
-   `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`.
+   `pair` shows a code; approve it on the hub's settings page. It then writes
+   `~/.brethof-brain/config.json` — the device key is never printed:
+   ```json
+   {"endpoint": "http://127.0.0.1:8600", "api_key": "bd_..."}
+   ```
+   Environment variables override the file: `BRETHOF_BRAIN_ENDPOINT`,
+   `BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_PROJECT`.
 
 Works in the Droid CLI, the Factory desktop app, and `droid exec`
 headless runs — they share the hooks system.

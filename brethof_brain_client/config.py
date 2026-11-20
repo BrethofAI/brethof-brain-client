@@ -3,15 +3,14 @@
 Resolution order for every setting: environment variable (``BRETHOF_BRAIN_*``
 first, then the ``CLAUDE_PLUGIN_OPTION_*`` variables Claude Code exports from a
 plugin's user config), then ``~/.brethof-brain/config.json``, then a built-in
-default. The config file is where the CLI stores your API key on disk (created
-owner-readable-only); the Claude Code plugin path never writes it to this file —
-Claude Code holds it and passes it via the environment.
+default. The config file is where ``brethof-brain pair`` stores this device's
+key on disk (created owner-readable-only) with the hub it was approved on.
 
 config.json shape (all keys optional except api_key)::
 
     {
-      "endpoint": "http://127.0.0.1:8610",
-      "api_key": "bmv2_...",
+      "endpoint": "http://127.0.0.1:8600",       (the hub, or <hub>/m/<memory>)
+      "api_key": "bd_...",                       (this device's key; Bearer only)
       "default_project": "global",
       "projects": [
         {"path": "/home/me/work/acme", "key": "acme"},
@@ -153,18 +152,6 @@ def _real(path: str) -> str:
 class Config:
     endpoint: str = DEFAULT_ENDPOINT
     api_key: str = ""
-    # Hosted-container installs only: the passphrase that unlocks the
-    # customer's encrypted memory. Held HERE, on the customer's machine —
-    # the host keeps it in tmpfs while unlocked and never on disk. The
-    # client presents it automatically when the container answers 423
-    # (locked); with it unset a locked memory is reported, never opened.
-    unlock_passphrase: str = ""
-    # How many idle minutes before the hosted container locks itself again.
-    # Travels with the passphrase on every unlock — lock policy belongs to
-    # whoever holds the key, not to a panel. 0 = keep the host's stored
-    # value. The host clamps to 5-60 minutes: under five the memory
-    # flip-flops and can lock before its own curated save arrives.
-    lock_after_minutes: int = 0
     default_project: str = "global"
     projects: list = field(default_factory=list)
     raw: dict = field(default_factory=dict)
@@ -180,17 +167,6 @@ class Config:
                         "CLAUDE_PLUGIN_OPTION_API_KEY",
                         "CLAUDE_PLUGIN_OPTION_api_key")
                    or f.get("api_key") or "")
-        unlock = (_env("BRETHOF_BRAIN_UNLOCK_PASSPHRASE",
-                       "CLAUDE_PLUGIN_OPTION_UNLOCK_PASSPHRASE",
-                       "CLAUDE_PLUGIN_OPTION_unlock_passphrase")
-                  or f.get("unlock_passphrase") or "")
-        try:
-            lock_after = int(_env("BRETHOF_BRAIN_LOCK_AFTER_MINUTES",
-                                  "CLAUDE_PLUGIN_OPTION_LOCK_AFTER_MINUTES",
-                                  "CLAUDE_PLUGIN_OPTION_lock_after_minutes")
-                             or f.get("lock_after_minutes") or 0)
-        except (TypeError, ValueError):
-            lock_after = 0
         default_project = (_env("BRETHOF_BRAIN_DEFAULT_PROJECT",
                                 "BRETHOF_MIND_DEFAULT_PROJECT",
                                 "CLAUDE_PLUGIN_OPTION_PROJECT",
@@ -198,8 +174,6 @@ class Config:
                            or f.get("default_project") or "global")
         projects = f.get("projects") if isinstance(f.get("projects"), list) else []
         return cls(endpoint=endpoint, api_key=api_key.strip(),
-                   unlock_passphrase=str(unlock),
-                   lock_after_minutes=lock_after,
                    default_project=default_project, projects=projects, raw=f)
 
     def configured(self) -> bool:

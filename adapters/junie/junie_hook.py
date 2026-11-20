@@ -90,10 +90,10 @@ def main() -> int:
             prompt = (payload.get("prompt") or "").strip()
             if prompt and inp["session_id"]:
                 project = cc_hook._project(cfg, inp)
-                env = Client(cfg).post("/v1/hooks/prompt-submit",
-                                       {"project": project, "prompt": prompt,
-                                        "session_id": inp["session_id"]})
-                text = cc_hook._injection_from_envelope(env)
+                # parts 1-7 joined, in parallel (the history of decisions is part 7)
+                text = cc_hook.prompt_context(
+                    cfg, {"project": project, "prompt": prompt,
+                          "session_id": inp["session_id"]})
                 if text:
                     sys.stdout.write(text)
                 _archive_turn(cfg, inp, "user", prompt)
@@ -103,7 +103,7 @@ def main() -> int:
     except ClientError as e:
         if getattr(e, "status_code", None) in (401, 403):
             sys.stderr.write("brethof-brain: API key rejected — memory and "
-                             "archiving are OFF. Run `brethof-brain setup`.\n")
+                             "archiving are OFF. Pair again: `brethof-brain pair <hub address>`.\n")
     except Exception:                                      # noqa: BLE001
         if os.environ.get("BRETHOF_BRAIN_HOOK_DEBUG"):
             import traceback

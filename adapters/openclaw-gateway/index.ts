@@ -11,48 +11,40 @@
  * registered here — point OpenClaw's native MCP client at the same endpoint
  * instead (see README), one config block, zero duplicate surface.
  */
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
-type Cfg = { endpoint: string; apiKey: string; project: string;
-             unlockPassphrase: string; lockAfterMinutes: number };
+type Cfg = { endpoint: string; apiKey: string; project: string };
 
-function cfgFrom(pluginConfig: any): Cfg {
-  const env = (globalThis as any).process?.env ?? {};
-  return {
-    endpoint: (pluginConfig?.endpoint || env.BRETHOF_BRAIN_ENDPOINT ||
-               "http://127.0.0.1:8610").replace(/\/+$/, ""),
-    apiKey: pluginConfig?.apiKey || env.BRETHOF_BRAIN_API_KEY || "",
-    project: pluginConfig?.project || env.BRETHOF_BRAIN_PROJECT || "openclaw",
-    unlockPassphrase: pluginConfig?.unlockPassphrase ||
-                      env.BRETHOF_BRAIN_UNLOCK_PASSPHRASE || "",
-    lockAfterMinutes: parseInt(pluginConfig?.lockAfterMinutes ||
-                               env.BRETHOF_BRAIN_LOCK_AFTER_MINUTES || "0", 10) || 0,
-  };
-}
-
-// A HOSTED memory locks itself after idle minutes and answers 423 until the
-// passphrase opens it again (the Python client has done this since 08-30;
-// the JS adapters did not — found 2026-09-04 provisioning the marketing
-// agent). Unauthenticated: the passphrase IS the authentication. Then the
-// original call is retried ONCE. Unset passphrase: reported, never opened.
-async function unlock(cfg: Cfg): Promise<boolean> {
-  if (!cfg.unlockPassphrase) return false;
-  const body: any = { passphrase: cfg.unlockPassphrase };
-  if (cfg.lockAfterMinutes) body.idle_seconds = cfg.lockAfterMinutes * 60;
+// The file `brethof-brain pair` writes: {endpoint, api_key, ...} — the same
+// one every adapter reads (BRETHOF_BRAIN_HOME moves it). Read per call, so a
+// device paired while the gateway runs is picked up without a restart.
+function fileConfig(): any {
   try {
-    const r = await fetch(cfg.endpoint + "/unlock", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(90000),
-    });
-    return r.ok;
+    const env = (globalThis as any).process?.env ?? {};
+    const home = env.BRETHOF_BRAIN_HOME || join(homedir(), ".brethof-brain");
+    return JSON.parse(readFileSync(join(home, "config.json"), "utf8")) || {};
   } catch {
-    return false;
+    return {};
   }
 }
 
-async function hookPost(cfg: Cfg, path: string, body: object,
-                        retried = false): Promise<any> {
+function cfgFrom(pluginConfig: any): Cfg {
+  const env = (globalThis as any).process?.env ?? {};
+  const f = fileConfig();
+  return {
+    endpoint: (pluginConfig?.endpoint || env.BRETHOF_BRAIN_ENDPOINT ||
+               f.endpoint || "http://127.0.0.1:8600").replace(/\/+$/, ""),
+    apiKey: pluginConfig?.apiKey || env.BRETHOF_BRAIN_API_KEY || f.api_key || "",
+    project: pluginConfig?.project || env.BRETHOF_BRAIN_PROJECT || "openclaw",
+  };
+}
+
+// THE HUB'S FRONT DOOR (local-first, 2026-11-20): the device key travels as
+// a Bearer token — the hub refuses any other header. The memory never locks, so a refusal is just a failure.
+async function hookPost(cfg: Cfg, path: string, body: object): Promise<any> {
   const r = await fetch(cfg.endpoint + path, {
     method: "POST",
     headers: {
@@ -62,11 +54,19 @@ async function hookPost(cfg: Cfg, path: string, body: object,
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(9000),
   });
-  if (r.status === 423 && !retried && (await unlock(cfg))) {
-    return hookPost(cfg, path, body, true);
-  }
   if (!r.ok) throw new Error(`${path} -> ${r.status}`);
   return r.json();
+}
+
+// PROMPT CONTEXT IN PARTS 1-7, as the Claude Code plugin receives it: records
+// and rules in 1-6, the history of decisions near the prompt in 7 (no part =
+// the legacy blob, which never carries that history). Asked in parallel, so
+// the wall time stays one request's 9 s; a failed part is simply left out.
+async function promptContext(cfg: Cfg, body: object): Promise<string> {
+  const got = await Promise.allSettled([1, 2, 3, 4, 5, 6, 7].map((part) =>
+    hookPost(cfg, "/v1/hooks/prompt-submit", { ...body, part })));
+  return got.map((r) => r.status === "fulfilled" ? String(r.value?.injection || "").trim() : "")
+    .filter(Boolean).join("\n\n");
 }
 
 /** Tolerant text extraction — agent_end payload shapes vary by version. */
@@ -90,7 +90,7 @@ const nextIndex = new Map<string, number>();       // sessionId -> turn index
 export default definePluginEntry({
   id: "brethof-brain",
   name: "brethof-brain memory",
-  description: "Persistent cross-session memory via brethof-brain cloud.",
+  description: "Persistent cross-session memory from your Brain hub.",
   register(api: any) {
     // NOTE FOR INSTALLERS: agent_end delivers conversation content, and
     // OpenClaw BLOCKS it for non-bundled plugins unless the user opts in:
@@ -128,10 +128,9 @@ export default definePluginEntry({
           if (env?.injection) parts.push(String(env.injection));
         }
         if (prompt) {
-          const env = await hookPost(cfg, "/v1/hooks/prompt-submit", {
+          recall = await promptContext(cfg, {
             project: cfg.project, prompt, session_id: sid,
           });
-          if (env?.injection) recall = String(env.injection);
         }
         // OpenClaw 2026.9 caches the system prompt per session: appendSystemContext
         // is for static text (the session start) and a per-turn addition there

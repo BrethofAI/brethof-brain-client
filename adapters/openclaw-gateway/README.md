@@ -1,4 +1,4 @@
-# brethof-brain cloud + OpenClaw gateway
+# brethof-brain + OpenClaw gateway
 
 Native OpenClaw plugin — persistent cross-session memory for your gateway
 agent:
@@ -12,10 +12,15 @@ agent:
 ## Install
 
 ```bash
-export BRETHOF_BRAIN_API_KEY=bmv2_...
+pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
+brethof-brain pair http://127.0.0.1:8600   # your hub; or https://<your hub>
 openclaw plugins install --force --accept-capabilities ./adapters/openclaw-gateway
 openclaw gateway restart
 ```
+
+`pair` shows a code; approve it on the hub's settings page, and the device
+key lands in `~/.brethof-brain/config.json` (never printed), which the plugin
+reads.
 
 OpenClaw 2026.8.2+ requires both flags for a plugin installed from a
 local path: `--force` because the source is outside ClawHub review (you
@@ -26,11 +31,8 @@ product). OpenClaw before 2026.8 (e.g. 2026.7.1) does not know
 `--accept-capabilities` and refuses the command — drop that flag there and
 keep `--force`.
 
-Configure (optional) in `openclaw.json` — env vars work too
-(`BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`; for a
-hosted memory also `BRETHOF_BRAIN_UNLOCK_PASSPHRASE` — the plugin unlocks the
-memory itself after it has locked on idle — and `BRETHOF_BRAIN_LOCK_AFTER_MINUTES`,
-5-60; the plugin config accepts `unlockPassphrase` / `lockAfterMinutes` too):
+Configure (optional) in `openclaw.json` — env vars override the file too
+(`BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`):
 
 ```json5
 {
@@ -61,14 +63,18 @@ one block, full customer toolset:
   mcp: {
     servers: {
       "brethof-brain": {
-        url: "http://127.0.0.1:8610/v1/mcp",
+        url: "http://127.0.0.1:8600/v1/mcp",   // or https://<your hub>/v1/mcp
         transport: "streamable-http",
-        headers: { Authorization: "Bearer bmv2_..." }
+        headers: { Authorization: "Bearer bd_..." }
       }
     }
   }
 }
 ```
+
+`bd_...` is the device key `pair` saved; `brethof-brain mcp-command` prints the
+address and key in a ready-made line. The hub accepts the key only as
+`Authorization: Bearer`.
 
 ## Notes
 

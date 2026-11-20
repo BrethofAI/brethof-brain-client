@@ -1,17 +1,18 @@
 """brethof-brain thin client.
 
 A tiny, dependency-free client for brethof-brain (https://brethof.ai/brain/):
-shared long-term memory for AI coding agents. The heavy lifting — SurrealDB,
-embeddings, retrieval-augmented recall — runs on the data plane; this client
-only forwards Claude Code hook events over HTTPS and wires the remote MCP
-endpoint. Stdlib only, so it runs anywhere a Python 3.9+ interpreter does.
+shared long-term memory for AI coding agents. The heavy lifting — storage,
+embeddings, retrieval-augmented recall — runs in your memory behind your Brain
+hub; this client only forwards agent hook events to the hub's front door and
+wires its MCP endpoint. Stdlib only, so it runs anywhere a Python 3.9+ interpreter does.
 
 Source-available (see LICENSE — brethof-brain Client License; not open source).
-Contains no secrets: your API key lives in ``~/.brethof-brain/config.json`` (or
-``$BRETHOF_BRAIN_API_KEY``), never in this code.
+Contains no secrets: this device's key (``brethof-brain pair`` fetches it)
+lives in ``~/.brethof-brain/config.json`` (or ``$BRETHOF_BRAIN_API_KEY``),
+never in this code.
 """
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:8600"   # the hub's front door (local-first, 2026-11-18; was the old per-memory port)
 USER_AGENT = f"brethof-brain-client/{__version__}"

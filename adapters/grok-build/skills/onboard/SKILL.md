@@ -1,27 +1,29 @@
 ---
 name: onboard
-description: "First-run setup: connect brethof-brain cloud memory and explain how it works. Run once after installing the plugin. Trigger on: onboard, set up memory, first run, initialize memory."
+description: "First-run setup: connect brethof-brain memory and explain how it works. Run once after installing the plugin. Trigger on: onboard, set up memory, first run, initialize memory."
 version: 2.0.0
 platforms: [linux, macos, windows]
 ---
 
 # Onboard — connect brethof-brain memory
 
-Guide a new user through connecting their brethof-brain cloud memory. Be
-conversational and concrete — a guided setup, not a lecture. There is
-nothing to install server-side and no local database: memory lives in the
-cloud and starts working on the first conversation.
+Guide a new user through connecting their brethof-brain memory. Be
+conversational and concrete — a guided setup, not a lecture. Memory lives in
+the user's Brain hub (on this machine or a server of theirs) and starts
+working on the first conversation.
 
-## 1. The key
-- The user creates an API key in their account panel:
-  **brethof.ai/account → Memory tab → New key** (2FA required once).
-- Put it in the environment: the brethof-brain MCP server entry in your ~/.grok config (see mcp_servers.example.toml).
+## 1. Pair this machine with the hub
+- The user runs `brethof-brain pair <hub address>` (e.g.
+  `http://127.0.0.1:8600`, or `https://<their hub>`), approves the code it
+  shows on the hub's settings page, then re-runs the adapter's
+  `python setup.py`, which puts the saved device key into the brethof-brain
+  MCP server entry in ~/.grok (see mcp_servers.example.toml).
 - Never echo the key back, never store it in memory or logs.
 
 ## 2. Verify the connection
 Call `search_brain("test")`. Any well-formed response — even "no
 results" — means the key works. An auth error means the key is wrong or
-revoked: back to the panel.
+revoked: pair the machine again.
 
 ## 3. Explain how it works (a few lines, in your own words)
 - **Memory is automatic.** Every exchange is archived, and the memory

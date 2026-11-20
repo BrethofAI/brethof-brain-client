@@ -16,7 +16,7 @@ runs without memory.
 
 1. Get the client next to the hook (either works):
    ```bash
-   pip install git+https://github.com/BrethofAI/brethof-brain-client.git
+   pip install "git+https://github.com/BrethofAI/brethof-brain-client.git"
    ```
    or run straight from a checkout of this repo — the hook bootstraps its
    own `sys.path`.
@@ -26,16 +26,18 @@ runs without memory.
    the absolute paths to `antigravity_hook.py`. (Timeouts are in seconds —
    Antigravity's convention.)
 
-3. Configure the key — `~/.brethof-brain/config.json`:
-   ```json
-   {
-     "api_key": "bmv2_...",
-     "endpoint": "http://127.0.0.1:8610",
-     "default_project": "my-project"
-   }
+3. Connect this machine to your hub (the Brain on this machine:
+   `http://127.0.0.1:8600`; on a server: `https://<your hub>`):
+   ```bash
+   brethof-brain pair http://127.0.0.1:8600
    ```
-   Environment variables override the file: `BRETHOF_BRAIN_API_KEY`,
-   `BRETHOF_BRAIN_ENDPOINT`, `BRETHOF_BRAIN_PROJECT`.
+   `pair` shows a code; approve it on the hub's settings page. It then writes
+   `~/.brethof-brain/config.json` — the device key is never printed:
+   ```json
+   {"endpoint": "http://127.0.0.1:8600", "api_key": "bd_..."}
+   ```
+   Environment variables override the file: `BRETHOF_BRAIN_ENDPOINT`,
+   `BRETHOF_BRAIN_API_KEY`, `BRETHOF_BRAIN_PROJECT`.
 
 Hooks are verified solid on the Antigravity CLI (`agy`) and SDK surfaces;
 community reports of hook reliability issues in the desktop IDE exist —

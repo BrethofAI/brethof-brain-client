@@ -40,8 +40,8 @@ class MindClient:
     def __init__(self, config: Optional[Config] = None, timeout: float = 30.0):
         self.cfg = config or Config.load()
         if not self.cfg.configured():
-            raise ClientError("no API key configured (set BRETHOF_BRAIN_API_KEY "
-                              "or run: brethof-brain setup)")
+            raise ClientError("not paired with a hub (set BRETHOF_BRAIN_API_KEY "
+                              "or run: brethof-brain pair <hub address>)")
         self._http = Client(self.cfg, timeout=timeout)
         self._id = 0
 
