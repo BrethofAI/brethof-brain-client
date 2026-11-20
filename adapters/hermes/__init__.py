@@ -17,7 +17,7 @@ code. Stdlib only, so it drops into ~/.hermes/plugins/ without dependencies.
 Config, env first, then $HERMES_HOME/.env, then ~/.brethof-brain/config.json:
   BRETHOF_BRAIN_API_KEY            your key (required)
   BRETHOF_BRAIN_ENDPOINT           your box (default http://127.0.0.1:8610;
-                                   hosted: https://memory.brethof.cloud/t/<tenant>)
+                                   or https://<your hub's address>)
   BRETHOF_BRAIN_PROJECT            the project this agent reads and archives to
   BRETHOF_BRAIN_UNLOCK_PASSPHRASE  hosted memory only: presented when the
                                    memory has locked after idle (423)
@@ -150,7 +150,7 @@ class BrethofBrainProvider(MemoryProvider):
              "url": "https://brethof.ai/brain"},
             {"key": "endpoint", "description":
                 "Your box: http://127.0.0.1:8610 for a local install, "
-                "https://memory.brethof.cloud/t/<tenant> for hosted",
+                "https://<your hub's address> for a hub on another machine",
              "default": DEFAULT_ENDPOINT, "env_var": "BRETHOF_BRAIN_ENDPOINT"},
             {"key": "project", "description":
                 "The project this agent reads from and archives to",

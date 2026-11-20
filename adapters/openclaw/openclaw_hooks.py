@@ -148,7 +148,7 @@ class MemorySession:
 
     # delete_project was removed 2026-08-12 (founder ruling): deleting a
     # whole project — including its conversation history — is a HUMAN act,
-    # done in the account panel at brethof.cloud, never by an agent.
+    # done in the account panel at brethof.ai, never by an agent.
 
     def delete(self, project: str, record_id: str) -> str:
         """Delete ONE saved record (works for rules too, project='rules').

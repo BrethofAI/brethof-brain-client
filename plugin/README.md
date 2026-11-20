@@ -90,9 +90,8 @@ once first (`connect.py`, above) — Cowork does not ask for plugin settings.
 ## Where your data goes
 
 The hooks and tools talk to your own memory: `127.0.0.1:8610` for a memory on
-your machine, or your hosted address on `memory.brethof.cloud`. Your memory
-sends the exchanges it needs processed to our hub (`hub.brethof.ai`), which
-processes them and stores none of it. The API key is read from
+your machine, or the hub you run on another machine. Your hub sends what its
+model needs to read to the model you chose on its settings page. The API key is read from
 `~/.brethof-brain/config.json` (or the `BRETHOF_BRAIN_API_KEY` variable) and is
 sent only to those brethof addresses. Details: the
 [privacy page](https://brethof.ai/brain/privacy/).

@@ -298,7 +298,7 @@ def cmd_connect(args) -> int:
             print("error: the window was not filled in before it timed out — run connect again", file=sys.stderr)
             return 1
     elif sys.stdin.isatty():
-        ep = input(f"Where your memory is [{endpoint or 'https://memory.brethof.cloud/t/<yours>'}]: ").strip() or endpoint
+        ep = input(f"Where your memory is [{endpoint or 'http://127.0.0.1:8600'}]: ").strip() or endpoint
         key = getpass.getpass("API key (bmv2_…, hidden): ").strip()
         pp = ""
         if not connectpage._is_local(ep):

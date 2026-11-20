@@ -17,8 +17,7 @@ block or break a run.
 
 - Every prompt you type, and each turn's user and assistant text, go with
   your API key to the brethof-brain server you configure: your own box at
-  `127.0.0.1:8610` by default, or the hosted one at `memory.brethof.cloud`.
-- A hosted memory also gets your unlock passphrase, to the same server.
+  `127.0.0.1:8610` by default, or a hub you run on another machine.
 - The server's briefing and recall text are put into the system prompt and
   into each turn.
 - It reads `BRETHOF_BRAIN_*` from `$HERMES_HOME/.env` and
@@ -48,7 +47,7 @@ Put your key in `~/.hermes/.env`:
 ```
 BRETHOF_BRAIN_API_KEY=bmv2_...
 BRETHOF_BRAIN_ENDPOINT=http://127.0.0.1:8610      # your local box (default)
-# BRETHOF_BRAIN_ENDPOINT=https://memory.brethof.cloud/t/<tenant>   # hosted
+# BRETHOF_BRAIN_ENDPOINT=https://<your hub's address>   # a hub on another machine
 BRETHOF_BRAIN_PROJECT=my-agent                     # the project this agent works in
 # hosted memory only — it locks after idle; the provider unlocks it itself:
 # BRETHOF_BRAIN_UNLOCK_PASSPHRASE=...
@@ -69,7 +68,7 @@ block in `~/.hermes/config.yaml`, the full customer toolset:
 ```yaml
 mcp_servers:
   brethof-brain:
-    url: "http://127.0.0.1:8610/v1/mcp"          # hosted: https://memory.brethof.cloud/t/<tenant>/v1/mcp
+    url: "http://127.0.0.1:8610/v1/mcp"          # another machine: https://<your hub's address>/v1/mcp
     headers:
       Authorization: "Bearer bmv2_..."
 ```

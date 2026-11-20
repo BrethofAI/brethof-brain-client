@@ -189,7 +189,7 @@ class MindClient:
 
     # delete_project was removed 2026-08-12 (founder ruling): deleting a
     # whole project — including its conversation history — is a HUMAN act,
-    # done in the account panel at brethof.cloud. No agent-reachable verb
+    # done in the account panel at brethof.ai. No agent-reachable verb
     # touches the conversation archive.
 
     def cleanup_history(self, project: str, older_than_days: int = None,

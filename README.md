@@ -244,11 +244,8 @@ The client is source-available precisely so you can verify this yourself — rea
   - **Local** (the default endpoint, `http://127.0.0.1:8610`): the memory
     container runs on your machine; conversations are archived there and
     never stored by us.
-  - **Hosted**: your container runs in our cloud at
-    `https://memory.brethof.cloud/t/<your-tenant>`, encrypted under a
-    passphrase only you hold — add `unlock_passphrase` to your config and
-    the client unlocks it at session start and lets it lock itself when you
-    step away (`lock_after_minutes`, 5–60).
+  - **On another machine**: install the hub there and pair this machine
+    with `brethof-brain pair https://<your hub's address>`.
 
 Nothing else is collected. The client never sends files, environment variables,
 or anything outside the transcript text described above. If a hook can't reach
@@ -281,12 +278,8 @@ brethof-brain pair http://127.0.0.1:8600      # or your hub's address on your ne
 machine gets its own key. Your memory, its passwords and its encryption stay
 on your machine; the account only counts devices.
 
-**On our cloud (hosted).** The panel creates your container, encrypted under
-a **passphrase only you hold**, and shows your endpoint
-(`https://memory.brethof.cloud/t/<tenant>`) and **memory key** once. Put all
-three in your config — endpoint, `api_key`, `unlock_passphrase` — and the
-client unlocks your memory at session start; it locks itself after
-`lock_after_minutes` (5–60) of quiet.
+**On a server of yours.** Install the hub there, put it behind HTTPS, and
+pair each machine with `brethof-brain pair https://<your hub's address>`.
 
 ## Install as a library / CLI (alternative)
 
@@ -295,7 +288,7 @@ For non-plugin use (scripting, other agents), install straight from the repo:
 ```bash
 pip install git+https://github.com/BrethofAI/brethof-brain-client.git
 # or pin a release (tags follow the package version):
-pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.3.0
+pip install git+https://github.com/BrethofAI/brethof-brain-client.git@v1.3.1
 ```
 
 (There is no PyPI package — the client is installed from source, so you get

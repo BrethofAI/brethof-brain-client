@@ -27,14 +27,14 @@ def test_an_approved_code_writes_the_key_and_never_prints_it(monkeypatch, capsys
                "verification_uri_complete": "https://brethof.ai/account/device/?code=ABCD-EFGH"}),
         (400, {"error": "authorization_pending"}),
         (400, {"error": "slow_down"}),
-        (200, {"api_key": key, "endpoint": "https://memory.brethof.cloud/t/abc123", "needs_passphrase": True}),
+        (200, {"api_key": key, "endpoint": "https://hub.example.com", "needs_passphrase": True}),
     ])
     assert rc == 0
     assert "ABCD-EFGH" in out.out and "DEV-SECRET" not in out.out + out.err
     assert key not in out.out + out.err
     assert [c for c in calls if c[0] == "sleep"] == [("sleep", 5), ("sleep", 5), ("sleep", 10)]   # slow_down adds 5 s
     saved = json.load(open(cli.CONFIG_PATH))
-    assert saved["api_key"] == key and saved["endpoint"] == "https://memory.brethof.cloud/t/abc123"
+    assert saved["api_key"] == key and saved["endpoint"] == "https://hub.example.com"
     assert "passphrase" in out.err                       # told how to add it; never asked off a terminal
 
 
